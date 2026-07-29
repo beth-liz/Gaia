@@ -4,24 +4,46 @@ from datetime import datetime
 
 
 class IncidentCreate(BaseModel):
-    animal_type: str
-    confidence: float
+    animal: str
     location: str
-    station_id: int
+    village_id: int
+    severity: str  # Low, Medium, High, Critical
+    description: str
+    photo_url: Optional[str] = None
+    contact_number: Optional[str] = None
+    date_reported: Optional[str] = None
+    time_reported: Optional[str] = None
 
 
-class IncidentUpdate(BaseModel):
-    status: Optional[str] = None
-    officer_id: Optional[int] = None
+class IncidentAssign(BaseModel):
+    assigned_to_id: int  # Forest Guard user ID
+    notes: Optional[str] = None
 
 
-class IncidentResponse(BaseModel):
+class IncidentStatusUpdate(BaseModel):
+    status: str  # In Progress, Completed, Rejected
+    notes: Optional[str] = None
+    report_url: Optional[str] = None
+
+
+class IncidentOut(BaseModel):
     id: int
-    animal_type: str
-    confidence: float
+    reporter_id: int
+    reporter_name: Optional[str] = None
+    village_id: Optional[int] = None
+    village_name: Optional[str] = None
+    animal: str
     location: str
+    severity: str
+    description: Optional[str] = None
     status: str
-    station_id: int
+    photo_url: Optional[str] = None
+    contact_number: Optional[str] = None
+    date_reported: Optional[str] = None
+    time_reported: Optional[str] = None
+    assigned_guard_id: Optional[int] = None
+    assigned_guard_name: Optional[str] = None
+    assignment_notes: Optional[str] = None
     created_at: datetime
 
     class Config:

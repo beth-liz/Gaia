@@ -1,214 +1,175 @@
-import { useState } from "react"
-import { Users, Search, CheckCircle2, Eye } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
+import React, { useState, useEffect } from "react";
+import { api } from "@/services/api";
+import { Search, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
-interface Villager {
-  id: string
-  name: string
-  village: string
-  phone: string
-  role: string
-  status: "approved" | "pending" | "rejected"
-  registeredDate: string
-}
+const VillagersManagement: React.FC = () => {
+  const [villagers, setVillagers] = useState<any[]>([]);
+  const [filter, setFilter] = useState<"all" | "pending" | "approved">("all");
+  const [search, setSearch] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
-export default function VillagersManagement() {
-  const [villagers, setVillagers] = useState<Villager[]>([
-    {
-      id: "VLG-101",
-      name: "Raman Nair",
-      village: "Chundale Settlement",
-      phone: "+91 98470 11223",
-      role: "Village Head",
-      status: "approved",
-      registeredDate: "2025-11-12"
-    },
-    {
-      id: "VLG-102",
-      name: "Kavitha Joseph",
-      village: "Pulpally Border",
-      phone: "+91 94461 44556",
-      role: "Resident Lead",
-      status: "approved",
-      registeredDate: "2026-01-05"
-    },
-    {
-      id: "VLG-103",
-      name: "Muhammed Shafi",
-      village: "Sulthan Bathery",
-      phone: "+91 97452 77889",
-      role: "Farmer",
-      status: "pending",
-      registeredDate: "2026-07-20"
-    },
-    {
-      id: "VLG-104",
-      name: "Devaki Amma",
-      village: "Kurichiad Village",
-      phone: "+91 98953 99001",
-      role: "Community Guard",
-      status: "approved",
-      registeredDate: "2025-09-18"
-    },
-    {
-      id: "VLG-105",
-      name: "Ananya Krishnan",
-      village: "Chundale Settlement",
-      phone: "+91 98471 22334",
-      role: "Resident Lead",
-      status: "pending",
-      registeredDate: "2026-07-25"
+  const loadVillagers = async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.getVillagers(filter === "all" ? undefined : filter);
+      setVillagers(data);
+    } catch (err: any) {
+      console.error("Failed to load villagers", err);
+    } finally {
+      setIsLoading(false);
     }
-  ])
+  };
 
-  const [search, setSearch] = useState("")
-  const [selectedVillager, setSelectedVillager] = useState<Villager | null>(null)
+  useEffect(() => {
+    loadVillagers();
+  }, [filter]);
 
-  const handleUpdateStatus = (id: string, status: "approved" | "rejected") => {
-    setVillagers(prev => prev.map(v => v.id === id ? { ...v, status } : v))
-  }
+  const handleApprove = async (id: number) => {
+    try {
+      await api.approveVillager(id);
+      loadVillagers();
+    } catch (err: any) {
+      alert(err.message || "Approve failed");
+    }
+  };
 
-  const filtered = villagers.filter(v => 
-    v.name.toLowerCase().includes(search.toLowerCase()) ||
-    v.village.toLowerCase().includes(search.toLowerCase()) ||
-    v.id.toLowerCase().includes(search.toLowerCase())
-  )
+  const handleReject = async (id: number) => {
+    if (!confirm("Are you sure you want to reject and remove this registration request?")) return;
+    try {
+      await api.rejectVillager(id);
+      loadVillagers();
+    } catch (err: any) {
+      alert(err.message || "Reject failed");
+    }
+  };
+
+  const filteredVillagers = villagers.filter(
+    (v) =>
+      v.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      v.email.toLowerCase().includes(search.toLowerCase()) ||
+      (v.village_name && v.village_name.toLowerCase().includes(search.toLowerCase()))
+  );
 
   return (
     <div className="space-y-6">
-      
-      {/* Header Bar */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-6 flex flex-wrap items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-center space-x-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-[#e8f4ec] text-[#10b981] flex items-center justify-center font-bold border border-[#c3e3ca]">
-            <Users className="h-6 w-6" />
-          </div>
-          <div>
-            <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
-              Villagers Directory & Approvals
-            </h2>
-            <p className="text-xs text-slate-500 font-medium">
-              Review, approve, or reject resident access to the Gaia alerting network.
-            </p>
-          </div>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 p-6 rounded-3xl border border-emerald-950/10 shadow-sm">
+        <div>
+          <h1 className="text-2xl font-bold text-emerald-950 tracking-tight">Villager Account Approval</h1>
+          <p className="text-xs text-emerald-900/70 mt-1">Review and approve villager registration requests stored in PostgreSQL</p>
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-1.5 bg-emerald-50 p-1.5 rounded-2xl border border-emerald-900/10 self-start sm:self-auto">
+          <button
+            onClick={() => setFilter("all")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              filter === "all" ? "bg-emerald-900 text-white shadow-xs" : "text-emerald-950 hover:bg-emerald-100"
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setFilter("pending")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              filter === "pending" ? "bg-amber-500 text-emerald-950 shadow-xs" : "text-emerald-950 hover:bg-emerald-100"
+            }`}
+          >
+            Pending
+          </button>
+          <button
+            onClick={() => setFilter("approved")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              filter === "approved" ? "bg-emerald-900 text-white shadow-xs" : "text-emerald-950 hover:bg-emerald-100"
+            }`}
+          >
+            Approved
+          </button>
         </div>
       </div>
 
-      {/* Search & Stats */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
-        <div className="relative w-72">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Search villager name, ID, village..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#10b981]"
-          />
-        </div>
-
-        <div className="flex items-center gap-4 text-xs font-semibold text-slate-600">
-          <span>Total: <strong className="text-slate-900">{villagers.length}</strong></span>
-          <span>Approved: <strong className="text-emerald-700">{villagers.filter(v => v.status === "approved").length}</strong></span>
-          <span>Pending: <strong className="text-amber-700">{villagers.filter(v => v.status === "pending").length}</strong></span>
-        </div>
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="w-5 h-5 text-emerald-700 absolute left-4 top-1/2 -translate-y-1/2" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search villager by name, email, or village..."
+          className="w-full pl-12 pr-4 py-3 rounded-2xl bg-white border border-emerald-900/15 text-emerald-950 text-sm placeholder:text-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-800 shadow-xs"
+        />
       </div>
 
-      {/* Villagers Table Card */}
-      <Card>
-        <CardContent className="p-0">
+      {/* Table */}
+      <div className="gaia-card overflow-hidden">
+        {isLoading ? (
+          <div className="p-12 text-center">
+            <Loader2 className="w-8 h-8 text-emerald-800 animate-spin mx-auto mb-2" />
+            <p className="text-xs font-medium text-emerald-950">Loading Villagers from Database...</p>
+          </div>
+        ) : filteredVillagers.length === 0 ? (
+          <div className="p-12 text-center text-emerald-900/60 text-xs font-medium">
+            No villager records found matching your filters.
+          </div>
+        ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                  <th className="p-4">Resident ID</th>
-                  <th className="p-4">Full Name</th>
-                  <th className="p-4">Village Sector</th>
-                  <th className="p-4">Phone Number</th>
-                  <th className="p-4">Role</th>
-                  <th className="p-4">Approval Status</th>
-                  <th className="p-4">Registered Date</th>
-                  <th className="p-4 text-right">Actions</th>
+            <table className="w-full text-left text-xs text-emerald-950">
+              <thead className="bg-emerald-50/80 border-b border-emerald-950/10 uppercase tracking-wider text-[11px] font-bold text-emerald-900">
+                <tr>
+                  <th className="py-3.5 px-6">Villager Name</th>
+                  <th className="py-3.5 px-6">Contact Info</th>
+                  <th className="py-3.5 px-6">Village Sector</th>
+                  <th className="py-3.5 px-6">Status</th>
+                  <th className="py-3.5 px-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
-                {filtered.map(v => (
-                  <tr key={v.id} className="hover:bg-slate-50/60 transition">
-                    <td className="p-4 font-mono font-bold text-slate-800">{v.id}</td>
-                    <td className="p-4 font-extrabold text-slate-900">{v.name}</td>
-                    <td className="p-4 text-slate-700">{v.village}</td>
-                    <td className="p-4 font-mono text-slate-600">{v.phone}</td>
-                    <td className="p-4 text-slate-800 font-semibold">{v.role}</td>
-                    <td className="p-4">
-                      <Badge variant={v.status === "approved" ? "emerald" : v.status === "pending" ? "warning" : "critical"}>
-                        {v.status}
-                      </Badge>
+              <tbody className="divide-y divide-emerald-950/10 font-medium">
+                {filteredVillagers.map((v) => (
+                  <tr key={v.id} className="hover:bg-emerald-50/40 transition-colors">
+                    <td className="py-4 px-6 font-bold text-emerald-950">{v.full_name}</td>
+                    <td className="py-4 px-6">
+                      <div>{v.email}</div>
+                      <div className="text-[11px] text-emerald-800/70">{v.phone || "No phone"}</div>
                     </td>
-                    <td className="p-4 font-mono text-slate-500">{v.registeredDate}</td>
-                    <td className="p-4 text-right">
-                      <div className="flex justify-end gap-1.5">
-                        <Button size="sm" variant="outline" onClick={() => setSelectedVillager(v)}>
-                          <Eye className="h-3.5 w-3.5 mr-1" /> View
-                        </Button>
-                        {v.status === "pending" && (
-                          <>
-                            <Button size="sm" className="bg-[#10b981] hover:bg-[#059669]" onClick={() => handleUpdateStatus(v.id, "approved")}>
-                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleUpdateStatus(v.id, "rejected")}>
-                              Reject
-                            </Button>
-                          </>
-                        )}
-                      </div>
+                    <td className="py-4 px-6 font-semibold">{v.village_name || "N/A"}</td>
+                    <td className="py-4 px-6">
+                      {v.is_verified ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 text-[11px] font-bold border border-emerald-300">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                          Approved
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-[11px] font-bold border border-amber-300">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-700" />
+                          Pending Approval
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-4 px-6 text-right space-x-2">
+                      {!v.is_verified && (
+                        <button
+                          onClick={() => handleApprove(v.id)}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white text-[11px] font-bold shadow-xs transition-all"
+                        >
+                          Approve
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleReject(v.id)}
+                        className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-bold border border-red-200 transition-all"
+                      >
+                        Reject / Delete
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Details Modal */}
-      {selectedVillager && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-extrabold text-slate-900">Resident Details</h3>
-              <button onClick={() => setSelectedVillager(null)} className="text-slate-400 hover:text-slate-600 font-bold text-sm">✕</button>
-            </div>
-            <div className="space-y-2 text-xs font-medium">
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Resident ID:</span>
-                <span className="font-bold font-mono">{selectedVillager.id}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Full Name:</span>
-                <span className="font-bold text-slate-900">{selectedVillager.name}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Village Sector:</span>
-                <span>{selectedVillager.village}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Phone:</span>
-                <span className="font-mono">{selectedVillager.phone}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-500">Role:</span>
-                <span className="font-bold">{selectedVillager.role}</span>
-              </div>
-            </div>
-            <div className="pt-2 flex justify-end">
-              <Button variant="outline" size="sm" onClick={() => setSelectedVillager(null)}>Close</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
+        )}
+      </div>
     </div>
-  )
-}
+  );
+};
+
+export default VillagersManagement;

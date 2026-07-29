@@ -1,109 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
-  /* Modern Nature-Inspired SaaS Palette */
-  --primary-forest: #0b2316;
-  --primary-emerald: #10b981;
-  --emerald-dark: #059669;
-  --emerald-light: #e8f4ec;
-  --surface-bg: #f8faf7;
-  --card-bg: #ffffff;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --border-subtle: #e2e8f0;
+  /* GAIA WILDLIFE COLOR PALETTE & SUBTLE GRADIENTS
+   * You can adjust background gradients and primary wildlife colors below:
+   */
+  --bg-warm-beige: #fdfbf7;
+  --bg-warm-beige-alt: #f7f4eb;
+  --bg-gradient-subtle: linear-gradient(135deg, #fdfbf7 0%, #f7f4eb 40%, #eef5ef 100%);
+  --bg-gradient-card: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(253,251,247,0.9) 100%);
+  --bg-gradient-hero: linear-gradient(135deg, #0d2818 0%, #1b4332 50%, #2d6a4f 100%);
 
-  --background: 140 15% 97%;
-  /* #f8faf7 */
-  --foreground: 222 47% 11%;
-  /* #0f172a */
+  --forest-dark: #0d2818;
+  --forest-green: #1b4332;
+  --forest-mid: #2d6a4f;
+  --forest-emerald: #52b788;
+  --forest-light: #d8f3dc;
+  
+  --muted-gold: #c5a059;
+  --muted-gold-light: #f4e8c1;
+  --charcoal-dark: #1a1d1a;
+  --charcoal-text: #2b2d2f;
+  --charcoal-muted: #5c6268;
 
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
+  --card-shadow: 0 10px 25px -5px rgba(27, 67, 50, 0.05), 0 4px 10px -2px rgba(27, 67, 50, 0.03);
+  --card-shadow-hover: 0 20px 35px -5px rgba(27, 67, 50, 0.1), 0 8px 16px -4px rgba(27, 67, 50, 0.06);
 
-  --primary: 160 84% 39%;
-  /* #10b981 */
-  --primary-foreground: 0 0% 100%;
-
-  --secondary: 140 30% 92%;
-  /* #e8f4ec */
-  --secondary-foreground: 160 84% 20%;
-
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
-
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
-  --ring: 160 84% 39%;
-
-  --radius: 12px;
-  /* Soft modern rounded corners */
+  --font-family-primary: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-@layer base {
-  * {
-    border-color: var(--border-subtle);
-  }
-
-  html,
-  body {
-    height: 100%;
-    background-color: #f8faf7;
-    color: #0f172a;
-    font-family: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
+html, body {
+  height: 100%;
+  background-color: var(--bg-warm-beige);
+  background-image: var(--bg-gradient-subtle);
+  color: var(--charcoal-dark);
+  font-family: var(--font-family-primary);
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
 }
 
-/* Glassmorphism & Soft SaaS Shadows */
-.glass-card {
-  background: rgba(255, 255, 255, 0.85);
+/* Glassmorphism SaaS Cards */
+.gaia-card {
+  background: var(--bg-gradient-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  box-shadow: 0 10px 30px -5px rgba(11, 35, 22, 0.05), 0 4px 6px -2px rgba(11, 35, 22, 0.02);
+  border: 1px solid rgba(27, 67, 50, 0.08);
+  box-shadow: var(--card-shadow);
+  border-radius: 1rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.glass-dark {
-  background: rgba(11, 35, 22, 0.85);
+.gaia-card:hover {
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.gaia-card-static {
+  background: #ffffff;
+  border: 1px solid rgba(27, 67, 50, 0.08);
+  box-shadow: var(--card-shadow);
+  border-radius: 1rem;
+}
+
+.glass-header {
+  background: rgba(253, 251, 247, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-bottom: 1px solid rgba(27, 67, 50, 0.08);
 }
 
-.gradient-primary {
-  background: linear-gradient(135deg, #0b2316 0%, #123c27 50%, #10b981 100%);
-}
-
-.gradient-emerald {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-}
-
-.gradient-text {
-  background: linear-gradient(135deg, #0b2316 0%, #10b981 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-
-/* Custom Soft Scrollbars */
+/* Custom Subtle Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f8faf7;
+  background: #f7f4eb;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #b7cbbf;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #10b981;
+  background: #2d6a4f;
 }

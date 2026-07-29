@@ -2,23 +2,18 @@ from pydantic import BaseModel
 from typing import Optional
 
 
-class VillageCreate(BaseModel):
-    name: str
-    district: str
-    state: str
+class VillageBase(BaseModel):
+    village_name: str
+    district: Optional[str] = "Wayanad"
+    state: Optional[str] = "Kerala"
 
 
-class VillageUpdate(BaseModel):
-    name: Optional[str] = None
-    district: Optional[str] = None
-    state: Optional[str] = None
+class VillageCreate(VillageBase):
+    pass
 
 
-class VillageResponse(BaseModel):
+class VillageOut(VillageBase):
     id: int
-    name: str
-    district: str
-    state: str
 
     class Config:
         from_attributes = True

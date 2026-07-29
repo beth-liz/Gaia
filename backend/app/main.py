@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.database.database import engine
@@ -14,53 +15,43 @@ Base.metadata.create_all(bind=engine)
 from app.database.seed import run_seed
 run_seed()
 
-from app.routers import auth
-from app.core.security import hash_password, verify_password
+from app.routers import auth, designations, villages, users, incidents, notifications, dashboard
 
-app = FastAPI(title="Gaia API")
+app = FastAPI(title="Gaia Wildlife Operations API", version="2.0.0")
 
-# Routers
+# CORS middleware for local frontend communication
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include Routers
 app.include_router(auth.router)
+app.include_router(designations.router)
+app.include_router(villages.router)
+app.include_router(users.router)
+app.include_router(incidents.router)
+app.include_router(notifications.router)
+app.include_router(dashboard.router)
 
 
 @app.get("/")
 def root():
     return {
-        "message": "Welcome to Gaia API"
+        "app": "Gaia Wildlife Protection Platform API",
+        "status": "Operational",
+        "version": "2.0.0"
     }
 
 
 @app.get("/test-db")
 def test_database():
-
     try:
-
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
-
-        return {
-            "status": "Database Connected Successfully"
-        }
-
+        return {"status": "Database Connected Successfully"}
     except Exception as e:
-
-        return {
-            "status": "Connection Failed",
-            "error": str(e)
-        }
-
-
-@app.get("/test-password")
-def test_password():
-
-    password = "Gaia123"
-
-    hashed = hash_password(password)
-
-    verified = verify_password(password, hashed)
-
-    return {
-        "Original Password": password,
-        "Hashed Password": hashed,
-        "Password Verified": verified
-    }
+        return {"status": "Connection Failed", "error": str(e)}

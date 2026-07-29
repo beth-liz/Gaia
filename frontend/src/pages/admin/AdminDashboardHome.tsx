@@ -1,196 +1,203 @@
-import { useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { 
-  Users, Shield, ShieldAlert, UserCheck, CheckCircle2, Plus, ArrowRight, Sparkles
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { api } from "@/services/api";
+import {
+  Users,
+  UserCheck,
+  Clock,
+  ShieldAlert,
+  ShieldCheck,
+  AlertTriangle,
+  ArrowRight,
+  RefreshCw,
+  Loader2
+} from "lucide-react";
 
-export default function AdminDashboardHome() {
-  const navigate = useNavigate()
+const AdminDashboardHome: React.FC = () => {
+  const [stats, setStats] = useState<any>(null);
+  const [recentIncidents, setRecentIncidents] = useState<any[]>([]);
+  const [pendingVillagers, setPendingVillagers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [pendingVillagers, setPendingVillagers] = useState([
-    { id: "VLG-103", name: "Muhammed Shafi", village: "Sulthan Bathery", phone: "+91 97452 77889", status: "pending" },
-    { id: "VLG-105", name: "Ananya Krishnan", village: "Chundale Settlement", phone: "+91 98471 22334", status: "pending" }
-  ])
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const [sData, incData, vilData] = await Promise.all([
+        api.getDashboardStats(),
+        api.getIncidents(),
+        api.getVillagers("pending"),
+      ]);
+      setStats(sData);
+      setRecentIncidents(incData.slice(0, 5));
+      setPendingVillagers(vilData.slice(0, 5));
+    } catch (err) {
+      console.error("Failed to load admin stats", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const [recentIncidents] = useState([
-    { id: "INC-9941", title: "Asian Elephant Herd Sighting", village: "Chundale", status: "Dispatched", threat: "critical" },
-    { id: "INC-9938", title: "Bengal Tiger Sighting", village: "Pulpally Border", status: "Under Investigation", threat: "warning" }
-  ])
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const handleApprove = (id: string) => {
-    setPendingVillagers(prev => prev.filter(v => v.id !== id))
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 text-emerald-800 animate-spin mb-2" />
+        <p className="text-sm font-medium text-emerald-950">Loading Admin Realtime Intelligence...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      
-      {/* Welcome Banner Card with Wildlife Image Background */}
-      <div className="relative rounded-3xl overflow-hidden bg-[#0b2316] text-white p-6 sm:p-8 shadow-lg border border-[#123c27]">
-        <div className="absolute inset-0 z-0">
-          <img src="/images/nature3.jpg" alt="Nature Banner" className="w-full h-full object-cover opacity-35" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0b2316] via-[#0b2316]/80 to-transparent" />
+    <div className="space-y-8">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 p-6 rounded-3xl border border-emerald-950/10 shadow-sm">
+        <div>
+          <h1 className="text-2xl font-bold text-emerald-950 tracking-tight">System Command Center</h1>
+          <p className="text-xs text-emerald-900/70 mt-1">Realtime PostgreSQL metrics across all forest sectors & villages</p>
+        </div>
+        <button
+          onClick={loadData}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-semibold border border-emerald-900/10 transition-all self-start sm:self-auto"
+        >
+          <RefreshCw className="w-4 h-4 text-emerald-700" />
+          Refresh Metrics
+        </button>
+      </div>
+
+      {/* Dynamic Counter Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="gaia-card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Total Villagers</span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center">
+              <Users className="w-5 h-5" />
+            </div>
+          </div>
+          <p className="text-3xl font-extrabold text-emerald-950">{stats?.total_villagers || 0}</p>
+          <div className="flex items-center gap-4 text-xs font-medium text-emerald-800/80 pt-1">
+            <span className="flex items-center gap-1"><UserCheck className="w-3.5 h-3.5 text-emerald-700" /> {stats?.approved_villagers || 0} Approved</span>
+            <span className="flex items-center gap-1 text-amber-700 font-bold"><Clock className="w-3.5 h-3.5" /> {stats?.pending_villagers || 0} Pending</span>
+          </div>
         </div>
 
-        <div className="relative z-10 space-y-3 max-w-xl">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#10b981]/20 border border-[#10b981]/30 text-emerald-300 text-xs font-bold">
-            <Sparkles className="h-3.5 w-3.5" /> Welcome to Gaia Admin
+        <div className="gaia-card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Total Officers</span>
+            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-            Operational Dashboard
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-300 font-normal leading-relaxed">
-            Monitor village community registrations, manage field officer deployments, and review active wildlife incident reports.
-          </p>
+          <p className="text-3xl font-extrabold text-emerald-950">{stats?.total_officers || 0}</p>
+          <div className="flex items-center gap-4 text-xs font-medium text-emerald-800/80 pt-1">
+            <span><strong className="text-emerald-950">{stats?.rfos_count || 0}</strong> Range Officers</span>
+            <span><strong className="text-emerald-950">{stats?.guards_count || 0}</strong> Guards</span>
+          </div>
+        </div>
 
-          {/* Quick Actions Bar */}
-          <div className="pt-2 flex flex-wrap gap-2">
-            <Button size="sm" className="bg-[#10b981] hover:bg-[#059669] text-white font-bold" onClick={() => navigate("/admin/officers")}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Add Officer
-            </Button>
-            <Button size="sm" variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20" onClick={() => navigate("/admin/incidents")}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Create Incident
-            </Button>
-            <Button size="sm" variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20" onClick={() => navigate("/admin/users")}>
-              View Villagers
-            </Button>
+        <div className="gaia-card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Incidents Overview</span>
+            <div className="w-9 h-9 rounded-xl bg-red-100 text-red-900 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
           </div>
+          <p className="text-3xl font-extrabold text-emerald-950">{stats?.total_incidents || 0}</p>
+          <div className="flex items-center gap-4 text-xs font-medium text-emerald-800/80 pt-1">
+            <span className="text-amber-700 font-bold">{stats?.open_incidents || 0} Active / Open</span>
+            <span className="text-emerald-700 font-bold">{stats?.resolved_incidents || 0} Resolved</span>
+          </div>
+        </div>
+
+        <div className="gaia-card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Guard Readiness</span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+          </div>
+          <p className="text-3xl font-extrabold text-emerald-950">{stats?.available_guards_count || 0}</p>
+          <p className="text-xs text-emerald-800/80 font-medium">Available for Instant Sector Dispatch</p>
         </div>
       </div>
 
-      {/* Quick Statistics Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        <Card className="hover:border-emerald-500/50">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold text-slate-500 uppercase">Total Villagers</span>
-              <div className="text-2xl font-extrabold text-slate-900 font-mono">1,248</div>
-              <span className="text-[11px] text-emerald-600 font-bold">Registered & Active</span>
-            </div>
-            <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-[#10b981] flex items-center justify-center font-bold border border-emerald-100">
-              <Users className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-emerald-500/50">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold text-slate-500 uppercase">Active Officers</span>
-              <div className="text-2xl font-extrabold text-slate-900 font-mono">24</div>
-              <span className="text-[11px] text-emerald-600 font-bold">Field Deployment</span>
-            </div>
-            <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-[#10b981] flex items-center justify-center font-bold border border-emerald-100">
-              <Shield className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-emerald-500/50">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold text-slate-500 uppercase">Pending Approvals</span>
-              <div className="text-2xl font-extrabold text-amber-600 font-mono">{pendingVillagers.length}</div>
-              <span className="text-[11px] text-amber-600 font-bold">Action Required</span>
-            </div>
-            <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold border border-amber-100">
-              <UserCheck className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-emerald-500/50">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold text-slate-500 uppercase">Open Incidents</span>
-              <div className="text-2xl font-extrabold text-rose-600 font-mono">2 Active</div>
-              <span className="text-[11px] text-rose-600 font-bold">1 Priority Dispatch</span>
-            </div>
-            <div className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold border border-rose-100">
-              <ShieldAlert className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-      </div>
-
-      {/* Grid: Pending Approvals & Recent Incidents */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Pending Villager Approvals */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+      {/* Bottom Data Tables Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Pending Approval Villagers */}
+        <div className="gaia-card p-6 space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-emerald-950/10">
             <div>
-              <CardTitle>Pending Villager Approvals</CardTitle>
-              <p className="text-xs text-slate-500 mt-0.5">Approve new resident registrations to grant alert access</p>
+              <h3 className="text-base font-bold text-emerald-950">Pending Villager Registrations</h3>
+              <p className="text-xs text-emerald-900/60">Awaiting Admin / RFO Approval</p>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/admin/users")}>
-              View All <ArrowRight className="h-3.5 w-3.5 ml-1" />
-            </Button>
-          </CardHeader>
-          <CardContent className="p-0">
-            {pendingVillagers.length > 0 ? (
-              <div className="divide-y divide-slate-100">
-                {pendingVillagers.map(v => (
-                  <div key={v.id} className="p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
-                    <div>
-                      <span className="font-mono text-[10px] text-slate-400 font-bold">{v.id}</span>
-                      <h4 className="font-extrabold text-slate-900">{v.name}</h4>
-                      <p className="text-[11px] text-slate-500">{v.village} • {v.phone}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" className="bg-[#10b981] hover:bg-[#059669]" onClick={() => handleApprove(v.id)}>
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleApprove(v.id)}>
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-6 text-center text-xs text-slate-500 font-medium">
-                No pending villager approvals at this time.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            <Link to="/admin/villagers" className="text-xs font-bold text-emerald-800 hover:text-emerald-950 flex items-center gap-1">
+              View All <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
 
-        {/* Recent Incidents */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Recent Incidents</CardTitle>
-              <p className="text-xs text-slate-500 mt-0.5">Active wildlife reports needing ranger dispatch</p>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/admin/incidents")}>
-              View All <ArrowRight className="h-3.5 w-3.5 ml-1" />
-            </Button>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-slate-100">
-              {recentIncidents.map(inc => (
-                <div key={inc.id} className="p-4 flex items-center justify-between gap-3 text-xs">
+          {pendingVillagers.length === 0 ? (
+            <p className="text-xs text-emerald-900/50 py-6 text-center">No villagers currently awaiting approval.</p>
+          ) : (
+            <div className="space-y-3">
+              {pendingVillagers.map((v) => (
+                <div key={v.id} className="p-3.5 rounded-2xl bg-white border border-emerald-900/10 flex items-center justify-between gap-3 shadow-xs">
                   <div>
-                    <span className="font-mono text-[10px] text-slate-400 font-bold">{inc.id}</span>
-                    <h4 className="font-extrabold text-slate-900">{inc.title}</h4>
-                    <p className="text-[11px] text-slate-500">{inc.village}</p>
+                    <p className="text-xs font-bold text-emerald-950">{v.full_name}</p>
+                    <p className="text-[11px] text-emerald-800/70">{v.email} &bull; {v.village_name || "Unknown Village"}</p>
                   </div>
-                  <Badge variant={inc.threat === "critical" ? "critical" : "warning"}>
-                    {inc.status}
-                  </Badge>
+                  <Link
+                    to="/admin/villagers"
+                    className="px-3 py-1.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white text-[11px] font-semibold transition-all"
+                  >
+                    Review
+                  </Link>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
 
+        {/* Recent Reported Incidents */}
+        <div className="gaia-card p-6 space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-emerald-950/10">
+            <div>
+              <h3 className="text-base font-bold text-emerald-950">Recent Wildlife Incidents</h3>
+              <p className="text-xs text-emerald-900/60">Logged from Villages</p>
+            </div>
+            <Link to="/admin/incidents" className="text-xs font-bold text-emerald-800 hover:text-emerald-950 flex items-center gap-1">
+              Manage <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {recentIncidents.length === 0 ? (
+            <p className="text-xs text-emerald-900/50 py-6 text-center">No wildlife incidents reported yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {recentIncidents.map((inc) => (
+                <div key={inc.id} className="p-3.5 rounded-2xl bg-white border border-emerald-900/10 flex items-center justify-between gap-3 shadow-xs">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-emerald-950">{inc.animal}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        inc.severity === "Critical" ? "bg-red-100 text-red-800" :
+                        inc.severity === "High" ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"
+                      }`}>
+                        {inc.severity}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800/70">{inc.location} &bull; Status: <strong className="text-emerald-950">{inc.status}</strong></p>
+                  </div>
+                  <span className="text-[11px] text-emerald-800/60">{inc.date_reported}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-
     </div>
-  )
-}
+  );
+};
+
+export default AdminDashboardHome;

@@ -3,63 +3,67 @@ from typing import Optional
 from datetime import datetime
 
 
-# -----------------------------
-# User Registration Schema
-# -----------------------------
-class UserCreate(BaseModel):
+class UserBase(BaseModel):
     full_name: str
     email: EmailStr
     phone: Optional[str] = None
+
+
+class VillagerRegister(BaseModel):
+    full_name: str
+    email: EmailStr
+    phone: str
     password: str
-    role: str
-    village_id: Optional[int] = None
+    village_id: int
 
 
-# -----------------------------
-# User Login Schema
-# -----------------------------
+class OfficerCreate(BaseModel):
+    full_name: str
+    email: EmailStr
+    phone: str
+    designation_id: int
+    station: Optional[str] = None
+    temporary_password: str
+
+
+class OfficerUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    designation_id: Optional[int] = None
+    station: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
 
-# -----------------------------
-# User Update Schema
-# -----------------------------
-class UserUpdate(BaseModel):
+class UserProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
-# -----------------------------
-# User Response Schema
-# -----------------------------
-class UserResponse(BaseModel):
+class UserOut(BaseModel):
     id: int
     full_name: str
-    email: EmailStr
-    phone: Optional[str]
+    email: str
+    phone: Optional[str] = None
     role: str
     is_verified: bool
     is_active: bool
+    village_id: Optional[int] = None
+    designation_id: Optional[int] = None
+    station: Optional[str] = None
+    work_status: Optional[str] = "Available"
+    avatar_url: Optional[str] = None
+    village_name: Optional[str] = None
+    designation_name: Optional[str] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
-
-
-# -----------------------------
-# User Password Change Schema
-# -----------------------------
-class UserChangePassword(BaseModel):
-    old_password: str
-    new_password: str
-
-
-# -----------------------------
-# Token & Login Response Schema
-# -----------------------------
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str
-    user: UserResponse

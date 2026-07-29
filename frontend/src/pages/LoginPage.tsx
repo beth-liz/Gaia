@@ -1,210 +1,187 @@
-import { useState } from "react"
-import { useNavigate, Link } from "react-router-dom"
-import { Leaf, Eye, EyeOff, Lock, Mail, ArrowRight, Sparkles } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { AuthHeader } from "@/components/AuthHeader";
+import { useAuth } from "@/context/AuthContext";
+import { api } from "@/services/api";
+import { Eye, EyeOff, Lock, Mail, ShieldCheck, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
 
-export default function LoginPage() {
-  const navigate = useNavigate()
-  const [role, setRole] = useState<"admin" | "officer" | "villager">("admin")
-  const [username, setUsername] = useState("admin@gaia.io")
-  const [password, setPassword] = useState("••••••••••••")
-  const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(true)
+const LoginPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault()
-    localStorage.setItem("authToken", "sample-token")
-    localStorage.setItem("userRole", role)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
-    if (role === "admin") navigate("/admin/dashboard")
-    else if (role === "officer") navigate("/officer/dashboard")
-    else navigate("/villager/dashboard")
-  }
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const roleDefaults = {
-    admin: "admin@gaia.io",
-    officer: "officer.marcus@gaia.io",
-    villager: "resident.raman@gaia.io"
-  }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const res = await api.login({ email, password });
+      login(res.access_token, res.user);
+
+      // Redirect based on role & verification
+      const user = res.user;
+      if (user.role === "Admin") {
+        navigate("/admin/dashboard", { replace: true });
+      } else if (user.role === "Range Forest Officer") {
+        navigate("/officer/dashboard", { replace: true });
+      } else if (user.role === "Forest Guard") {
+        navigate("/guard/dashboard", { replace: true });
+      } else if (user.role === "Villager") {
+        if (user.is_verified) {
+          navigate("/villager/dashboard", { replace: true });
+        } else {
+          navigate("/pending-approval", { replace: true });
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to log in. Please check your credentials.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#0b2316] text-slate-900 font-sans antialiased flex items-center justify-center p-0 lg:p-6">
-      
-      {/* Main Split Container */}
-      <div className="w-full max-w-5xl bg-white rounded-none lg:rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[640px] border border-[#123c27]/20">
-        
-        {/* Left Side: Wildlife Image & Platform Vision (6 Cols on large screens) */}
-        <div className="lg:col-span-6 relative bg-[#0b2316] text-white p-8 lg:p-12 flex flex-col justify-between overflow-hidden hidden md:flex">
-          
-          {/* Background Wildlife Image */}
-          <div className="absolute inset-0 z-0">
-            <img 
-              src="/images/nature2.jpg" 
-              alt="Gaia Nature" 
-              className="w-full h-full object-cover opacity-45 scale-105 transition duration-700 hover:scale-100"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0b2316] via-[#0b2316]/60 to-transparent" />
+    <div className="min-h-screen bg-gradient-to-br from-[#fdfbf7] via-[#f7f4eb] to-[#eef5ef] flex flex-col justify-center pt-20 pb-10 px-4 sm:px-6 lg:px-8">
+      <AuthHeader />
+
+      <div className="max-w-4xl w-full mx-auto grid grid-cols-1 md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl border border-emerald-900/10 bg-white">
+        {/* Left Side: Wildlife Illustration / Visual */}
+        <div className="relative hidden md:flex flex-col justify-between p-8 bg-emerald-950 text-white overflow-hidden">
+          <img
+            src="/images/tiger1.jpg"
+            alt="Gaia Wildlife Officer"
+            className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-luminosity"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-emerald-950 via-emerald-950/60 to-transparent" />
+
+          <div className="relative z-10">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-800/80 text-amber-300 text-xs font-semibold tracking-wider uppercase backdrop-blur-md border border-emerald-700/50">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Secure Portal
+            </span>
           </div>
 
-          {/* Top Brand Logo */}
-          <div className="relative z-10 flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#10b981] to-[#059669] text-white flex items-center justify-center font-bold shadow-lg">
-              <Leaf className="h-5 w-5" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-base font-extrabold tracking-tight text-white font-sans">gaia</span>
-              <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-widest -mt-1">
-                Wildlife Platform
-              </span>
+          <div className="relative z-10 space-y-4">
+            <blockquote className="text-xl font-medium tracking-tight text-emerald-50 leading-relaxed">
+              "Protecting human lives and preserving wild ecosystems through intelligent operational workflows."
+            </blockquote>
+            <div className="pt-2 border-t border-emerald-800/50">
+              <p className="text-sm font-semibold text-amber-300">Gaia Operations Command</p>
+              <p className="text-xs text-emerald-300">Range Management & Village Alert System</p>
             </div>
           </div>
-
-          {/* Middle Vision Quote */}
-          <div className="relative z-10 space-y-4 my-auto py-8">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#10b981]/20 border border-[#10b981]/30 text-emerald-300 text-xs font-bold">
-              <Sparkles className="h-3.5 w-3.5" /> Next-Gen Nature SaaS
-            </div>
-            <h2 className="text-2xl lg:text-3xl font-extrabold text-white leading-tight tracking-tight">
-              Harmonizing Human Settlements & Wildlife Corridors.
-            </h2>
-            <p className="text-xs lg:text-sm text-slate-300 leading-relaxed max-w-md">
-              Real-time telemetry monitoring, automated SOS conflict alerts, and field ranger dispatch in one seamless platform.
-            </p>
-
-            <div className="pt-4 grid grid-cols-2 gap-4 border-t border-white/10 text-xs">
-              <div>
-                <p className="text-xl font-extrabold text-emerald-400 font-mono">99.4%</p>
-                <p className="text-[11px] text-slate-300">Conflict Mitigation SLA</p>
-              </div>
-              <div>
-                <p className="text-xl font-extrabold text-white font-mono">24 / 7</p>
-                <p className="text-[11px] text-slate-300">Automated Early Warning</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Footer Note */}
-          <div className="relative z-10 text-[11px] text-slate-400 font-medium">
-            © 2026 Gaia Platform Inc. All rights reserved.
-          </div>
-
         </div>
 
-        {/* Right Side: Modern SaaS Authentication Card (6 Cols) */}
-        <div className="lg:col-span-6 p-6 sm:p-10 lg:p-12 bg-white flex flex-col justify-center space-y-6">
-          
-          <div className="space-y-2">
-            <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Welcome back</h2>
-            <p className="text-xs text-slate-500 font-medium">
-              Please enter your credentials to access your portal.
-            </p>
+        {/* Right Side: Login Form */}
+        <div className="p-8 sm:p-10 flex flex-col justify-center">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-emerald-950 tracking-tight">System Sign In</h2>
+            <p className="text-sm text-emerald-900/70 mt-1">Access your Gaia operational dashboard</p>
           </div>
 
-          {/* Role Selection Tabs */}
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Select Account Role</label>
-            <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 text-xs">
-              {(["admin", "officer", "villager"] as const).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => { setRole(r); setUsername(roleDefaults[r]) }}
-                  className={`py-2 px-2 font-bold rounded-xl capitalize transition-all duration-200 ${
-                    role === r 
-                      ? "bg-white text-slate-900 shadow-sm border border-slate-200" 
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
+          {error && (
+            <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+              <span>{error}</span>
             </div>
-          </div>
+          )}
 
-          {/* Login Form */}
-          <form onSubmit={handleLogin} className="space-y-4 text-xs">
-            
-            {/* Email Field */}
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-700">Email Address</label>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="block text-xs font-semibold text-emerald-950 uppercase tracking-wider mb-2">
+                Email Address
+              </label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input 
-                  type="email" 
-                  value={username} 
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="name@domain.com"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/20 font-medium transition"
-                  required 
+                <Mail className="w-5 h-5 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@gaia.com or villager@gaia.com"
+                  className="w-full pl-11 pr-4 py-3 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm placeholder:text-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all"
                 />
               </div>
             </div>
 
-            {/* Password Field */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center">
-                <label className="font-bold text-slate-700">Password</label>
-                <a href="#forgot" onClick={(e) => { e.preventDefault(); alert("Password reset link sent to your registered email.") }} className="text-[11px] font-bold text-[#10b981] hover:underline">
-                  Forgot password?
-                </a>
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-emerald-950 uppercase tracking-wider mb-2">
+                Password
+              </label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input 
+                <Lock className="w-5 h-5 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
                   type={showPassword ? "text" : "password"}
-                  value={password} 
+                  required
+                  value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/20 font-medium transition"
-                  required 
+                  placeholder="••••••••"
+                  className="w-full pl-11 pr-11 py-3 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm placeholder:text-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-700 hover:text-emerald-950 focus:outline-none"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            {/* Remember Me */}
-            <div className="flex items-center space-x-2 pt-1">
-              <input 
-                type="checkbox" 
-                id="remember"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 rounded text-[#10b981] focus:ring-[#10b981] border-slate-300"
-              />
-              <label htmlFor="remember" className="text-xs text-slate-600 font-medium cursor-pointer">
-                Remember me for 30 days
+            <div className="flex items-center justify-between text-xs">
+              <label className="flex items-center gap-2 text-emerald-950 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-800 focus:ring-emerald-800 border-emerald-900/20"
+                />
+                Remember me
               </label>
+              <a href="#forgot" onClick={(e) => { e.preventDefault(); alert("Contact Admin at admin@gaia.com to reset password."); }} className="text-emerald-800 hover:text-emerald-950 font-semibold">
+                Forgot password?
+              </a>
             </div>
 
-            {/* Submit Button */}
-            <Button 
-              type="submit" 
-              size="lg" 
-              className="w-full bg-gradient-to-r from-[#0b2316] via-[#123c27] to-[#10b981] text-white hover:opacity-95 shadow-md font-bold h-11 rounded-2xl transition-all duration-200 mt-2"
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl bg-emerald-900 hover:bg-emerald-950 text-white font-semibold shadow-lg shadow-emerald-950/20 transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-70"
             >
-              Sign In to Gaia <ArrowRight className="h-4 w-4 ml-1.5" />
-            </Button>
-
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin text-amber-300" />
+                  Authenticating...
+                </>
+              ) : (
+                <>
+                  Sign In to Dashboard
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
           </form>
 
-          {/* Footer Register Link */}
-          <p className="text-center text-xs text-slate-500 pt-2 font-medium">
-            Don't have an account?{" "}
-            <Link to="/register" className="font-extrabold text-[#10b981] hover:underline">
-              Create an account
-            </Link>
-          </p>
-
+          <div className="mt-8 pt-6 border-t border-emerald-900/10 text-center">
+            <p className="text-xs text-emerald-900/70">
+              Are you a local villager needing incident access?{" "}
+              <Link to="/register" className="font-bold text-emerald-800 hover:text-emerald-950 underline underline-offset-4">
+                Register New Villager Account
+              </Link>
+            </p>
+          </div>
         </div>
-
       </div>
-
     </div>
-  )
-}
+  );
+};
+
+export default LoginPage;
