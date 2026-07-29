@@ -12,16 +12,20 @@
   --text-muted: #64748b;
   --border-subtle: #e2e8f0;
 
-  --background: 140 15% 97%;   /* #f8faf7 */
-  --foreground: 222 47% 11%;   /* #0f172a */
+  --background: 140 15% 97%;
+  /* #f8faf7 */
+  --foreground: 222 47% 11%;
+  /* #0f172a */
 
   --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
 
-  --primary: 160 84% 39%;      /* #10b981 */
+  --primary: 160 84% 39%;
+  /* #10b981 */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 140 30% 92%;    /* #e8f4ec */
+  --secondary: 140 30% 92%;
+  /* #e8f4ec */
   --secondary-foreground: 160 84% 20%;
 
   --muted: 210 40% 96%;
@@ -34,15 +38,17 @@
   --input: 214 32% 91%;
   --ring: 160 84% 39%;
 
-  --radius: 12px; /* Soft modern rounded corners */
+  --radius: 12px;
+  /* Soft modern rounded corners */
 }
 
 @layer base {
   * {
     border-color: var(--border-subtle);
   }
-  
-  html, body {
+
+  html,
+  body {
     height: 100%;
     background-color: #f8faf7;
     color: #0f172a;
@@ -78,21 +84,26 @@
 .gradient-text {
   background: linear-gradient(135deg, #0b2316 0%, #10b981 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
 
 /* Custom Soft Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: #f8faf7;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 9999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: #10b981;
 }
