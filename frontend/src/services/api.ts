@@ -73,6 +73,20 @@ export const api = {
     return handleResponse<any>(res);
   },
 
+  uploadProfileImage: async (formData: FormData) => {
+    const token = localStorage.getItem("gaia_token");
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const res = await fetch(`${API_BASE}/api/users/profile-image`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    return handleResponse<any>(res);
+  },
+
   // --- VILLAGES & DESIGNATIONS ---
   getVillages: async () => {
     const res = await fetch(`${API_BASE}/api/villages`, {
@@ -117,6 +131,108 @@ export const api = {
 
   deleteDesignation: async (id: number) => {
     const res = await fetch(`${API_BASE}/api/designations/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  // --- STATES & DISTRICTS & MONITORING STATIONS ---
+  getStates: async () => {
+    const res = await fetch(`${API_BASE}/api/states`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  createState: async (data: any) => {
+    const res = await fetch(`${API_BASE}/api/states`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  updateState: async (id: number, data: any) => {
+    const res = await fetch(`${API_BASE}/api/states/${id}`, {
+      method: "PUT",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  deleteState: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/states/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  getDistricts: async (stateId?: number) => {
+    const query = stateId ? `?state_id=${stateId}` : "";
+    const res = await fetch(`${API_BASE}/api/districts${query}`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  createDistrict: async (data: any) => {
+    const res = await fetch(`${API_BASE}/api/districts`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  updateDistrict: async (id: number, data: any) => {
+    const res = await fetch(`${API_BASE}/api/districts/${id}`, {
+      method: "PUT",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  deleteDistrict: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/districts/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  getMonitoringStations: async (districtId?: number) => {
+    const query = districtId ? `?district_id=${districtId}` : "";
+    const res = await fetch(`${API_BASE}/api/monitoring-stations${query}`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  createMonitoringStation: async (data: any) => {
+    const res = await fetch(`${API_BASE}/api/monitoring-stations`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  updateMonitoringStation: async (id: number, data: any) => {
+    const res = await fetch(`${API_BASE}/api/monitoring-stations/${id}`, {
+      method: "PUT",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  deleteMonitoringStation: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/monitoring-stations/${id}`, {
       method: "DELETE",
       headers: getHeaders(true),
     });

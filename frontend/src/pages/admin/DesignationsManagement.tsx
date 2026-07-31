@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { api } from "@/services/api";
-import { Plus, Award, Trash2, Edit, X, Loader2 } from "lucide-react";
+import { PageHeader } from "@/components/common/PageHeader";
+import { ActionToolbar } from "@/components/common/ActionToolbar";
+import { DataTable } from "@/components/common/DataTable";
+import type { Column } from "@/components/common/DataTable";
+import { Award, Edit2, Trash2 } from "lucide-react";
 
 const DesignationsManagement: React.FC = () => {
   const [designations, setDesignations] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,110 +82,124 @@ const DesignationsManagement: React.FC = () => {
     }
   };
 
+  const filteredDesignations = designations.filter(
+    (d) =>
+      d.designation_name.toLowerCase().includes(search.toLowerCase()) ||
+      (d.description && d.description.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const columns: Column<any>[] = [
+    {
+      header: "ID",
+      accessorKey: "id",
+      sortable: true,
+      cell: (d) => <span className="font-bold text-emerald-800">#{d.id}</span>,
+    },
+    {
+      header: "Designation Title",
+      accessorKey: "designation_name",
+      sortable: true,
+      cell: (d) => (
+        <span className="font-extrabold text-emerald-950 flex items-center gap-2">
+          <Award className="w-4 h-4 text-amber-600 shrink-0" />
+          {d.designation_name}
+        </span>
+      ),
+    },
+    {
+      header: "Role Description",
+      accessorKey: "description",
+      cell: (d) => <span className="text-emerald-900/70 font-medium">{d.description || "No description specified"}</span>,
+    },
+    {
+      header: "Actions",
+      align: "right",
+      cell: (d) => (
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={() => openEditModal(d)}
+            className="px-2.5 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs border border-gray-200 transition-all flex items-center gap-1"
+            title="Edit Designation"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+            <span>Edit</span>
+          </button>
+          <button
+            onClick={() => handleDelete(d.id)}
+            className="px-2.5 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs border border-red-200 transition-all flex items-center gap-1"
+            title="Delete Designation"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete</span>
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 p-6 rounded-3xl border border-emerald-950/10 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-bold text-emerald-950 tracking-tight">Officer Designations Table</h1>
-          <p className="text-xs text-emerald-900/70 mt-1">Manage official officer roles stored directly in PostgreSQL</p>
-        </div>
-        <button
-          onClick={openCreateModal}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-bold shadow-md transition-all self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4 text-amber-300" />
-          Add New Designation
-        </button>
-      </div>
+      <PageHeader
+        title="Officer Designations"
+        subtitle="Manage official officer roles stored directly in PostgreSQL"
+        icon={Award}
+        badge={`${designations.length} Active Designations`}
+      />
 
-      <div className="gaia-card overflow-hidden">
-        {isLoading ? (
-          <div className="p-12 text-center">
-            <Loader2 className="w-8 h-8 text-emerald-800 animate-spin mx-auto mb-2" />
-            <p className="text-xs font-medium text-emerald-950">Loading Designations from Database...</p>
-          </div>
-        ) : designations.length === 0 ? (
-          <div className="p-12 text-center text-emerald-900/60 text-xs font-medium">
-            No designation entries found in database.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-emerald-950">
-              <thead className="bg-emerald-50/80 border-b border-emerald-950/10 uppercase tracking-wider text-[11px] font-bold text-emerald-900">
-                <tr>
-                  <th className="py-3.5 px-6">ID</th>
-                  <th className="py-3.5 px-6">Designation Title</th>
-                  <th className="py-3.5 px-6">Role Description</th>
-                  <th className="py-3.5 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-emerald-950/10 font-medium">
-                {designations.map((d) => (
-                  <tr key={d.id} className="hover:bg-emerald-50/40 transition-colors">
-                    <td className="py-4 px-6 font-bold text-emerald-800">#{d.id}</td>
-                    <td className="py-4 px-6 font-bold text-emerald-950 flex items-center gap-2">
-                      <Award className="w-4 h-4 text-amber-600" />
-                      {d.designation_name}
-                    </td>
-                    <td className="py-4 px-6 text-emerald-900/70">{d.description || "No description specified"}</td>
-                    <td className="py-4 px-6 text-right space-x-2">
-                      <button
-                        onClick={() => openEditModal(d)}
-                        className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-900/10"
-                        title="Edit Designation"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(d.id)}
-                        className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
-                        title="Delete Designation"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {/* Action Toolbar */}
+      <ActionToolbar
+        searchQuery={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search designations..."
+        onRefresh={loadData}
+        isRefreshing={isLoading}
+        addButtonLabel="Add Designation"
+        onAddClick={openCreateModal}
+      />
 
-      {/* Modal */}
+      {/* DataTable */}
+      <DataTable
+        columns={columns}
+        data={filteredDesignations}
+        keyExtractor={(d) => d.id}
+        isLoading={isLoading}
+        emptyMessage="No designation entries found in database."
+      />
+
+      {/* Add / Edit Designation Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-emerald-950/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-emerald-900/10 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-emerald-950/10">
-              <h3 className="text-lg font-bold text-emerald-950">
+        <div className="fixed inset-0 z-50 bg-emerald-950/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-emerald-950/10 space-y-4">
+            <div className="flex items-center justify-between border-b border-emerald-950/10 pb-3">
+              <h3 className="text-base font-extrabold text-emerald-950">
                 {editingDesig ? "Edit Designation" : "Add New Designation"}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="p-1 rounded-xl text-emerald-950/60 hover:bg-emerald-50">
-                <X className="w-5 h-5" />
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-700 font-bold text-xl">
+                ×
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
               <div>
-                <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">Designation Title</label>
+                <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Designation Title *</label>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Range Forest Officer"
-                  className="w-full px-4 py-2.5 rounded-xl bg-emerald-50/50 border border-emerald-900/15 text-xs text-emerald-950 focus:ring-2 focus:ring-emerald-800"
+                  className="w-full px-4 py-2.5 rounded-xl border border-emerald-950/15 text-xs text-emerald-950 font-semibold focus:ring-2 focus:ring-emerald-800"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">Description</label>
+                <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Description</label>
                 <textarea
                   rows={3}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Description of duties..."
-                  className="w-full px-4 py-2.5 rounded-xl bg-emerald-50/50 border border-emerald-900/15 text-xs text-emerald-950 focus:ring-2 focus:ring-emerald-800"
+                  className="w-full px-4 py-2.5 rounded-xl border border-emerald-950/15 text-xs text-emerald-950 font-medium focus:ring-2 focus:ring-emerald-800"
                 />
               </div>
 
@@ -188,14 +207,14 @@ const DesignationsManagement: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-emerald-50 text-emerald-950 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold border border-gray-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-bold shadow-md"
+                  className="px-5 py-2 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-extrabold shadow-md active:scale-95"
                 >
                   {isSubmitting ? "Saving..." : "Save Designation"}
                 </button>

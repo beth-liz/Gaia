@@ -1,5 +1,7 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from app.database.database import engine
@@ -15,7 +17,18 @@ Base.metadata.create_all(bind=engine)
 from app.database.seed import run_seed
 run_seed()
 
-from app.routers import auth, designations, villages, users, incidents, notifications, dashboard
+from app.routers import (
+    auth,
+    designations,
+    villages,
+    users,
+    incidents,
+    notifications,
+    dashboard,
+    states,
+    districts,
+    monitoring_stations
+)
 
 app = FastAPI(title="Gaia Wildlife Operations API", version="2.0.0")
 
@@ -28,6 +41,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static directory for uploaded profile images & media
+static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+os.makedirs(static_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 # Include Routers
 app.include_router(auth.router)
 app.include_router(designations.router)
@@ -36,6 +54,9 @@ app.include_router(users.router)
 app.include_router(incidents.router)
 app.include_router(notifications.router)
 app.include_router(dashboard.router)
+app.include_router(states.router)
+app.include_router(districts.router)
+app.include_router(monitoring_stations.router)
 
 
 @app.get("/")

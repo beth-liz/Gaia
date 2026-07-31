@@ -16,6 +16,9 @@ import VillagerDashboardLayout from "@/layouts/VillagerDashboardLayout";
 
 // Admin Pages
 import AdminDashboardHome from "@/pages/admin/AdminDashboardHome";
+import AdminStatesPage from "@/pages/admin/AdminStatesPage";
+import AdminDistrictsPage from "@/pages/admin/AdminDistrictsPage";
+import AdminMonitoringStationsPage from "@/pages/admin/AdminMonitoringStationsPage";
 import VillagersManagement from "@/pages/admin/VillagersManagement";
 import AdminOfficersPage from "@/pages/admin/AdminOfficersPage";
 import DesignationsManagement from "@/pages/admin/DesignationsManagement";
@@ -82,6 +85,9 @@ function App() {
           >
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboardHome />} />
+            <Route path="states" element={<AdminStatesPage />} />
+            <Route path="districts" element={<AdminDistrictsPage />} />
+            <Route path="monitoring-stations" element={<AdminMonitoringStationsPage />} />
             <Route path="villagers" element={<VillagersManagement />} />
             <Route path="officers" element={<AdminOfficersPage />} />
             <Route path="designations" element={<DesignationsManagement />} />
@@ -91,11 +97,11 @@ function App() {
             <Route path="settings" element={<ProfilePage />} />
           </Route>
 
-          {/* Range Forest Officer (RFO) Protected Routes */}
+          {/* Range Forest Officer (RFO) & Guard Protected Routes */}
           <Route
             path="/officer"
             element={
-              <ProtectedRoute allowedRoles={["Range Forest Officer", "Admin"]}>
+              <ProtectedRoute allowedRoles={["Range Forest Officer", "Forest Guard", "Admin"]}>
                 <OfficerDashboardLayout />
               </ProtectedRoute>
             }
@@ -140,6 +146,16 @@ function App() {
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
+
+          {/* Profile & Settings fallback route */}
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute requireApproval={false}>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Catch-all fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

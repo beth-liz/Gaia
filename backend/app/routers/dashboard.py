@@ -6,6 +6,9 @@ from app.models.user import User
 from app.models.incident import Incident
 from app.models.incident_assignment import IncidentAssignment
 from app.models.notification import Notification
+from app.models.monitoring_station import MonitoringStation
+from app.models.district import District
+from app.models.state import State
 from app.utils.deps import get_current_user
 
 router = APIRouter(
@@ -35,6 +38,11 @@ def get_dashboard_stats(
         User.is_active == True,
         User.work_status == "Available"
     ).count()
+
+    # Hierarchy counts
+    total_stations = db.query(MonitoringStation).count()
+    total_districts = db.query(District).count()
+    total_states = db.query(State).count()
 
     total_incidents = db.query(Incident).count()
     open_incidents = db.query(Incident).filter(Incident.status.in_(["Pending", "Assigned", "In Progress"])).count()
@@ -69,10 +77,17 @@ def get_dashboard_stats(
         "total_villagers": total_villagers,
         "approved_villagers": approved_villagers,
         "pending_villagers": pending_villagers,
+        "pending_approvals": pending_villagers,
         "total_officers": total_officers,
         "rfos_count": rfos_count,
         "guards_count": guards_count,
         "available_guards_count": available_guards_count,
+        "monitoring_stations": total_stations,
+        "total_stations": total_stations,
+        "districts": total_districts,
+        "total_districts": total_districts,
+        "states": total_states,
+        "total_states": total_states,
         "total_incidents": total_incidents,
         "open_incidents": open_incidents,
         "resolved_incidents": resolved_incidents,

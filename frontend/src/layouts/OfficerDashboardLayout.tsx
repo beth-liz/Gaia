@@ -1,17 +1,22 @@
 import React from "react";
 import { BaseDashboardLayout } from "./BaseDashboardLayout";
 import type { NavItem } from "./BaseDashboardLayout";
-import { LayoutDashboard, Radio, Bell, User } from "lucide-react";
+import { LayoutDashboard, Radio, Bell } from "lucide-react";
 
 const rfoNavItems: NavItem[] = [
   { label: "Dashboard", path: "/officer/dashboard", icon: LayoutDashboard },
-  { label: "Assigned Incidents", path: "/officer/incidents", icon: Radio },
+  { label: "Incident Operations", path: "/officer/incidents", icon: Radio, sectionHeader: "Command Center" },
   { label: "Notifications", path: "/officer/notifications", icon: Bell },
-  { label: "Profile", path: "/officer/profile", icon: User },
 ];
 
 const OfficerDashboardLayout: React.FC = () => {
-  return <BaseDashboardLayout roleTitle="Range Officer Command" navItems={rfoNavItems} />;
+  return (
+    <BaseDashboardLayout
+      roleTitle="Officer Command Center"
+      navItems={rfoNavItems}
+      profilePath="/officer/profile"
+    />
+  );
 };
 
 export default OfficerDashboardLayout;

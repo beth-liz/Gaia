@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -6,6 +8,9 @@ from app.database.deps import get_db
 from app.models.user import User
 from app.models.designation import Designation
 from app.models.village import Village
+from app.models.monitoring_station import MonitoringStation
+from app.models.district import District
+from app.models.state import State
 from app.schemas.user import UserOut, OfficerCreate, OfficerUpdate, UserProfileUpdate
 from app.core.security import hash_password, verify_password
 from app.utils.deps import get_current_admin, get_current_user
@@ -16,7 +21,30 @@ router = APIRouter(
 )
 
 
-def format_user_out(user: User) -> UserOut:
+def format_user_out(user: User, db: Optional[Session] = None) -> UserOut:
+    st_name = None
+    dist_name = None
+    state_name = None
+    st_id = user.station_id
+
+    if user.station_rel:
+        st_name = user.station_rel.station_name
+        st_id = user.station_rel.id
+        if user.station_rel.district:
+            dist_name = user.station_rel.district.district_name
+            if user.station_rel.district.state:
+                state_name = user.station_rel.district.state.state_name
+    elif user.station:
+        st_name = user.station
+
+    # Fallback for village district/state if user is Villager
+    v_name = user.village.village_name if user.village else None
+    if user.village and user.village.district_rel:
+        if not dist_name:
+            dist_name = user.village.district_rel.district_name
+        if user.village.district_rel.state and not state_name:
+            state_name = user.village.district_rel.state.state_name
+
     return UserOut(
         id=user.id,
         full_name=user.full_name,
@@ -27,11 +55,16 @@ def format_user_out(user: User) -> UserOut:
         is_active=user.is_active,
         village_id=user.village_id,
         designation_id=user.designation_id,
-        station=user.station,
+        station_id=st_id,
+        station=st_name or user.station,
         work_status=user.work_status or "Available",
         avatar_url=user.avatar_url,
-        village_name=user.village.village_name if user.village else None,
+        profile_image=user.profile_image or user.avatar_url,
+        village_name=v_name,
         designation_name=user.designation.designation_name if user.designation else None,
+        station_name=st_name,
+        district_name=dist_name,
+        state_name=state_name,
         created_at=user.created_at
     )
 
@@ -51,7 +84,7 @@ def get_villagers(
         query = query.filter(User.is_verified == True)
     
     users = query.order_by(User.created_at.desc()).all()
-    return [format_user_out(u) for u in users]
+    return [format_user_out(u, db) for u in users]
 
 
 @router.put("/villagers/{user_id}/approve", response_model=UserOut)
@@ -67,7 +100,7 @@ def approve_villager(
     user.is_verified = True
     db.commit()
     db.refresh(user)
-    return format_user_out(user)
+    return format_user_out(user, db)
 
 
 @router.put("/villagers/{user_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
@@ -98,7 +131,7 @@ def get_officers(
         query = query.filter(User.role == role)
     
     officers = query.order_by(User.full_name.asc()).all()
-    return [format_user_out(u) for u in officers]
+    return [format_user_out(u, db) for u in officers]
 
 
 @router.post("/officers", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -114,9 +147,14 @@ def create_officer(
     desig = db.query(Designation).filter(Designation.id == data.designation_id).first()
     if not desig:
         raise HTTPException(status_code=400, detail="Invalid designation ID")
+
+    station = db.query(MonitoringStation).filter(MonitoringStation.id == data.station_id).first()
+    if not station:
+        raise HTTPException(status_code=400, detail="Invalid monitoring station ID")
     
     role = desig.designation_name
-    
+    is_act = True if (data.status is None or data.status == "Active") else False
+
     officer = User(
         full_name=data.full_name,
         email=data.email,
@@ -124,16 +162,17 @@ def create_officer(
         password=hash_password(data.temporary_password),
         role=role,
         designation_id=data.designation_id,
-        station=data.station,
+        station_id=data.station_id,
+        station=station.station_name,
         is_verified=True,
-        is_active=True,
+        is_active=is_act,
         work_status="Available",
-        must_change_password=True
+        must_change_password=False
     )
     db.add(officer)
     db.commit()
     db.refresh(officer)
-    return format_user_out(officer)
+    return format_user_out(officer, db)
 
 
 @router.put("/officers/{user_id}", response_model=UserOut)
@@ -153,8 +192,11 @@ def update_officer(
         officer.email = data.email
     if data.phone is not None:
         officer.phone = data.phone
-    if data.station is not None:
-        officer.station = data.station
+    if data.station_id is not None:
+        st = db.query(MonitoringStation).filter(MonitoringStation.id == data.station_id).first()
+        if st:
+            officer.station_id = st.id
+            officer.station = st.station_name
     if data.is_active is not None:
         officer.is_active = data.is_active
     if data.designation_id is not None:
@@ -165,7 +207,7 @@ def update_officer(
 
     db.commit()
     db.refresh(officer)
-    return format_user_out(officer)
+    return format_user_out(officer, db)
 
 
 @router.put("/officers/{user_id}/toggle-status", response_model=UserOut)
@@ -181,7 +223,7 @@ def toggle_officer_status(
     officer.is_active = not officer.is_active
     db.commit()
     db.refresh(officer)
-    return format_user_out(officer)
+    return format_user_out(officer, db)
 
 
 @router.delete("/officers/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -210,14 +252,14 @@ def get_available_guards(
         User.is_active == True,
         User.work_status == "Available"
     ).all()
-    return [format_user_out(g) for g in guards]
+    return [format_user_out(g, db) for g in guards]
 
 
 # --- PROFILE ENDPOINTS ---
 
 @router.get("/profile", response_model=UserOut)
-def get_profile(user: User = Depends(get_current_user)):
-    return format_user_out(user)
+def get_profile(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return format_user_out(user, db)
 
 
 @router.put("/profile", response_model=UserOut)
@@ -232,6 +274,8 @@ def update_profile(
         current_user.phone = data.phone
     if data.avatar_url:
         current_user.avatar_url = data.avatar_url
+    if data.profile_image:
+        current_user.profile_image = data.profile_image
     
     if data.new_password:
         if not data.current_password or not verify_password(data.current_password, current_user.password):
@@ -241,4 +285,33 @@ def update_profile(
 
     db.commit()
     db.refresh(current_user)
-    return format_user_out(current_user)
+    return format_user_out(current_user, db)
+
+
+@router.post("/profile-image", response_model=UserOut)
+async def upload_profile_image(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload user profile picture and store image path in database."""
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
+
+    upload_dir = os.path.join("app", "static", "uploads", "profile")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    ext = os.path.splitext(file.filename)[1] or ".jpg"
+    unique_filename = f"user_{current_user.id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = os.path.join(upload_dir, unique_filename)
+
+    with open(file_path, "wb") as f:
+        contents = await file.read()
+        f.write(contents)
+
+    rel_url = f"/static/uploads/profile/{unique_filename}"
+    current_user.profile_image = rel_url
+    db.commit()
+    db.refresh(current_user)
+
+    return format_user_out(current_user, db)

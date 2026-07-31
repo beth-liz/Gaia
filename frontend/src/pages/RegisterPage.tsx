@@ -128,7 +128,7 @@ const RegisterPage: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             <div>
               <label className="block text-xs font-semibold text-emerald-950 uppercase tracking-wider mb-1.5">
                 Full Name

@@ -28,18 +28,30 @@ const LoginPage: React.FC = () => {
 
       // Redirect based on role & verification
       const user = res.user;
-      if (user.role === "Admin") {
+      const roleLower = (user.role || "").toLowerCase();
+
+      if (user.role === "Admin" || roleLower === "admin") {
         navigate("/admin/dashboard", { replace: true });
-      } else if (user.role === "Range Forest Officer") {
+      } else if (
+        user.role === "Range Forest Officer" ||
+        user.role === "Forest Guard" ||
+        user.role === "Officer" ||
+        roleLower.includes("officer") ||
+        roleLower.includes("guard") ||
+        roleLower.includes("ranger") ||
+        user.designation_id ||
+        user.station_id
+      ) {
         navigate("/officer/dashboard", { replace: true });
-      } else if (user.role === "Forest Guard") {
-        navigate("/guard/dashboard", { replace: true });
-      } else if (user.role === "Villager") {
+      } else if (user.role === "Villager" || roleLower === "villager") {
         if (user.is_verified) {
           navigate("/villager/dashboard", { replace: true });
         } else {
           navigate("/pending-approval", { replace: true });
         }
+      } else {
+        // Fallback for any other valid logged-in account
+        navigate("/officer/dashboard", { replace: true });
       }
     } catch (err: any) {
       setError(err.message || "Failed to log in. Please check your credentials.");
@@ -88,13 +100,13 @@ const LoginPage: React.FC = () => {
           </div>
 
           {error && (
-            <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-3">
+            <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold flex items-center gap-3">
               <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
             <div>
               <label className="block text-xs font-semibold text-emerald-950 uppercase tracking-wider mb-2">
                 Email Address
@@ -104,9 +116,10 @@ const LoginPage: React.FC = () => {
                 <input
                   type="email"
                   required
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@gaia.com or villager@gaia.com"
+                  placeholder="rfo@gaia.com or admin@gaia.com"
                   className="w-full pl-11 pr-4 py-3 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm placeholder:text-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all"
                 />
               </div>
@@ -121,6 +134,7 @@ const LoginPage: React.FC = () => {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"

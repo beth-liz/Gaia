@@ -40,8 +40,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     // Redirect to appropriate dashboard based on user's actual role
     if (user.role === "Admin") return <Navigate to="/admin/dashboard" replace />;
-    if (user.role === "Range Forest Officer") return <Navigate to="/officer/dashboard" replace />;
-    if (user.role === "Forest Guard") return <Navigate to="/guard/dashboard" replace />;
+    if (user.role === "Range Forest Officer" || user.role === "Forest Guard") return <Navigate to="/officer/dashboard" replace />;
     if (user.role === "Villager") {
       return user.is_verified ? <Navigate to="/villager/dashboard" replace /> : <Navigate to="/pending-approval" replace />;
     }
@@ -64,8 +63,7 @@ export const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ child
 
   if (isAuthenticated && user) {
     if (user.role === "Admin") return <Navigate to="/admin/dashboard" replace />;
-    if (user.role === "Range Forest Officer") return <Navigate to="/officer/dashboard" replace />;
-    if (user.role === "Forest Guard") return <Navigate to="/guard/dashboard" replace />;
+    if (user.role === "Range Forest Officer" || user.role === "Forest Guard") return <Navigate to="/officer/dashboard" replace />;
     if (user.role === "Villager") {
       return user.is_verified ? <Navigate to="/villager/dashboard" replace /> : <Navigate to="/pending-approval" replace />;
     }

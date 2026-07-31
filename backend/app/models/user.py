@@ -17,11 +17,13 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     must_change_password = Column(Boolean, default=False)
     
-    village_id = Column(Integer, ForeignKey("villages.id"), nullable=True)
-    designation_id = Column(Integer, ForeignKey("designations.id"), nullable=True)
+    village_id = Column(Integer, ForeignKey("villages.id", ondelete="SET NULL"), nullable=True)
+    designation_id = Column(Integer, ForeignKey("designations.id", ondelete="SET NULL"), nullable=True)
+    station_id = Column(Integer, ForeignKey("monitoring_stations.id", ondelete="SET NULL"), nullable=True)
     station = Column(String(100), nullable=True)
     work_status = Column(String(20), default="Available")  # Available, Busy
     avatar_url = Column(String(255), nullable=True)
+    profile_image = Column(String(255), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -29,3 +31,4 @@ class User(Base):
     # Relationships
     village = relationship("Village", backref="users", lazy="joined")
     designation = relationship("Designation", backref="users", lazy="joined")
+    station_rel = relationship("MonitoringStation", back_populates="officers", lazy="joined")
