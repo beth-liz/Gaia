@@ -26,6 +26,10 @@ class VillagerRegister(BaseModel):
     village_id: int
 
 
+class VillagerApprovalUpdate(BaseModel):
+    is_approved: bool
+
+
 class OfficerCreate(BaseModel):
     full_name: str
     email: EmailStr

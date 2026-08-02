@@ -12,3 +12,4 @@ class Village(Base):
 
     # Relationship
     district_rel = relationship("District", back_populates="villages")
+    users = relationship("User", back_populates="village")

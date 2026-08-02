@@ -10,6 +10,7 @@ class MonitoringStation(Base):
     id = Column(Integer, primary_key=True, index=True)
     station_name = Column(String(100), nullable=False)
     district_id = Column(Integer, ForeignKey("districts.id", ondelete="CASCADE"), nullable=False)
+    head_officer_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     address = Column(String(255), nullable=True)
     phone = Column(String(30), nullable=True)
     email = Column(String(100), nullable=True)
@@ -23,4 +24,5 @@ class MonitoringStation(Base):
 
     # Relationships
     district = relationship("District", back_populates="monitoring_stations")
-    officers = relationship("User", back_populates="station_rel")
+    officers = relationship("User", foreign_keys="[User.station_id]", back_populates="station_rel")
+    head_officer = relationship("User", foreign_keys=[head_officer_id], lazy="joined")

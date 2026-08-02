@@ -1,18 +1,24 @@
-import os
-import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from datetime import datetime
 
 from app.database.deps import get_db
 from app.models.user import User
 from app.models.designation import Designation
-from app.models.village import Village
 from app.models.monitoring_station import MonitoringStation
-from app.models.district import District
-from app.models.state import State
-from app.schemas.user import UserOut, OfficerCreate, OfficerUpdate, UserProfileUpdate
-from app.core.security import hash_password, verify_password
+from app.models.village import Village
+from app.models.officer_posting_history import OfficerPostingHistory
+from app.models.notification import Notification
+from app.schemas.user import (
+    UserOut,
+    OfficerCreate,
+    OfficerUpdate,
+    VillagerApprovalUpdate
+)
+from app.schemas.officer_transfer import OfficerTransferCreate, OfficerPostingHistoryOut
+from app.core.security import hash_password
+from app.services.auth_service import format_user_payload
 from app.utils.deps import get_current_admin, get_current_user
 
 router = APIRouter(
@@ -21,104 +27,59 @@ router = APIRouter(
 )
 
 
-def format_user_out(user: User, db: Optional[Session] = None) -> UserOut:
-    st_name = None
-    dist_name = None
-    state_name = None
-    st_id = user.station_id
+def format_user_out(user: User, db: Session) -> UserOut:
+    return format_user_payload(user)
 
-    if user.station_rel:
-        st_name = user.station_rel.station_name
-        st_id = user.station_rel.id
-        if user.station_rel.district:
-            dist_name = user.station_rel.district.district_name
-            if user.station_rel.district.state:
-                state_name = user.station_rel.district.state.state_name
-    elif user.station:
-        st_name = user.station
 
-    # Fallback for village district/state if user is Villager
-    v_name = user.village.village_name if user.village else None
-    if user.village and user.village.district_rel:
-        if not dist_name:
-            dist_name = user.village.district_rel.district_name
-        if user.village.district_rel.state and not state_name:
-            state_name = user.village.district_rel.state.state_name
+@router.get("/me", response_model=UserOut)
+def get_me_profile(current_user: User = Depends(get_current_user)):
+    return format_user_payload(current_user)
 
-    return UserOut(
-        id=user.id,
-        full_name=user.full_name,
-        email=user.email,
-        phone=user.phone,
-        role=user.role,
-        is_verified=user.is_verified,
-        is_active=user.is_active,
-        village_id=user.village_id,
-        designation_id=user.designation_id,
-        station_id=st_id,
-        station=st_name or user.station,
-        work_status=user.work_status or "Available",
-        avatar_url=user.avatar_url,
-        profile_image=user.profile_image or user.avatar_url,
-        village_name=v_name,
-        designation_name=user.designation.designation_name if user.designation else None,
-        station_name=st_name,
-        district_name=dist_name,
-        state_name=state_name,
-        created_at=user.created_at
-    )
+
+@router.get("/profile", response_model=UserOut)
+def get_user_profile(current_user: User = Depends(get_current_user)):
+    return format_user_payload(current_user)
 
 
 # --- VILLAGER MANAGEMENT ---
 
 @router.get("/villagers", response_model=List[UserOut])
 def get_villagers(
-    status: Optional[str] = None,  # 'pending', 'approved'
+    status_filter: Optional[str] = None,
     db: Session = Depends(get_db),
     admin=Depends(get_current_admin)
 ):
     query = db.query(User).filter(User.role == "Villager")
-    if status == "pending":
-        query = query.filter(User.is_verified == False)
-    elif status == "approved":
-        query = query.filter(User.is_verified == True)
     
-    users = query.order_by(User.created_at.desc()).all()
-    return [format_user_out(u, db) for u in users]
+    if status_filter == "pending":
+        query = query.filter(User.is_verified == False)
+    elif status_filter == "approved":
+        query = query.filter(User.is_verified == True)
+        
+    villagers = query.order_by(User.created_at.desc()).all()
+    return [format_user_out(v, db) for v in villagers]
 
 
 @router.put("/villagers/{user_id}/approve", response_model=UserOut)
 def approve_villager(
     user_id: int,
+    data: VillagerApprovalUpdate,
     db: Session = Depends(get_db),
     admin=Depends(get_current_admin)
 ):
-    user = db.query(User).filter(User.id == user_id, User.role == "Villager").first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Villager not found")
+    villager = db.query(User).filter(User.id == user_id, User.role == "Villager").first()
+    if not villager:
+        raise HTTPException(status_code=404, detail="Villager account not found")
+
+    villager.is_verified = data.is_approved
+    villager.is_active = data.is_approved
     
-    user.is_verified = True
     db.commit()
-    db.refresh(user)
-    return format_user_out(user, db)
+    db.refresh(villager)
+    return format_user_out(villager, db)
 
 
-@router.put("/villagers/{user_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
-def reject_villager(
-    user_id: int,
-    db: Session = Depends(get_db),
-    admin=Depends(get_current_admin)
-):
-    user = db.query(User).filter(User.id == user_id, User.role == "Villager").first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Villager not found")
-    
-    db.delete(user)
-    db.commit()
-    return None
-
-
-# --- OFFICER MANAGEMENT ---
+# --- OFFICER MANAGEMENT & STATIONS ---
 
 @router.get("/officers", response_model=List[UserOut])
 def get_officers(
@@ -126,7 +87,7 @@ def get_officers(
     db: Session = Depends(get_db),
     admin=Depends(get_current_admin)
 ):
-    query = db.query(User).filter(User.role.in_(["Range Forest Officer", "Forest Guard"]))
+    query = db.query(User).filter(User.role.in_(["Range Forest Officer", "Forest Guard", "Officer"]))
     if role:
         query = query.filter(User.role == role)
     
@@ -155,6 +116,32 @@ def create_officer(
     role = desig.designation_name
     is_act = True if (data.status is None or data.status == "Active") else False
 
+    # Validation 1: Only ONE Range Forest Officer per Station
+    if role in ["Range Forest Officer", "Officer"]:
+        existing_rfo = db.query(User).filter(
+            User.station_id == station.id,
+            User.role.in_(["Range Forest Officer", "Officer"]),
+            User.is_active == True
+        ).first()
+        if existing_rfo or station.head_officer_id:
+            raise HTTPException(
+                status_code=400,
+                detail="This station already has a Range Forest Officer. Transfer or replace the existing officer first."
+            )
+
+    # Validation 2: Forest Guard requires a Range Forest Officer at Station
+    if role == "Forest Guard":
+        rfo_at_station = db.query(User).filter(
+            User.station_id == station.id,
+            User.role.in_(["Range Forest Officer", "Officer"]),
+            User.is_active == True
+        ).first()
+        if not rfo_at_station and not station.head_officer_id:
+            raise HTTPException(
+                status_code=400,
+                detail="This station currently has no assigned Range Forest Officer. Please assign a head officer before adding Forest Guards."
+            )
+
     officer = User(
         full_name=data.full_name,
         email=data.email,
@@ -172,6 +159,13 @@ def create_officer(
     db.add(officer)
     db.commit()
     db.refresh(officer)
+
+    # If created as Head RFO, set station head_officer_id and active status
+    if role in ["Range Forest Officer", "Officer"]:
+        station.head_officer_id = officer.id
+        station.status = "Active"
+        db.commit()
+
     return format_user_out(officer, db)
 
 
@@ -192,11 +186,6 @@ def update_officer(
         officer.email = data.email
     if data.phone is not None:
         officer.phone = data.phone
-    if data.station_id is not None:
-        st = db.query(MonitoringStation).filter(MonitoringStation.id == data.station_id).first()
-        if st:
-            officer.station_id = st.id
-            officer.station = st.station_name
     if data.is_active is not None:
         officer.is_active = data.is_active
     if data.designation_id is not None:
@@ -208,6 +197,120 @@ def update_officer(
     db.commit()
     db.refresh(officer)
     return format_user_out(officer, db)
+
+
+# --- OFFICER TRANSFER WORKFLOW & HISTORY ---
+
+@router.post("/officers/{user_id}/transfer", response_model=UserOut)
+def transfer_officer(
+    user_id: int,
+    data: OfficerTransferCreate,
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin)
+):
+    officer = db.query(User).filter(User.id == user_id).first()
+    if not officer:
+        raise HTTPException(status_code=404, detail="Officer not found")
+
+    new_station = db.query(MonitoringStation).filter(MonitoringStation.id == data.new_station_id).first()
+    if not new_station:
+        raise HTTPException(status_code=404, detail="Target monitoring station not found")
+
+    old_station_id = officer.station_id
+    old_station = db.query(MonitoringStation).filter(MonitoringStation.id == old_station_id).first() if old_station_id else None
+
+    if old_station_id == data.new_station_id:
+        raise HTTPException(status_code=400, detail="Officer is already assigned to this station.")
+
+    # Validation for RFO transfer
+    if officer.role in ["Range Forest Officer", "Officer"]:
+        existing_rfo_new = db.query(User).filter(
+            User.station_id == new_station.id,
+            User.role.in_(["Range Forest Officer", "Officer"]),
+            User.is_active == True,
+            User.id != officer.id
+        ).first()
+        if existing_rfo_new or (new_station.head_officer_id and new_station.head_officer_id != officer.id):
+            raise HTTPException(
+                status_code=400,
+                detail="This station already has a Range Forest Officer. Transfer or replace the existing officer first."
+            )
+
+        # Clear head officer on old station
+        if old_station and old_station.head_officer_id == officer.id:
+            old_station.head_officer_id = None
+            old_station.status = "No Head Officer Assigned"
+
+        # Assign head officer on new station
+        new_station.head_officer_id = officer.id
+        new_station.status = "Active"
+
+    # Validation for Guard transfer
+    if officer.role == "Forest Guard":
+        if not new_station.head_officer_id:
+            rfo = db.query(User).filter(
+                User.station_id == new_station.id,
+                User.role.in_(["Range Forest Officer", "Officer"]),
+                User.is_active == True
+            ).first()
+            if not rfo:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This station currently has no assigned Range Forest Officer. Please assign a head officer before adding Forest Guards."
+                )
+
+    # Record Transfer History
+    history_entry = OfficerPostingHistory(
+        officer_id=officer.id,
+        old_station_id=old_station_id,
+        new_station_id=new_station.id,
+        reason=data.reason,
+        created_by=admin.id
+    )
+    db.add(history_entry)
+
+    # Update Officer Record
+    officer.station_id = new_station.id
+    officer.station = new_station.station_name
+    officer.work_status = "Available"
+
+    # Create Notification
+    db.add(Notification(
+        user_id=officer.id,
+        title="Station Transfer Completed",
+        message=f"You have been transferred from {old_station.station_name if old_station else 'Unassigned'} to {new_station.station_name}."
+    ))
+
+    db.commit()
+    db.refresh(officer)
+    return format_user_out(officer, db)
+
+
+@router.get("/officers/{user_id}/transfer-history", response_model=List[OfficerPostingHistoryOut])
+def get_officer_transfer_history(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin)
+):
+    history = db.query(OfficerPostingHistory).filter(
+        OfficerPostingHistory.officer_id == user_id
+    ).order_by(OfficerPostingHistory.created_at.desc()).all()
+
+    out = []
+    for h in history:
+        out.append(OfficerPostingHistoryOut(
+            id=h.id,
+            officer_id=h.officer_id,
+            officer_name=h.officer.full_name if h.officer else None,
+            old_station_id=h.old_station_id,
+            old_station_name=h.old_station.station_name if h.old_station else "Unassigned",
+            new_station_id=h.new_station_id,
+            new_station_name=h.new_station.station_name if h.new_station else "Unassigned",
+            transfer_date=h.transfer_date,
+            reason=h.reason,
+            created_by_name=h.transfer_by.full_name if h.transfer_by else "Admin"
+        ))
+    return out
 
 
 @router.put("/officers/{user_id}/toggle-status", response_model=UserOut)
@@ -236,6 +339,13 @@ def delete_officer(
     if not officer:
         raise HTTPException(status_code=404, detail="Officer not found")
     
+    # If officer was head officer of station, update station status
+    if officer.station_id:
+        st = db.query(MonitoringStation).filter(MonitoringStation.id == officer.station_id).first()
+        if st and st.head_officer_id == officer.id:
+            st.head_officer_id = None
+            st.status = "No Head Officer Assigned"
+
     db.delete(officer)
     db.commit()
     return None
@@ -243,75 +353,19 @@ def delete_officer(
 
 @router.get("/guards/available", response_model=List[UserOut])
 def get_available_guards(
+    station_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
-    """Fetch Forest Guards who are Active and Available."""
-    guards = db.query(User).filter(
+    query = db.query(User).filter(
         User.role == "Forest Guard",
         User.is_active == True,
         User.work_status == "Available"
-    ).all()
-    return [format_user_out(g, db) for g in guards]
-
-
-# --- PROFILE ENDPOINTS ---
-
-@router.get("/profile", response_model=UserOut)
-def get_profile(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return format_user_out(user, db)
-
-
-@router.put("/profile", response_model=UserOut)
-def update_profile(
-    data: UserProfileUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    if data.full_name:
-        current_user.full_name = data.full_name
-    if data.phone:
-        current_user.phone = data.phone
-    if data.avatar_url:
-        current_user.avatar_url = data.avatar_url
-    if data.profile_image:
-        current_user.profile_image = data.profile_image
+    )
     
-    if data.new_password:
-        if not data.current_password or not verify_password(data.current_password, current_user.password):
-            raise HTTPException(status_code=400, detail="Current password incorrect")
-        current_user.password = hash_password(data.new_password)
-        current_user.must_change_password = False
-
-    db.commit()
-    db.refresh(current_user)
-    return format_user_out(current_user, db)
-
-
-@router.post("/profile-image", response_model=UserOut)
-async def upload_profile_image(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Upload user profile picture and store image path in database."""
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image files are allowed")
-
-    upload_dir = os.path.join("app", "static", "uploads", "profile")
-    os.makedirs(upload_dir, exist_ok=True)
-
-    ext = os.path.splitext(file.filename)[1] or ".jpg"
-    unique_filename = f"user_{current_user.id}_{uuid.uuid4().hex[:8]}{ext}"
-    file_path = os.path.join(upload_dir, unique_filename)
-
-    with open(file_path, "wb") as f:
-        contents = await file.read()
-        f.write(contents)
-
-    rel_url = f"/static/uploads/profile/{unique_filename}"
-    current_user.profile_image = rel_url
-    db.commit()
-    db.refresh(current_user)
-
-    return format_user_out(current_user, db)
+    target_st_id = station_id or current_user.station_id
+    if target_st_id:
+        query = query.filter(User.station_id == target_st_id)
+        
+    guards = query.order_by(User.full_name.asc()).all()
+    return [format_user_out(g, db) for g in guards]

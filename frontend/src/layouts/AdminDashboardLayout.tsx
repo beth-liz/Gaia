@@ -11,15 +11,17 @@ import {
   Globe,
   Building2,
   Radio,
+  Trees,
 } from "lucide-react";
 
 const adminNavItems: NavItem[] = [
   { label: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
   
-  // Administrative Hierarchy section
-  { label: "States", path: "/admin/states", icon: Globe, sectionHeader: "Administrative Hierarchy" },
+  // Master Data & Administrative Hierarchy section
+  { label: "States", path: "/admin/states", icon: Globe, sectionHeader: "Master Data & Hierarchy" },
   { label: "Districts", path: "/admin/districts", icon: Building2 },
   { label: "Monitoring Stations", path: "/admin/monitoring-stations", icon: Radio },
+  { label: "Animal Species", path: "/admin/animal-species", icon: Trees },
 
   // Operations & Governance section
   { label: "Villagers", path: "/admin/villagers", icon: Users, sectionHeader: "Operations & Governance" },

@@ -306,14 +306,81 @@ export const api = {
     return handleResponse<any>(res);
   },
 
-  getAvailableGuards: async () => {
-    const res = await fetch(`${API_BASE}/api/users/guards/available`, {
+  getAvailableGuards: async (stationId?: number) => {
+    const query = stationId ? `?station_id=${stationId}` : "";
+    const res = await fetch(`${API_BASE}/api/users/guards/available${query}`, {
       headers: getHeaders(true),
     });
     return handleResponse<any[]>(res);
   },
 
+  // --- ANIMAL SPECIES ---
+  getAnimalSpecies: async (activeOnly?: boolean) => {
+    const query = activeOnly ? "?active_only=true" : "";
+    const res = await fetch(`${API_BASE}/api/animal-species${query}`, {
+      headers: getHeaders(false),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  getAnimalSpeciesById: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/animal-species/${id}`, {
+      headers: getHeaders(false),
+    });
+    return handleResponse<any>(res);
+  },
+
+  createAnimalSpecies: async (data: any) => {
+    const res = await fetch(`${API_BASE}/api/animal-species`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  updateAnimalSpecies: async (id: number, data: any) => {
+    const res = await fetch(`${API_BASE}/api/animal-species/${id}`, {
+      method: "PUT",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  uploadSpeciesImage: async (id: number, formData: FormData) => {
+    const token = localStorage.getItem("gaia_token");
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/api/animal-species/${id}/upload-image`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    return handleResponse<any>(res);
+  },
+
+  deleteAnimalSpecies: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/animal-species/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
   // --- INCIDENTS ---
+  uploadIncidentImages: async (formData: FormData) => {
+    const token = localStorage.getItem("gaia_token");
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/api/incidents/upload-images`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    return handleResponse<string[]>(res);
+  },
+
   createIncident: async (data: any) => {
     const res = await fetch(`${API_BASE}/api/incidents`, {
       method: "POST",
@@ -323,19 +390,61 @@ export const api = {
     return handleResponse<any>(res);
   },
 
-  getIncidents: async (params?: { status?: string; my_reports_only?: boolean; assigned_to_me?: boolean }) => {
+  getIncidents: async (params?: {
+    status?: string;
+    station_id?: number;
+    district_id?: number;
+    species_id?: number;
+    severity?: string;
+    date?: string;
+    search?: string;
+    my_reports_only?: boolean;
+    assigned_to_me?: boolean;
+  }) => {
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.append("status", params.status);
+    if (params?.station_id) searchParams.append("station_id", String(params.station_id));
+    if (params?.district_id) searchParams.append("district_id", String(params.district_id));
+    if (params?.species_id) searchParams.append("species_id", String(params.species_id));
+    if (params?.severity) searchParams.append("severity", params.severity);
+    if (params?.date) searchParams.append("date", params.date);
+    if (params?.search) searchParams.append("search", params.search);
     if (params?.my_reports_only) searchParams.append("my_reports_only", "true");
     if (params?.assigned_to_me) searchParams.append("assigned_to_me", "true");
+
     const res = await fetch(`${API_BASE}/api/incidents?${searchParams.toString()}`, {
       headers: getHeaders(true),
     });
     return handleResponse<any[]>(res);
   },
 
-  assignIncident: async (incidentId: number, data: { assigned_to_id: number; notes?: string }) => {
-    const res = await fetch(`${API_BASE}/api/incidents/${incidentId}/assign`, {
+  getIncidentById: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  updateIncident: async (id: number, data: any) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}`, {
+      method: "PUT",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  deleteIncident: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  // --- OFFICER TRANSFER & WORKFLOW ---
+  transferOfficer: async (id: number, data: { new_station_id: number; reason?: string; effective_date?: string }) => {
+    const res = await fetch(`${API_BASE}/api/users/officers/${id}/transfer`, {
       method: "POST",
       headers: getHeaders(true),
       body: JSON.stringify(data),
@@ -343,11 +452,117 @@ export const api = {
     return handleResponse<any>(res);
   },
 
-  updateIncidentStatus: async (incidentId: number, data: { status: string; notes?: string; report_url?: string }) => {
-    const res = await fetch(`${API_BASE}/api/incidents/${incidentId}/update-status`, {
+  getOfficerTransferHistory: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/users/officers/${id}/transfer-history`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  getStationGuardsWorkflow: async () => {
+    const res = await fetch(`${API_BASE}/api/officers/guards`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  getStationOverviewMetrics: async () => {
+    const res = await fetch(`${API_BASE}/api/officers/station-overview`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  getIncidentQueue: async () => {
+    const res = await fetch(`${API_BASE}/api/incidents/queue`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  getRFOAssignments: async () => {
+    const res = await fetch(`${API_BASE}/api/incidents/rfo/assignments`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  // --- INCIDENT WORKFLOW & TIMELINE ---
+  getIncidentActivities: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/activities`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  rejectIncident: async (id: number, payload: { reason: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/reject`, {
       method: "POST",
       headers: getHeaders(true),
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  requestInfoIncident: async (id: number, payload: { message: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/request-info`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  verifyCloseIncident: async (id: number, payload: { remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/verify-close`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  assignGuardIncident: async (id: number, payload: { assigned_to_id: number; notes?: string; priority?: string; estimated_response_time?: string; remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/assign`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  fieldUpdateIncident: async (id: number, payload: { step_name: string; remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/field-update`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  submitFinalReport: async (id: number, payload: { actions_taken: string; animal_observed: string; damage_assessment: string; recommendations: string; remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/submit-report`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  approveCloseIncident: async (id: number, payload: { remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/approve-close`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  returnCorrectionIncident: async (id: number, payload: { correction_notes: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/return-correction`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
     });
     return handleResponse<any>(res);
   },
