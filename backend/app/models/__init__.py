@@ -13,5 +13,6 @@ from app.models.incident_assignment import IncidentAssignment
 from app.models.notification import Notification
 from app.models.officer_posting_history import OfficerPostingHistory
 from app.models.incident_activity import IncidentActivity
+from app.models.field_operation import FieldOperation
 
 Base.metadata.create_all(bind=engine)

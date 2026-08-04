@@ -24,6 +24,33 @@ def get_user_notifications(
     ).order_by(Notification.created_at.desc()).all()
 
 
+@router.get("/unread-count")
+def get_unread_count(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """Count unread notifications for logged in user."""
+    count = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_read == False
+    ).count()
+    return {"unread_count": count}
+
+
+@router.put("/read-all")
+def mark_all_notifications_read(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """Mark all notifications as read for logged in user."""
+    db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_read == False
+    ).update({"is_read": True})
+    db.commit()
+    return {"status": "All notifications marked as read"}
+
+
 @router.put("/{notification_id}/read", response_model=NotificationOut)
 def mark_notification_read(
     notification_id: int,

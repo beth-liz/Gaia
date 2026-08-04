@@ -64,6 +64,20 @@ export interface District {
   state_name?: string;
 }
 
+export interface AssignedOfficer {
+  assignment_id: number;
+  officer_id: number;
+  full_name: string;
+  designation?: string;
+  work_status?: string;
+  avatar_url?: string;
+  assigned_at: string;
+  priority?: string;
+  estimated_response_time?: string;
+  instructions?: string;
+  dispatched_at?: string;
+}
+
 export interface Incident {
   id: number;
   reference_id?: string;
@@ -105,7 +119,60 @@ export interface Incident {
   assigned_guard_id?: number;
   assigned_guard_name?: string;
   assignment_notes?: string;
+  assigned_officers?: AssignedOfficer[];
+  is_head_officer?: boolean;
+  head_officer_id?: number;
+  head_officer_name?: string;
+  verification_notes?: string;
+  verification_time?: string;
+  verified_by_name?: string;
+  closed_at?: string;
+  closed_by_name?: string;
+  final_closure_remarks?: string;
   created_at: string;
+}
+
+export interface FieldOperation {
+  id: number;
+  incident_id: number;
+  guard_id: number;
+  guard_name?: string;
+  current_step: "Pending Acceptance" | "Travelling" | "Reached Site" | "Initial Assessment" | "Action In Progress" | "Situation Controlled" | "Evidence Uploaded" | "Final Report Submitted" | string;
+  departure_time?: string;
+  vehicle?: string;
+  acceptance_remarks?: string;
+  travelling_start_time?: string;
+  travelling_gps?: string;
+  travelling_remarks?: string;
+  arrival_time?: string;
+  arrival_gps?: string;
+  arrival_weather?: string;
+  arrival_remarks?: string;
+  animal_present?: boolean;
+  animal_count?: number;
+  animal_behaviour?: string;
+  threat_level?: string;
+  human_injury?: boolean;
+  livestock_damage?: boolean;
+  property_damage?: boolean;
+  assessment_remarks?: string;
+  actions_checklist?: string[];
+  action_remarks?: string;
+  outcome?: string;
+  animal_direction?: string;
+  distance_covered?: string;
+  remaining_risk?: string;
+  situation_remarks?: string;
+  evidence_gps?: string;
+  reinforcement_requested?: boolean;
+  reinforcement_reason?: string;
+  reinforcement_priority?: string;
+  reinforcement_count?: number;
+  reinforcement_status?: "None" | "Requested" | "Approved" | "Rejected" | string;
+  reinforcement_remarks?: string;
+  report_generated_content?: string;
+  submitted_at?: string;
+  updated_at?: string;
 }
 
 export interface OfficerPostingHistory {

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "@/services/api";
 import { PageHeader } from "@/components/common/PageHeader";
 import type { Incident } from "@/types";
-import { ShieldCheck, MapPin, Calendar, Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, MapPin, Calendar, Loader2, ArrowRight, CheckCircle2, Radio } from "lucide-react";
 
 export const GuardIncidentsPage: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -29,7 +29,7 @@ export const GuardIncidentsPage: React.FC = () => {
     <div className="space-y-6">
       <PageHeader
         title="My Field Assignments"
-        subtitle="Active wildlife incidents assigned to you by Range Forest Command"
+        subtitle="Active wildlife missions assigned to you by Range Forest Command"
         icon={ShieldCheck}
         badge={`${incidents.length} Assigned`}
       />
@@ -60,16 +60,16 @@ export const GuardIncidentsPage: React.FC = () => {
                   </div>
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
-                      inc.status === "Assigned"
-                        ? "bg-amber-100 text-amber-950 border border-amber-300"
-                        : inc.status === "In Progress"
+                      inc.status === "Dispatched" || inc.status === "Assigned"
+                        ? "bg-amber-400 text-emerald-950 border border-amber-500 shadow-xs"
+                        : inc.status === "In Progress" || inc.status === "Action In Progress"
                         ? "bg-purple-100 text-purple-950 border border-purple-300"
                         : inc.status === "Resolved"
                         ? "bg-emerald-100 text-emerald-950 border border-emerald-300"
                         : "bg-gray-100 text-gray-900"
                     }`}
                   >
-                    {inc.status}
+                    {inc.status === "Dispatched" ? "Pending Acceptance" : inc.status}
                   </span>
                 </div>
 
@@ -107,16 +107,10 @@ export const GuardIncidentsPage: React.FC = () => {
 
               <div className="pt-3 border-t border-emerald-950/10 flex items-center justify-end gap-2">
                 <Link
-                  to={`/incidents/${inc.id}`}
-                  className="px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-extrabold text-xs transition-all"
+                  to={`/guard/mission/${inc.id}`}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-amber-300 font-black text-xs shadow-md flex items-center gap-1.5 transition-all active:scale-95"
                 >
-                  View Details
-                </Link>
-                <Link
-                  to={`/incidents/${inc.id}`}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white font-black text-xs shadow-md flex items-center gap-1.5 transition-all active:scale-95"
-                >
-                  Update Progress <ArrowRight className="w-3.5 h-3.5" />
+                  <Radio className="w-3.5 h-3.5 text-amber-300" /> Execute Field Mission <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
             </div>

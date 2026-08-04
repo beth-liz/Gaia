@@ -29,9 +29,28 @@ class IncidentCreate(BaseModel):
     images: Optional[List[str]] = []
 
 
-class IncidentAssign(BaseModel):
-    assigned_to_id: int
-    notes: Optional[str] = None
+class IncidentAssignMulti(BaseModel):
+    officer_ids: List[int]
+    priority: Optional[str] = "High"
+    estimated_response_time: Optional[str] = "30 Mins"
+    instructions: Optional[str] = None
+    mission_notes: Optional[str] = None
+    assignment_category: Optional[str] = "Field Patrol"
+    emergency_level: Optional[str] = "Level 2"
+
+
+class AssignedOfficerOut(BaseModel):
+    assignment_id: int
+    officer_id: int
+    full_name: str
+    designation: Optional[str] = "Forest Guard"
+    work_status: Optional[str] = "Available"
+    avatar_url: Optional[str] = None
+    assigned_at: str
+    priority: Optional[str] = "High"
+    estimated_response_time: Optional[str] = "30 Mins"
+    instructions: Optional[str] = None
+    dispatched_at: Optional[str] = None
 
 
 class IncidentStatusUpdate(BaseModel):
@@ -80,6 +99,19 @@ class IncidentOut(BaseModel):
     assigned_guard_id: Optional[int] = None
     assigned_guard_name: Optional[str] = None
     assignment_notes: Optional[str] = None
+    assigned_officers: List[AssignedOfficerOut] = []
+    is_head_officer: bool = False
+    head_officer_id: Optional[int] = None
+    head_officer_name: Optional[str] = None
+
+    # Verification & Closure Fields
+    verification_notes: Optional[str] = None
+    verification_time: Optional[str] = None
+    verified_by_name: Optional[str] = None
+    closed_at: Optional[str] = None
+    closed_by_name: Optional[str] = None
+    final_closure_remarks: Optional[str] = None
+
     created_at: datetime
 
     class Config:

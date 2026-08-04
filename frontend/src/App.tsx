@@ -34,6 +34,7 @@ import RFOStationOverviewPage from "@/pages/officer/RFOStationOverviewPage";
 import GuardDashboardHome from "@/pages/officer/GuardDashboardHome";
 import GuardIncidentsPage from "@/pages/officer/GuardIncidentsPage";
 import GuardCompletedReportsPage from "@/pages/officer/GuardCompletedReportsPage";
+import GuardMissionExecutionPage from "@/pages/officer/GuardMissionExecutionPage";
 
 // Villager Pages
 import VillagerDashboardHome from "@/pages/villager/VillagerDashboardHome";
@@ -106,7 +107,7 @@ function App() {
             <Route path="settings" element={<ProfilePage />} />
           </Route>
 
-          {/* Range Forest Officer (RFO) & Guard Protected Routes */}
+          {/* Range Forest Officer (RFO) Protected Routes */}
           <Route
             path="/officer"
             element={
@@ -119,6 +120,7 @@ function App() {
             <Route path="dashboard" element={<OfficerDashboardHome />} />
             <Route path="incidents" element={<RFOIncidentsPage />} />
             <Route path="incidents/:id" element={<IncidentReviewPage />} />
+            <Route path="mission/:id" element={<GuardMissionExecutionPage />} />
             <Route path="guards" element={<RFOForestGuardsPage />} />
             <Route path="station" element={<RFOStationOverviewPage />} />
             <Route path="create-incident" element={<OfficerCreateIncidentPage />} />
@@ -139,7 +141,8 @@ function App() {
             <Route path="dashboard" element={<GuardDashboardHome />} />
             <Route path="assignments" element={<GuardIncidentsPage />} />
             <Route path="incidents" element={<GuardIncidentsPage />} />
-            <Route path="incidents/:id" element={<IncidentReviewPage />} />
+            <Route path="mission/:id" element={<GuardMissionExecutionPage />} />
+            <Route path="incidents/:id" element={<GuardMissionExecutionPage />} />
             <Route path="completed" element={<GuardCompletedReportsPage />} />
             <Route path="reports" element={<GuardCompletedReportsPage />} />
             <Route path="notifications" element={<NotificationsPage />} />

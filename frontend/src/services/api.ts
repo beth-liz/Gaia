@@ -522,6 +522,31 @@ export const api = {
     return handleResponse<any>(res);
   },
 
+  approveIncident: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/approve`, {
+      method: "POST",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  assignMultiOfficers: async (id: number, payload: { officer_ids: number[]; priority?: string; estimated_response_time?: string; instructions?: string; mission_notes?: string; assignment_category?: string; emergency_level?: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/assign-multi`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  dispatchTeam: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/dispatch`, {
+      method: "POST",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
   assignGuardIncident: async (id: number, payload: { assigned_to_id: number; notes?: string; priority?: string; estimated_response_time?: string; remarks?: string }) => {
     const res = await fetch(`${API_BASE}/api/incidents/${id}/assign`, {
       method: "POST",
@@ -542,6 +567,160 @@ export const api = {
 
   submitFinalReport: async (id: number, payload: { actions_taken: string; animal_observed: string; damage_assessment: string; recommendations: string; remarks?: string }) => {
     const res = await fetch(`${API_BASE}/api/incidents/${id}/submit-report`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  // --- FIELD OPERATIONS WORKFLOW ---
+  getFieldOp: async (incidentId: number) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  acceptMission: async (incidentId: number, payload: { departure_time?: string; vehicle?: string; remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/accept`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  fieldStepTravelling: async (incidentId: number, payload: { start_time?: string; gps?: string; remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/step-travelling`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  fieldStepReachedSite: async (incidentId: number, payload: { arrival_time?: string; gps?: string; arrival_weather?: string; remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/step-reached-site`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  fieldStepAssessment: async (incidentId: number, payload: { animal_present?: boolean; animal_count?: number; animal_behaviour?: string; threat_level?: string; human_injury?: boolean; livestock_damage?: boolean; property_damage?: boolean; remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/step-assessment`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  fieldStepActionTaken: async (incidentId: number, payload: { actions_checklist: string[]; remarks: string }) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/step-action-taken`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  fieldStepSituationControlled: async (incidentId: number, payload: { outcome?: string; animal_direction?: string; distance?: string; remaining_risk?: string; remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/step-situation-controlled`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  fieldStepEvidence: async (incidentId: number, payload: { gps?: string }) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/step-evidence`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  requestReinforcement: async (incidentId: number, payload: { reason: string; priority?: string; count?: number; remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/request-reinforcement`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  approveReinforcement: async (incidentId: number) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/approve-reinforcement`, {
+      method: "POST",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  approveReport: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/approve-report`, {
+      method: "POST",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  returnReport: async (id: number, payload: { remarks: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/return-report`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  verifyIncident: async (id: number, payload: { notes: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/verify`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  closeIncident: async (id: number, payload: { remarks?: string }) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/close`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  getUnreadNotificationsCount: async () => {
+    const res = await fetch(`${API_BASE}/api/notifications/unread-count`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  markAllNotificationsRead: async () => {
+    const res = await fetch(`${API_BASE}/api/notifications/read-all`, {
+      method: "PUT",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  getAnalyticsSummary: async () => {
+    const res = await fetch(`${API_BASE}/api/incidents/analytics/summary`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  generateSubmitFinalReport: async (incidentId: number, payload: { signature?: string }) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/generate-submit-report`, {
       method: "POST",
       headers: getHeaders(true),
       body: JSON.stringify(payload),

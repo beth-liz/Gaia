@@ -39,7 +39,7 @@ class Incident(Base):
     crop_damage = Column(Boolean, default=False)
 
     # Incident Status & Metadata
-    status = Column(String(50), nullable=False, default="Pending Review")  # Pending Review, Assigned, In Progress, Completed, Rejected
+    status = Column(String(50), nullable=False, default="Pending Review")  # Pending Review, Assigned, Dispatched, Report Submitted, Report Approved, Verified, Closed
     incident_status = Column(String(50), nullable=True, default="Pending Review")
 
     reported_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -52,6 +52,15 @@ class Incident(Base):
     date_reported = Column(String(20), nullable=True)
     time_reported = Column(String(20), nullable=True)
 
+    # Verification & Closure Fields
+    verification_notes = Column(Text, nullable=True)
+    verification_time = Column(DateTime, nullable=True)
+    verified_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    closed_at = Column(DateTime, nullable=True)
+    closed_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    final_closure_remarks = Column(Text, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -59,6 +68,8 @@ class Incident(Base):
     animal_species_rel = relationship("AnimalSpecies", back_populates="incidents", lazy="joined")
     reporter_rel = relationship("User", foreign_keys=[reported_by], lazy="joined")
     reporter = relationship("User", foreign_keys=[reporter_id], lazy="joined")
+    verified_by = relationship("User", foreign_keys=[verified_by_id], lazy="joined")
+    closed_by = relationship("User", foreign_keys=[closed_by_id], lazy="joined")
     village = relationship("Village", lazy="joined")
     station_rel = relationship("MonitoringStation", lazy="joined")
     district_rel = relationship("District", lazy="joined")

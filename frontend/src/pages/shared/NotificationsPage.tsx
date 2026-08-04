@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { api } from "@/services/api";
-import { Bell, Check, Trash2, Loader2 } from "lucide-react";
+import { Bell, Check, Trash2, Loader2, CheckCheck } from "lucide-react";
 
 const NotificationsPage: React.FC = () => {
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -31,6 +31,15 @@ const NotificationsPage: React.FC = () => {
     }
   };
 
+  const handleMarkAllRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      loadNotifications();
+    } catch (err: any) {
+      alert(err.message || "Failed to mark all as read");
+    }
+  };
+
   const handleDelete = async (id: number) => {
     try {
       await api.deleteNotification(id);
@@ -50,9 +59,20 @@ const NotificationsPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-emerald-950 tracking-tight">System Alerts & Notifications</h1>
           <p className="text-xs text-emerald-900/70 mt-1">Real-time alerts and mission dispatches saved in database</p>
         </div>
-        <div className="bg-emerald-50 px-4 py-2 rounded-2xl border border-emerald-900/10 text-xs font-bold text-emerald-900 flex items-center gap-2">
-          <Bell className="w-4 h-4 text-emerald-700" />
-          Unread Alerts: <span className="text-amber-700 font-extrabold text-sm">{unreadCount}</span>
+        <div className="flex items-center gap-3">
+          <div className="bg-emerald-50 px-4 py-2 rounded-2xl border border-emerald-900/10 text-xs font-bold text-emerald-900 flex items-center gap-2">
+            <Bell className="w-4 h-4 text-emerald-700" />
+            Unread Alerts: <span className="text-amber-700 font-extrabold text-sm">{unreadCount}</span>
+          </div>
+
+          {unreadCount > 0 && (
+            <button
+              onClick={handleMarkAllRead}
+              className="px-4 py-2 rounded-2xl bg-emerald-900 hover:bg-emerald-950 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all"
+            >
+              <CheckCheck className="w-4 h-4 text-amber-300" /> Mark All Read
+            </button>
+          )}
         </div>
       </div>
 
