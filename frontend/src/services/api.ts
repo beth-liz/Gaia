@@ -465,6 +465,12 @@ export const api = {
     });
     return handleResponse<any[]>(res);
   },
+  getStationGuards: async () => {
+    const res = await fetch(`${API_BASE}/api/officers/guards`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
 
   getStationOverviewMetrics: async () => {
     const res = await fetch(`${API_BASE}/api/officers/station-overview`, {

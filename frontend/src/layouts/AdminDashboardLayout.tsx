@@ -12,6 +12,9 @@ import {
   Building2,
   Radio,
   Trees,
+  Package,
+  Warehouse,
+  ShieldCheck,
 } from "lucide-react";
 
 const adminNavItems: NavItem[] = [
@@ -22,6 +25,11 @@ const adminNavItems: NavItem[] = [
   { label: "Districts", path: "/admin/districts", icon: Building2 },
   { label: "Monitoring Stations", path: "/admin/monitoring-stations", icon: Radio },
   { label: "Animal Species", path: "/admin/animal-species", icon: Trees },
+
+  // Inventory Management section
+  { label: "Inventory Master", path: "/admin/inventory/master", icon: Package, sectionHeader: "Inventory Management" },
+  { label: "Station Inventory Overview", path: "/admin/inventory/stations", icon: Warehouse },
+  { label: "System Audit Logs", path: "/admin/inventory/audit-logs", icon: ShieldCheck },
 
   // Operations & Governance section
   { label: "Villagers", path: "/admin/villagers", icon: Users, sectionHeader: "Operations & Governance" },

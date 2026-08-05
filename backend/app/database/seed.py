@@ -160,6 +160,163 @@ def seed_sample_officers(db: Session):
     db.commit()
 
 
+def seed_inventory(db: Session):
+    from datetime import datetime
+    from app.models.inventory import (
+        InventoryCategory,
+        InventoryMaster,
+        StationInventory,
+        InventoryTransaction,
+        KitMaster,
+        KitItem,
+    )
+
+    # 1. Seed Categories
+    cat_data = [
+        {"name": "Permanent Asset", "desc": "Long-term reusable hardware, optics, electronics and vehicles.", "return_required": True, "consumable": False, "requires_refill": False},
+        {"name": "Consumable", "desc": "Single-use field items deducted directly upon issue.", "return_required": False, "consumable": True, "requires_refill": False},
+        {"name": "Refillable Kit", "desc": "Emergency medical / rescue kits requiring inspection and component refills.", "return_required": True, "consumable": False, "requires_refill": True},
+    ]
+
+    cat_map = {}
+    for c in cat_data:
+        cat_obj = db.query(InventoryCategory).filter(InventoryCategory.name == c["name"]).first()
+        if not cat_obj:
+            cat_obj = InventoryCategory(
+                name=c["name"],
+                description=c["desc"],
+                return_required=c["return_required"],
+                consumable=c["consumable"],
+                requires_refill=c["requires_refill"],
+            )
+            db.add(cat_obj)
+            db.flush()
+        cat_map[c["name"]] = cat_obj
+
+    db.commit()
+
+    perm_cat = cat_map.get("Permanent Asset")
+    cons_cat = cat_map.get("Consumable")
+    refill_cat = cat_map.get("Refillable Kit")
+
+    # 2. Seed Master Catalog
+    master_items = [
+        {"name": "GPS Device", "category": "Electronics", "cat_id": perm_cat.id if perm_cat else None, "unit": "Units", "min_stock": 5, "desc": "Garmin Handheld GPS Receiver."},
+        {"name": "Walkie Talkie", "category": "Electronics", "cat_id": perm_cat.id if perm_cat else None, "unit": "Units", "min_stock": 10, "desc": "VHF High-frequency long-range radio transceiver."},
+        {"name": "Drone", "category": "Surveillance", "cat_id": perm_cat.id if perm_cat else None, "unit": "Units", "min_stock": 2, "desc": "Thermal imaging aerial surveillance drone."},
+        {"name": "Camera Trap", "category": "Surveillance", "cat_id": perm_cat.id if perm_cat else None, "unit": "Units", "min_stock": 15, "desc": "Motion-triggered infrared night-vision camera."},
+        {"name": "Binoculars", "category": "Optics", "cat_id": perm_cat.id if perm_cat else None, "unit": "Units", "min_stock": 8, "desc": "10x50 waterproof field observation binoculars."},
+        {"name": "Torch", "category": "Lighting", "cat_id": perm_cat.id if perm_cat else None, "unit": "Units", "min_stock": 12, "desc": "Heavy-duty tactical LED flashlight."},
+        {"name": "Vehicle", "category": "Vehicles", "unit": "Units", "cat_id": perm_cat.id if perm_cat else None, "min_stock": 1, "desc": "4x4 All-terrain forest patrol vehicle."},
+        {"name": "First Aid Kit", "category": "Refillable Kit", "cat_id": refill_cat.id if refill_cat else None, "unit": "Kits", "min_stock": 10, "desc": "Emergency medical response kit for field officers."},
+        {"name": "Snake Bite Kit", "category": "Refillable Kit", "cat_id": refill_cat.id if refill_cat else None, "unit": "Kits", "min_stock": 5, "desc": "Anti-venom emergency response kit."},
+        {"name": "Emergency Rescue Box", "category": "Refillable Kit", "cat_id": refill_cat.id if refill_cat else None, "unit": "Kits", "min_stock": 3, "desc": "Tactical rescue and evacuation kit."},
+        {"name": "Battery", "category": "Consumable", "cat_id": cons_cat.id if cons_cat else None, "unit": "Packs", "min_stock": 20, "desc": "Rechargeable Li-ion battery pack for radios and torches."},
+        {"name": "Torch Cell", "category": "Consumable", "cat_id": cons_cat.id if cons_cat else None, "unit": "Pieces", "min_stock": 30, "desc": "D-Cell heavy-duty flashlight batteries."},
+        {"name": "Medical Gloves", "category": "Consumable", "cat_id": cons_cat.id if cons_cat else None, "unit": "Boxes", "min_stock": 15, "desc": "Nitrile protective surgical gloves."},
+        {"name": "Water Bottle", "category": "Consumable", "cat_id": cons_cat.id if cons_cat else None, "unit": "Units", "min_stock": 25, "desc": "Insulated field canteen bottle."},
+        {"name": "Fire Crackers", "category": "Consumable", "cat_id": cons_cat.id if cons_cat else None, "unit": "Boxes", "min_stock": 40, "desc": "Wildlife repellent audio pyrotechnics."},
+    ]
+
+    for item in master_items:
+        exists = db.query(InventoryMaster).filter(InventoryMaster.item_name == item["name"]).first()
+        if not exists:
+            db.add(InventoryMaster(
+                item_name=item["name"],
+                category=item["category"],
+                category_id=item.get("cat_id"),
+                unit=item["unit"],
+                minimum_stock=item["min_stock"],
+                reorder_level=5,
+                description=item["desc"],
+                is_active=True
+            ))
+        else:
+            if item.get("cat_id"):
+                exists.category_id = item["cat_id"]
+    db.commit()
+
+    # 3. Seed initial station stock for Muthanga Range Office
+    muthanga = db.query(MonitoringStation).filter(MonitoringStation.station_name == "Muthanga Range Office").first()
+    rfo = db.query(User).filter(User.role == "Range Forest Officer").first()
+    rfo_id = rfo.id if rfo else 1
+
+    if muthanga:
+        initial_stocks = [
+            ("GPS Device", 20),
+            ("Walkie Talkie", 30),
+            ("Camera Trap", 25),
+            ("Drone", 4),
+            ("Binoculars", 15),
+            ("First Aid Kit", 15),
+            ("Snake Bite Kit", 6),
+            ("Battery", 50),
+            ("Medical Gloves", 30),
+            ("Torch Cell", 60),
+        ]
+        for name, qty in initial_stocks:
+            m_item = db.query(InventoryMaster).filter(InventoryMaster.item_name == name).first()
+            if m_item:
+                exists_st = db.query(StationInventory).filter(
+                    StationInventory.station_id == muthanga.id,
+                    StationInventory.inventory_master_id == m_item.id
+                ).first()
+                if not exists_st:
+                    st_inv = StationInventory(
+                        station_id=muthanga.id,
+                        inventory_master_id=m_item.id,
+                        current_quantity=qty,
+                        available_quantity=qty,
+                        reserved_quantity=0,
+                        damaged_quantity=0,
+                        status="Available"
+                    )
+                    db.add(st_inv)
+                    db.flush()
+                    db.add(InventoryTransaction(
+                        station_inventory_id=st_inv.id,
+                        transaction_type="STOCK_ADDED",
+                        quantity=qty,
+                        performed_by=rfo_id,
+                        remarks="Initial station inventory setup."
+                    ))
+
+        # 4. Seed Refillable Kit #004
+        fa_item = db.query(InventoryMaster).filter(InventoryMaster.item_name == "First Aid Kit").first()
+        if fa_item:
+            kit_exists = db.query(KitMaster).filter(KitMaster.kit_number == "First Aid Kit #004").first()
+            if not kit_exists:
+                kit_obj = KitMaster(
+                    kit_number="First Aid Kit #004",
+                    inventory_master_id=fa_item.id,
+                    station_id=muthanga.id,
+                    current_status="Available",
+                    last_refilled_date=datetime.utcnow(),
+                    notes="Standard emergency trauma & first aid kit."
+                )
+                db.add(kit_obj)
+                db.flush()
+
+                kit_components = [
+                    ("Bandages", 10, 10, "Packs"),
+                    ("Painkillers", 20, 20, "Tablets"),
+                    ("Gauze", 15, 15, "Rolls"),
+                    ("Cotton", 5, 5, "Rolls"),
+                    ("Antiseptic", 2, 2, "Bottles"),
+                    ("Scissors", 1, 1, "Units"),
+                ]
+                for c_name, req_q, cur_q, u in kit_components:
+                    db.add(KitItem(
+                        kit_id=kit_obj.id,
+                        item_name=c_name,
+                        required_quantity=req_q,
+                        current_quantity=cur_q,
+                        unit=u
+                    ))
+
+    db.commit()
+
+
 def run_seed():
     db = SessionLocal()
     try:
@@ -168,6 +325,7 @@ def run_seed():
         seed_villages(db)
         seed_admin_user(db)
         seed_sample_officers(db)
+        seed_inventory(db)
     finally:
         db.close()
 

@@ -24,6 +24,8 @@ import VillagersManagement from "@/pages/admin/VillagersManagement";
 import AdminOfficersPage from "@/pages/admin/AdminOfficersPage";
 import DesignationsManagement from "@/pages/admin/DesignationsManagement";
 import AdminIncidentsPage from "@/pages/admin/AdminIncidentsPage";
+import { AdminInventoryMasterPage } from "@/pages/admin/AdminInventoryMasterPage";
+import { AdminStationInventoryOverviewPage } from "@/pages/admin/AdminStationInventoryOverviewPage";
 
 // Officer & Guard Pages
 import OfficerDashboardHome from "@/pages/officer/OfficerDashboardHome";
@@ -31,10 +33,28 @@ import OfficerCreateIncidentPage from "@/pages/officer/OfficerCreateIncidentPage
 import RFOIncidentsPage from "@/pages/officer/RFOIncidentsPage";
 import RFOForestGuardsPage from "@/pages/officer/RFOForestGuardsPage";
 import RFOStationOverviewPage from "@/pages/officer/RFOStationOverviewPage";
+import { RFODashboardPage } from "@/pages/officer/inventory/RFODashboardPage";
+import { RFOStationStockPage } from "@/pages/officer/inventory/RFOStationStockPage";
+import { RFORefillableKitsPage } from "@/pages/officer/inventory/RFORefillableKitsPage";
+import { RFOEquipmentRequestsPage } from "@/pages/officer/inventory/RFOEquipmentRequestsPage";
+import { RFOIssueEquipmentPage } from "@/pages/officer/inventory/RFOIssueEquipmentPage";
+import { RFOAssignedEquipmentPage } from "@/pages/officer/inventory/RFOAssignedEquipmentPage";
+import { RFOReturnsPage } from "@/pages/officer/inventory/RFOReturnsPage";
+import { RFODamagedEquipmentPage } from "@/pages/officer/inventory/RFODamagedEquipmentPage";
 import GuardDashboardHome from "@/pages/officer/GuardDashboardHome";
 import GuardIncidentsPage from "@/pages/officer/GuardIncidentsPage";
 import GuardCompletedReportsPage from "@/pages/officer/GuardCompletedReportsPage";
 import GuardMissionExecutionPage from "@/pages/officer/GuardMissionExecutionPage";
+import { GuardInventoryPage } from "@/pages/officer/GuardInventoryPage";
+import { GuardMyEquipmentPage } from "@/pages/guard/inventory/GuardMyEquipmentPage";
+import { GuardReturnEquipmentPage } from "@/pages/guard/inventory/GuardReturnEquipmentPage";
+import { RFORefillRequestsPage } from "@/pages/officer/inventory/RFORefillRequestsPage";
+import { RFOVerifyReturnsPage } from "@/pages/officer/inventory/RFOVerifyReturnsPage";
+import { RFORepairManagementPage } from "@/pages/officer/inventory/RFORepairManagementPage";
+import { InventoryMovementHistoryPage } from "@/pages/officer/inventory/InventoryMovementHistoryPage";
+import { InventoryAnalyticsPage } from "@/pages/officer/inventory/InventoryAnalyticsPage";
+import { RFOInventoryTransfersPage } from "@/pages/officer/inventory/RFOInventoryTransfersPage";
+import { AdminAuditLogsPage } from "@/pages/admin/inventory/AdminAuditLogsPage";
 
 // Villager Pages
 import VillagerDashboardHome from "@/pages/villager/VillagerDashboardHome";
@@ -97,6 +117,10 @@ function App() {
             <Route path="districts" element={<AdminDistrictsPage />} />
             <Route path="monitoring-stations" element={<AdminMonitoringStationsPage />} />
             <Route path="animal-species" element={<AdminAnimalSpeciesPage />} />
+            <Route path="inventory" element={<Navigate to="/admin/inventory/master" replace />} />
+            <Route path="inventory/master" element={<AdminInventoryMasterPage />} />
+            <Route path="inventory/stations" element={<AdminStationInventoryOverviewPage />} />
+            <Route path="inventory/audit-logs" element={<AdminAuditLogsPage />} />
             <Route path="villagers" element={<VillagersManagement />} />
             <Route path="officers" element={<AdminOfficersPage />} />
             <Route path="designations" element={<DesignationsManagement />} />
@@ -123,6 +147,21 @@ function App() {
             <Route path="mission/:id" element={<GuardMissionExecutionPage />} />
             <Route path="guards" element={<RFOForestGuardsPage />} />
             <Route path="station" element={<RFOStationOverviewPage />} />
+            <Route path="inventory" element={<Navigate to="/officer/inventory/dashboard" replace />} />
+            <Route path="inventory/dashboard" element={<RFODashboardPage />} />
+            <Route path="inventory/stock" element={<RFOStationStockPage />} />
+            <Route path="inventory/kits" element={<RFORefillableKitsPage />} />
+            <Route path="inventory/refill-requests" element={<RFORefillRequestsPage />} />
+            <Route path="inventory/requests" element={<RFOEquipmentRequestsPage />} />
+            <Route path="inventory/issue" element={<RFOIssueEquipmentPage />} />
+            <Route path="inventory/assigned" element={<RFOAssignedEquipmentPage />} />
+            <Route path="inventory/returns" element={<RFOReturnsPage />} />
+            <Route path="inventory/verify-returns" element={<RFOVerifyReturnsPage />} />
+            <Route path="inventory/damaged" element={<RFODamagedEquipmentPage />} />
+            <Route path="inventory/repairs" element={<RFORepairManagementPage />} />
+            <Route path="inventory/transfers" element={<RFOInventoryTransfersPage />} />
+            <Route path="inventory/analytics" element={<InventoryAnalyticsPage />} />
+            <Route path="inventory/history" element={<InventoryMovementHistoryPage />} />
             <Route path="create-incident" element={<OfficerCreateIncidentPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
@@ -141,6 +180,9 @@ function App() {
             <Route path="dashboard" element={<GuardDashboardHome />} />
             <Route path="assignments" element={<GuardIncidentsPage />} />
             <Route path="incidents" element={<GuardIncidentsPage />} />
+            <Route path="inventory" element={<GuardInventoryPage />} />
+            <Route path="inventory/my-equipment" element={<GuardMyEquipmentPage />} />
+            <Route path="inventory/return-equipment" element={<GuardReturnEquipmentPage />} />
             <Route path="mission/:id" element={<GuardMissionExecutionPage />} />
             <Route path="incidents/:id" element={<GuardMissionExecutionPage />} />
             <Route path="completed" element={<GuardCompletedReportsPage />} />

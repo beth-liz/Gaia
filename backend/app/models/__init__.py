@@ -14,5 +14,12 @@ from app.models.notification import Notification
 from app.models.officer_posting_history import OfficerPostingHistory
 from app.models.incident_activity import IncidentActivity
 from app.models.field_operation import FieldOperation
+from app.models.inventory import (
+    InventoryMaster,
+    StationInventory,
+    InventoryTransaction,
+    EquipmentRequest,
+    EquipmentAssignment
+)
 
 Base.metadata.create_all(bind=engine)

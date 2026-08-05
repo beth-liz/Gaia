@@ -40,7 +40,7 @@ def get_station_guards_workflow(
 
     out = []
     for g in guards:
-        payload = format_user_payload(g)
+        payload = format_user_payload(g).model_dump()
 
         # Calculate assignments today
         assignments_today = db.query(IncidentAssignment).filter(
@@ -108,7 +108,7 @@ def get_station_overview_metrics(
         "station_name": st.station_name,
         "district_id": st.district_id,
         "district_name": st.district.district_name if st.district else "Wayanad",
-        "state_name": st.district.state_rel.state_name if st.district and st.district.state_rel else "Kerala",
+        "state_name": st.district.state.state_name if st.district and st.district.state else "Kerala",
         "head_officer_id": st.head_officer_id,
         "head_officer_name": head_rfo.full_name if head_rfo else "No Head Officer Assigned",
         "head_officer_email": head_rfo.email if head_rfo else None,

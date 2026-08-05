@@ -11,6 +11,17 @@ import {
   CheckCircle2,
   User,
   FileCheck,
+  Warehouse,
+  ShieldCheck,
+  Send,
+  PackageCheck,
+  RotateCcw,
+  History,
+  Clock,
+  Layers,
+  Wrench,
+  ArrowRightLeft,
+  BarChart2,
 } from "lucide-react";
 
 const rfoNavItems: NavItem[] = [
@@ -18,6 +29,20 @@ const rfoNavItems: NavItem[] = [
   { label: "Incidents", path: "/officer/incidents", icon: Radio, sectionHeader: "Field Operations" },
   { label: "Forest Guards", path: "/officer/guards", icon: Users },
   { label: "Station Overview", path: "/officer/station", icon: Building2 },
+
+  // Inventory Management section
+  { label: "Inventory Dashboard", path: "/officer/inventory/dashboard", icon: LayoutDashboard, sectionHeader: "Inventory Management" },
+  { label: "Station Inventory", path: "/officer/inventory/stock", icon: Warehouse },
+  { label: "Refillable Kits", path: "/officer/inventory/kits", icon: Layers },
+  { label: "Equipment Requests", path: "/officer/inventory/requests", icon: Clock },
+  { label: "Issue Equipment", path: "/officer/inventory/issue", icon: Send },
+  { label: "Assigned Equipment", path: "/officer/inventory/assigned", icon: PackageCheck },
+  { label: "Verify Returns", path: "/officer/inventory/verify-returns", icon: RotateCcw },
+  { label: "Repair Management", path: "/officer/inventory/repairs", icon: Wrench },
+  { label: "Station Transfers", path: "/officer/inventory/transfers", icon: ArrowRightLeft },
+  { label: "Inventory Analytics", path: "/officer/inventory/analytics", icon: BarChart2 },
+  { label: "Audit Log History", path: "/officer/inventory/history", icon: History },
+
   { label: "Notifications", path: "/officer/notifications", icon: Bell, sectionHeader: "System" },
   { label: "Profile & Settings", path: "/officer/profile", icon: User },
 ];
@@ -25,7 +50,9 @@ const rfoNavItems: NavItem[] = [
 const guardNavItems: NavItem[] = [
   { label: "Dashboard", path: "/guard/dashboard", icon: LayoutDashboard },
   { label: "My Assignments", path: "/guard/assignments", icon: FileCheck, sectionHeader: "Field Operations" },
-  { label: "Completed Reports", path: "/guard/completed", icon: CheckCircle2 },
+  { label: "My Equipment & Kits", path: "/guard/inventory/my-equipment", icon: ShieldCheck, sectionHeader: "Equipment Management" },
+  { label: "Return Equipment", path: "/guard/inventory/return-equipment", icon: RotateCcw },
+  { label: "Completed Reports", path: "/guard/completed", icon: CheckCircle2, sectionHeader: "Reporting" },
   { label: "Notifications", path: "/guard/notifications", icon: Bell, sectionHeader: "System" },
   { label: "Profile & Settings", path: "/guard/profile", icon: User },
 ];

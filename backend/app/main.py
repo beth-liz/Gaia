@@ -30,7 +30,8 @@ from app.routers import (
     monitoring_stations,
     animal_species,
     officers,
-    field_ops
+    field_ops,
+    inventory
 )
 
 app = FastAPI(title="Gaia Wildlife Operations API", version="2.0.0")
@@ -63,6 +64,7 @@ app.include_router(dashboard.router)
 app.include_router(states.router)
 app.include_router(districts.router)
 app.include_router(monitoring_stations.router)
+app.include_router(inventory.router)
 
 
 @app.get("/")
