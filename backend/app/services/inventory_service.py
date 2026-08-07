@@ -2583,28 +2583,72 @@ def get_rfo_inventory_dashboard(db: Session, current_user: User) -> dict:
     # 10. Damaged Items
     damaged_items = sum(inv.damaged_quantity for inv in st_invs)
 
-    # Grouped Inventory by Category
+    # Grouped Inventory by Category (Fully Dynamic from DB)
     categories = db.query(InventoryCategory).all()
+    cat_by_id = {c.id: c for c in categories}
+    cat_by_name = {c.name.lower().strip(): c for c in categories}
+
+    # Initialize all existing InventoryCategories in DB
+    category_groups_map = {}
+    for c in categories:
+        category_groups_map[c.id] = {
+            "category_id": c.id,
+            "category_name": c.name,
+            "procurement_type": getattr(c, "procurement_type", "LOCAL_ALLOWED"),
+            "items": [],
+            "total_available": 0,
+            "total_quantity": 0,
+        }
+
+    for inv in st_invs:
+        master = inv.master_item
+        cat_obj = None
+        cat_id = None
+        cat_name = "Uncategorized"
+        proc_type = "LOCAL_ALLOWED"
+
+        if master:
+            if master.category_id and master.category_id in cat_by_id:
+                cat_obj = cat_by_id[master.category_id]
+                cat_id = cat_obj.id
+                cat_name = cat_obj.name
+                proc_type = getattr(cat_obj, "procurement_type", "LOCAL_ALLOWED")
+            elif master.category:
+                raw_cat = master.category.strip()
+                normalized = raw_cat.lower()
+                if normalized in cat_by_name:
+                    cat_obj = cat_by_name[normalized]
+                    cat_id = cat_obj.id
+                    cat_name = cat_obj.name
+                    proc_type = getattr(cat_obj, "procurement_type", "LOCAL_ALLOWED")
+                else:
+                    cat_name = raw_cat
+                    cat_id = f"custom_{raw_cat}"
+
+        if cat_id is None:
+            cat_id = "uncategorized"
+
+        if cat_id not in category_groups_map:
+            category_groups_map[cat_id] = {
+                "category_id": cat_id,
+                "category_name": cat_name,
+                "procurement_type": proc_type,
+                "items": [],
+                "total_available": 0,
+                "total_quantity": 0,
+            }
+
+        category_groups_map[cat_id]["items"].append((inv, master, cat_obj, proc_type))
+
     grouped_categories = []
 
-    for cat in categories:
-        cat_items = [
-            inv for inv in st_invs
-            if inv.master_item and (
-                inv.master_item.category_id == cat.id or
-                (inv.master_item.category and inv.master_item.category.lower().rstrip('s') == cat.name.lower().rstrip('s'))
-            )
-        ]
-
-        if not cat_items:
-            continue
-
+    for cat_id, grp in category_groups_map.items():
+        cat_items_list = grp["items"]
         item_rows = []
         cat_available_sum = 0
         cat_total_sum = 0
 
-        for inv in cat_items:
-            master = inv.master_item
+        for inv, master, cat_obj, proc_type in cat_items_list:
             cat_available_sum += inv.available_quantity
             cat_total_sum += inv.total_quantity
 
@@ -2624,20 +2668,30 @@ def get_rfo_inventory_dashboard(db: Session, current_user: User) -> dict:
                 InventoryTransaction.station_inventory_id == inv.id
             ).order_by(InventoryTransaction.created_at.desc()).first()
 
-            supplier_source = "HQ Allocation"
+            recorded_source = None
             if last_tx:
                 if last_tx.vendor_name:
-                    supplier_source = f"Local: {last_tx.vendor_name}"
+                    recorded_source = last_tx.vendor_name
                 elif last_tx.supplier:
-                    supplier_source = last_tx.supplier
+                    recorded_source = last_tx.supplier
                 elif last_tx.allocation_reference:
-                    supplier_source = f"HQ: {last_tx.allocation_reference}"
+                    recorded_source = f"HQ: {last_tx.allocation_reference}"
+
+            if not recorded_source and getattr(inv, "supplier", None):
+                recorded_source = inv.supplier
+            if not recorded_source and master and getattr(master, "purchase_source", None):
+                recorded_source = master.purchase_source
+
+            if proc_type == "ADMIN_ONLY":
+                supplier_source = recorded_source or "HQ Allocation"
+            else:
+                supplier_source = recorded_source or "Not Recorded"
 
             item_rows.append({
                 "id": inv.id,
                 "inventory_master_id": inv.inventory_master_id,
                 "equipment_name": master.item_name if master else "Unknown Equipment",
-                "category": master.category if master else cat.name,
+                "category": master.category if master else grp["category_name"],
                 "unit": master.unit if master else "Units",
                 "available": inv.available_quantity,
                 "reserved": inv.reserved_quantity,
@@ -2652,10 +2706,10 @@ def get_rfo_inventory_dashboard(db: Session, current_user: User) -> dict:
             })
 
         grouped_categories.append({
-            "category_id": cat.id,
-            "category_name": cat.name,
-            "procurement_type": getattr(cat, "procurement_type", "LOCAL_ALLOWED"),
-            "items_count": len(cat_items),
+            "category_id": cat_id,
+            "category_name": grp["category_name"],
+            "procurement_type": grp["procurement_type"],
+            "items_count": len(item_rows),
             "total_available": cat_available_sum,
             "total_quantity": cat_total_sum,
             "items": item_rows,
