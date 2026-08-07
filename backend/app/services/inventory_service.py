@@ -1651,35 +1651,47 @@ def verify_returned_equipment_options(
 
 def format_equipment_request(req: EquipmentRequest) -> dict:
     item_name = None
+    category = "General"
     unit = None
     station_name = None
     if req.station_inventory:
         if req.station_inventory.master_item:
             item_name = req.station_inventory.master_item.item_name
+            category = req.station_inventory.master_item.category
             unit = req.station_inventory.master_item.unit
         if req.station_inventory.station:
-            station_name = req.station_inventory.station.station_name
+            station_name = getattr(req.station_inventory.station, "station_name", getattr(req.station_inventory.station, "name", "Forest Station"))
     elif req.master_item:
         item_name = req.master_item.item_name
+        category = req.master_item.category
         unit = req.master_item.unit
+
+    guard_name = req.guard.full_name if req.guard else "Forest Guard"
+    badge_id = getattr(req.guard, "badge_number", None) or (f"FG-{req.guard_id:03d}" if req.guard_id else "FG-001")
 
     return {
         "id": req.id,
         "guard_id": req.guard_id,
-        "guard_name": req.guard.full_name if req.guard else None,
+        "guard_name": guard_name,
+        "badge_id": badge_id,
         "station_inventory_id": req.station_inventory_id,
         "inventory_master_id": req.inventory_master_id,
         "item_name": item_name,
+        "equipment_name": item_name,
+        "category": category,
         "unit": unit,
         "station_name": station_name,
         "requested_quantity": req.quantity,
         "quantity": req.quantity,
+        "issued_quantity": req.quantity if req.status in ["ISSUED", "COMPLETED", "FULFILLED"] else 0,
         "reason": req.purpose,
         "purpose": req.purpose,
         "priority": req.priority,
         "status": req.status,
+        "request_type": req.request_type,
         "requested_at": req.requested_at,
         "approved_at": req.approved_at,
+        "issued_at": req.approved_at if req.status in ["ISSUED", "COMPLETED", "FULFILLED"] else None,
         "approved_by": req.approved_by,
         "approver_name": req.approver.full_name if req.approver else None,
         "rejection_reason": req.rejection_reason,
@@ -1761,19 +1773,26 @@ def approve_or_reject_equipment_request(
         raise HTTPException(status_code=404, detail="Equipment request not found.")
 
     act = data.action.upper().strip()
-    req.status = act
+    if act in ["APPROVE", "APPROVED"]:
+        req.status = "APPROVED"
+    elif act in ["ISSUE", "ISSUED"]:
+        req.status = "ISSUED"
+    elif act in ["REJECT", "REJECTED"]:
+        req.status = "REJECTED"
+    else:
+        req.status = act
+
     req.approved_at = datetime.utcnow()
     req.approved_by = current_user.id
     if data.rejection_reason:
         req.rejection_reason = data.rejection_reason
 
-    if act == "APPROVED":
+    if req.status in ["APPROVED", "ISSUED"]:
         st_inv = req.station_inventory
         if st_inv and st_inv.available_quantity >= req.quantity:
             qty_before = st_inv.available_quantity
             st_inv.available_quantity -= req.quantity
             st_inv.issued_quantity = (st_inv.issued_quantity or 0) + req.quantity
-            st_inv.reserved_quantity = st_inv.issued_quantity
 
             asgn = EquipmentAssignment(
                 station_inventory_id=st_inv.id,
@@ -1799,13 +1818,13 @@ def approve_or_reject_equipment_request(
                 assigned_to=req.guard_id,
                 ref_table="equipment_requests",
                 ref_id=req.id,
-                remarks=f"Approved request #{req.id} and issued {req.quantity} units.",
+                remarks=f"Processed request #{req.id} ({req.status}) and issued {req.quantity} units.",
             )
 
     log_audit(
         db=db,
         user=current_user,
-        action=f"Processed Request ({act})",
+        action=f"Processed Request ({req.status})",
         entity_type="equipment_requests",
         entity_id=req.id,
     )
@@ -2858,10 +2877,13 @@ def get_rfo_inventory_dashboard(db: Session, current_user: User) -> dict:
     }
 
 
-def get_admin_hq_requests(db: Session) -> dict:
-    reqs = db.query(EquipmentRequest).filter(
+def get_admin_hq_requests(db: Session, station_id: Optional[int] = None) -> dict:
+    query = db.query(EquipmentRequest).filter(
         EquipmentRequest.request_type == "HQ_STOCK_REQUEST"
-    ).order_by(EquipmentRequest.requested_at.desc()).all()
+    )
+    if station_id:
+        query = query.join(StationInventory).filter(StationInventory.station_id == station_id)
+    reqs = query.order_by(EquipmentRequest.requested_at.desc()).all()
 
     now = datetime.utcnow()
     start_of_today = datetime(now.year, now.month, now.day)
@@ -2897,6 +2919,8 @@ def get_admin_hq_requests(db: Session) -> dict:
             "equipment_name": master.item_name if master else "Equipment",
             "category": master.category if master else "HQ Asset",
             "quantity_requested": r.quantity,
+            "issued_quantity": r.quantity if (r.status or "").upper() in ["ISSUED", "APPROVED", "COMPLETED"] else 0,
+            "issued_date": (r.approved_at or r.requested_at).isoformat() if (r.approved_at or r.requested_at) else None,
             "priority": (r.priority or "MEDIUM").upper(),
             "reason": r.purpose or "Requisition",
             "remarks": r.remarks,

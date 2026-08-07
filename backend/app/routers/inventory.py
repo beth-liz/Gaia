@@ -328,13 +328,14 @@ def fulfill_hq_stock_request(
 
 @router.get(
     "/admin/hq-requests",
-    summary="Get all Headquarters stock requests and metrics for Admin Overview"
+    summary="Get all Headquarters stock requests and metrics"
 )
 def get_admin_hq_requests(
     db: Session = Depends(get_db),
-    admin: User = Depends(get_current_admin)
+    user: User = Depends(get_current_officer_or_admin)
 ):
-    return inventory_service.get_admin_hq_requests(db=db)
+    station_filter = None if user.role == "Admin" else user.station_id
+    return inventory_service.get_admin_hq_requests(db=db, station_id=station_filter)
 
 
 @router.post(

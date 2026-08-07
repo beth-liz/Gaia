@@ -295,19 +295,25 @@ class EquipmentRequestResponse(BaseModel):
     id: int
     guard_id: int
     guard_name: Optional[str] = None
+    badge_id: Optional[str] = None
     station_inventory_id: Optional[int] = None
     inventory_master_id: Optional[int] = None
     item_name: Optional[str] = None
+    equipment_name: Optional[str] = None
+    category: Optional[str] = None
     unit: Optional[str] = None
     station_name: Optional[str] = None
     requested_quantity: int
     quantity: int
+    issued_quantity: Optional[int] = 0
     reason: Optional[str] = None
     purpose: Optional[str] = None
     priority: str = "MEDIUM"
     status: str
+    request_type: Optional[str] = "GUARD_REQUEST"
     requested_at: datetime
     approved_at: Optional[datetime] = None
+    issued_at: Optional[datetime] = None
     approved_by: Optional[int] = None
     approver_name: Optional[str] = None
     rejection_reason: Optional[str] = None

@@ -110,23 +110,31 @@ export interface EquipmentRequest {
   id: number;
   guard_id: number;
   guard_name?: string;
+  badge_id?: string;
   station_inventory_id: number;
   inventory_master_id?: number;
   item_name?: string;
+  equipment_name?: string;
+  category?: string;
   unit?: string;
   station_name?: string;
   quantity: number;
   requested_quantity?: number;
+  issued_quantity?: number;
   purpose?: string;
   reason?: string;
   priority?: string;
   status: string;
+  request_type?: string;
   requested_at: string;
   approved_at?: string;
+  issued_at?: string;
   approved_by?: number;
   approver_name?: string;
   rejection_reason?: string;
   remarks?: string;
+  hq_status?: string;
+  hq_response?: string;
 }
 
 export interface EquipmentAssignment {
