@@ -18,9 +18,6 @@ import {
   RotateCcw,
   History,
   Clock,
-  Layers,
-  Wrench,
-  ArrowRightLeft,
   BarChart2,
 } from "lucide-react";
 
@@ -32,16 +29,13 @@ const rfoNavItems: NavItem[] = [
 
   // Inventory Management section
   { label: "Inventory Dashboard", path: "/officer/inventory/dashboard", icon: LayoutDashboard, sectionHeader: "Inventory Management" },
-  { label: "Station Inventory", path: "/officer/inventory/stock", icon: Warehouse },
-  { label: "Refillable Kits", path: "/officer/inventory/kits", icon: Layers },
+  { label: "Add / Update Station Stock", path: "/officer/inventory/stock", icon: Warehouse },
   { label: "Equipment Requests", path: "/officer/inventory/requests", icon: Clock },
   { label: "Issue Equipment", path: "/officer/inventory/issue", icon: Send },
   { label: "Assigned Equipment", path: "/officer/inventory/assigned", icon: PackageCheck },
   { label: "Verify Returns", path: "/officer/inventory/verify-returns", icon: RotateCcw },
-  { label: "Repair Management", path: "/officer/inventory/repairs", icon: Wrench },
-  { label: "Station Transfers", path: "/officer/inventory/transfers", icon: ArrowRightLeft },
   { label: "Inventory Analytics", path: "/officer/inventory/analytics", icon: BarChart2 },
-  { label: "Audit Log History", path: "/officer/inventory/history", icon: History },
+  { label: "Audit History", path: "/officer/inventory/audit", icon: History },
 
   { label: "Notifications", path: "/officer/notifications", icon: Bell, sectionHeader: "System" },
   { label: "Profile & Settings", path: "/officer/profile", icon: User },

@@ -1,39 +1,68 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { inventoryService } from "@/services/inventoryService";
-import type { EquipmentAssignment } from "@/types/inventory";
 import { PageHeader } from "@/components/common/PageHeader";
 import {
   RotateCcw,
-  User,
   CheckCircle,
-  AlertTriangle,
   Loader2,
   RefreshCw,
   Search,
+  ShieldAlert,
+  Trash2,
+  Image as ImageIcon,
+  Check,
+  Wrench,
+  AlertTriangle,
+  XCircle,
+  Clock,
+  History as HistoryIcon,
 } from "lucide-react";
 
 export const RFOReturnsPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
+  const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  const [assignments, setAssignments] = useState<EquipmentAssignment[]>([]);
+  // Return Data Collections
+  const [returnSubmissions, setReturnSubmissions] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
 
-  // Modals
-  const [selectedAsgn, setSelectedAsgn] = useState<EquipmentAssignment | null>(null);
-  const [showVerifyModal, setShowVerifyModal] = useState<boolean>(false);
-  const [verifyAction, setVerifyAction] = useState<"ACCEPT" | "MARK_DAMAGED" | "REJECT">("ACCEPT");
-  const [damagedQtyInput, setDamagedQtyInput] = useState<number>(1);
-  const [remarksInput, setRemarksInput] = useState<string>("");
+  // History Checkboxes
+  const [selectedHistoryIds, setSelectedHistoryIds] = useState<number[]>([]);
+
+  // Confirmation Modal State
+  const [confirmDeleteModal, setConfirmDeleteModal] = useState<{
+    show: boolean;
+    type: "single" | "selected" | "all";
+    targetId?: number;
+    title: string;
+    message: string;
+  }>({
+    show: false,
+    type: "single",
+    title: "",
+    message: "",
+  });
+
+  // Photo Preview Modal State
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setToastMsg({ text, type });
+    setTimeout(() => {
+      setToastMsg((prev) => (prev?.text === text ? null : prev));
+    }, 4500);
+  };
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const asgns = await inventoryService.getStationAssignments();
-      setAssignments(asgns);
+      const submissions = await inventoryService.getStationReturns();
+      setReturnSubmissions(submissions);
     } catch (err: any) {
-      setError(err.message || "Failed to load station returns.");
+      setError(err.message || "Failed to load station returns queue.");
     } finally {
       setLoading(false);
     }
@@ -43,52 +72,159 @@ export const RFOReturnsPage: React.FC = () => {
     fetchData();
   }, []);
 
-  const handleVerifySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedAsgn) return;
+  // Filtered Pending Returns Only
+  const pendingReturnsList = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+    // Return submissions that are pending verification
+    return returnSubmissions.filter((ret) => {
+      const isPending =
+        ret.status === "Pending Verification" ||
+        ret.status === "PENDING_RETURN" ||
+        ret.status === "Pending";
+
+      if (!isPending) return false;
+      if (!term) return true;
+
+      return (
+        (ret.guard_name || "").toLowerCase().includes(term) ||
+        (ret.item_name || "").toLowerCase().includes(term) ||
+        (ret.reason || "").toLowerCase().includes(term)
+      );
+    });
+  }, [returnSubmissions, searchTerm]);
+
+  // Verified Return History Section
+  const verifiedHistoryList = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+    return returnSubmissions.filter((ret) => {
+      const isHistory =
+        ret.status !== "Pending Verification" &&
+        ret.status !== "PENDING_RETURN" &&
+        ret.status !== "Pending";
+
+      if (!isHistory) return false;
+      if (!term) return true;
+
+      return (
+        (ret.guard_name || "").toLowerCase().includes(term) ||
+        (ret.item_name || "").toLowerCase().includes(term) ||
+        (ret.status || "").toLowerCase().includes(term)
+      );
+    });
+  }, [returnSubmissions, searchTerm]);
+
+  // Handle Verification Actions (Accept, Send Repair, Write Off, Reject)
+  const handleVerifyReturnAction = async (
+    returnId: number,
+    action: "ACCEPT" | "REPAIR" | "WRITE_OFF" | "REJECT",
+    remarks?: string
+  ) => {
+    setSubmitting(true);
     try {
-      await inventoryService.verifyReturnOptions(selectedAsgn.id, {
-        action: verifyAction,
-        damaged_quantity: verifyAction === "MARK_DAMAGED" ? damagedQtyInput : undefined,
-        remarks: remarksInput,
+      await inventoryService.verifyReturn(returnId, {
+        action,
+        remarks: remarks || `Action ${action} processed by Range Forest Officer.`,
       });
 
-      setShowVerifyModal(false);
-      setSelectedAsgn(null);
-      setRemarksInput("");
+      showToast(`Return Action (${action}) Processed Successfully`, "success");
       fetchData();
     } catch (err: any) {
-      alert(err.message || "Failed to process return verification");
+      alert(err.message || "Failed to verify return.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const pendingReturns = assignments.filter((a) => a.status === "Issued");
-  const completedReturns = assignments.filter((a) => a.status === "Returned" || a.status === "Damaged");
+  // Handle History Deletion Execution
+  const handleExecuteDeleteHistory = async () => {
+    setSubmitting(true);
+    try {
+      if (confirmDeleteModal.type === "single" && confirmDeleteModal.targetId) {
+        await inventoryService.deleteReturnHistory(confirmDeleteModal.targetId);
+      } else if (confirmDeleteModal.type === "selected" && selectedHistoryIds.length > 0) {
+        await inventoryService.deleteReturnHistoryBatch(selectedHistoryIds);
+        setSelectedHistoryIds([]);
+      } else if (confirmDeleteModal.type === "all") {
+        await inventoryService.deleteAllReturnHistory();
+        setSelectedHistoryIds([]);
+      }
 
-  const filteredActive = pendingReturns.filter(
-    (a) =>
-      !searchTerm ||
-      (a.guard_name && a.guard_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (a.item_name && a.item_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+      showToast("Return History Deleted Successfully", "success");
+      setConfirmDeleteModal({ show: false, type: "single", title: "", message: "" });
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || "Failed to delete return history.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Multi-select history handlers
+  const handleToggleSelectHistory = (id: number) => {
+    setSelectedHistoryIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllHistory = () => {
+    if (selectedHistoryIds.length === verifiedHistoryList.length) {
+      setSelectedHistoryIds([]);
+    } else {
+      setSelectedHistoryIds(verifiedHistoryList.map((h) => h.id));
+    }
+  };
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return "N/A";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "N/A";
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = d.toLocaleString("en-US", { month: "short" });
+    const year = d.getFullYear();
+    const time = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+    return `${day} ${month} ${year}, ${time}`;
+  };
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
         <Loader2 className="w-8 h-8 text-emerald-800 animate-spin mb-2" />
-        <p className="text-sm font-medium text-emerald-950">Loading Equipment Returns Queue...</p>
+        <p className="text-sm font-medium text-emerald-950">Loading Pending Returns Queue & History...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto">
       <PageHeader
-        title="Equipment Return Verification Portal"
-        subtitle="Inspect and verify returned gear from Forest Guards with Accept, Mark Damaged, or Reject options."
+        title="Verify Equipment Returns"
+        subtitle="Review pending return submissions from Forest Guards, verify item conditions, process actions, and manage return history."
         icon={RotateCcw}
-        badge={`${pendingReturns.length} Deployments Awaiting Return`}
+        badge={`${pendingReturnsList.length} Pending Verifications`}
       />
+
+      {/* Global Toast Notification */}
+      {toastMsg && (
+        <div
+          className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between shadow-lg transition-all ${
+            toastMsg.type === "success"
+              ? "bg-emerald-900 text-white border-emerald-950"
+              : "bg-red-600 text-white border-red-700"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {toastMsg.type === "success" ? (
+              <CheckCircle className="w-4 h-4 text-emerald-300 shrink-0" />
+            ) : (
+              <ShieldAlert className="w-4 h-4 text-white shrink-0" />
+            )}
+            <span>{toastMsg.text}</span>
+          </div>
+          <button onClick={() => setToastMsg(null)} className="text-white hover:opacity-80 font-black text-base ml-4">
+            ×
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center justify-between shadow-xs">
@@ -99,11 +235,11 @@ export const RFOReturnsPage: React.FC = () => {
 
       {/* Toolbar */}
       <div className="p-4 rounded-2xl bg-white border border-emerald-950/10 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 absolute left-3 top-3 text-emerald-700/50" />
           <input
             type="text"
-            placeholder="Search guard or item..."
+            placeholder="Search guard, equipment, reason..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-xs font-semibold rounded-xl border border-emerald-950/10 bg-emerald-950/5 text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-800 placeholder-emerald-900/40"
@@ -112,227 +248,409 @@ export const RFOReturnsPage: React.FC = () => {
 
         <button
           onClick={fetchData}
-          className="p-2.5 text-emerald-900 hover:bg-emerald-100 rounded-xl border border-emerald-950/10 transition-all"
+          className="p-2.5 text-emerald-900 hover:bg-emerald-100 rounded-xl border border-emerald-950/10 transition-all flex items-center gap-2 text-xs font-bold"
           title="Refresh Data"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className="w-4 h-4" /> Refresh Returns Queue
         </button>
       </div>
 
-      {/* Pending Return Verification Queue */}
-      <div className="bg-white rounded-3xl border border-emerald-950/10 overflow-hidden shadow-xs space-y-3">
-        <div className="p-4 bg-emerald-50/40 border-b border-emerald-950/10 font-black text-xs text-emerald-950 uppercase tracking-wider">
-          Deployments Ready for Return Verification ({filteredActive.length})
+      {/* SECTION 1: PENDING RETURNS ONLY TABLE */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-black text-emerald-950 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-amber-600" />
+            Pending Return Submissions
+          </h3>
+          <span className="px-3 py-1 bg-amber-100 text-amber-900 rounded-xl text-xs font-black">
+            {pendingReturnsList.length} Awaiting Verification
+          </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-emerald-50/20 border-b border-emerald-950/10 text-emerald-950 font-black uppercase text-[11px] tracking-wider">
-                <th className="px-6 py-4">Issue Date</th>
-                <th className="px-6 py-4">Forest Guard</th>
-                <th className="px-6 py-4">Equipment Item</th>
-                <th className="px-6 py-4">Qty Issued</th>
-                <th className="px-6 py-4">Issued By</th>
-                <th className="px-6 py-4 text-right">Verification Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-emerald-950/5 text-emerald-950 text-xs font-semibold">
-              {filteredActive.map((asgn) => (
-                <tr key={asgn.id} className="hover:bg-emerald-50/30">
-                  <td className="px-6 py-4 text-[11px] font-mono text-emerald-800/70">
-                    {new Date(asgn.issue_date).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 font-extrabold text-emerald-950 flex items-center gap-2">
-                    <User className="w-4 h-4 text-emerald-700" />
-                    {asgn.guard_name}
-                  </td>
-                  <td className="px-6 py-4 font-bold">{asgn.item_name}</td>
-                  <td className="px-6 py-4 font-mono font-black text-emerald-700">
-                    {asgn.quantity} {asgn.unit}
-                  </td>
-                  <td className="px-6 py-4 text-xs text-emerald-800/70">{asgn.issuer_name}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => {
-                        setSelectedAsgn(asgn);
-                        setVerifyAction("ACCEPT");
-                        setDamagedQtyInput(asgn.quantity);
-                        setShowVerifyModal(true);
-                      }}
-                      className="px-4 py-2 bg-emerald-900 hover:bg-emerald-950 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all inline-flex items-center gap-1.5"
-                    >
-                      <RotateCcw className="w-4 h-4 text-amber-300" /> Process Return Options
-                    </button>
-                  </td>
+        <div className="bg-white rounded-3xl border border-emerald-950/10 overflow-hidden shadow-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-center border-collapse min-w-[1350px]">
+              <thead>
+                <tr className="bg-emerald-50/50 border-b border-emerald-950/10 text-emerald-950 font-black uppercase text-[10px] tracking-wider whitespace-nowrap">
+                  <th className="px-4 py-4 text-center align-middle">Guard</th>
+                  <th className="px-4 py-4 text-center align-middle">Equipment</th>
+                  <th className="px-4 py-4 text-center align-middle">Issue Date</th>
+                  <th className="px-4 py-4 text-center align-middle">Return Date</th>
+                  <th className="px-3.5 py-4 text-center align-middle">Condition</th>
+                  <th className="px-4 py-4 text-center align-middle">Reason</th>
+                  <th className="px-3.5 py-4 text-center align-middle">Photos</th>
+                  <th className="px-4 py-4 text-center align-middle">Remarks</th>
+                  <th className="px-3.5 py-4 text-center align-middle">Status</th>
+                  <th className="px-5 py-4 text-center align-middle">Actions</th>
                 </tr>
-              ))}
-              {filteredActive.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-emerald-800/60 font-medium">
-                    No active deployments waiting for return verification.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-emerald-950/5 text-emerald-950 text-xs font-semibold">
+                {pendingReturnsList.map((ret) => (
+                  <tr key={ret.id} className="hover:bg-emerald-50/30 transition-all">
+                    {/* Guard */}
+                    <td className="px-4 py-4 text-center align-middle font-extrabold text-emerald-950 whitespace-nowrap">
+                      <div>{ret.guard_name || "Forest Guard"}</div>
+                      {ret.guard_badge && (
+                        <span className="text-[10px] text-emerald-800/70 font-bold block">
+                          Badge #{ret.guard_badge}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Equipment */}
+                    <td className="px-4 py-4 text-center align-middle font-extrabold text-emerald-950 whitespace-nowrap">
+                      {ret.item_name || "Equipment"}
+                    </td>
+
+                    {/* Issue Date */}
+                    <td className="px-4 py-4 text-center align-middle font-mono text-[11px] text-gray-600 font-bold whitespace-nowrap">
+                      {formatDate(ret.issue_date)}
+                    </td>
+
+                    {/* Return Date */}
+                    <td className="px-4 py-4 text-center align-middle font-mono text-[11px] text-amber-900 font-bold whitespace-nowrap">
+                      {formatDate(ret.submitted_date)}
+                    </td>
+
+                    {/* Condition */}
+                    <td className="px-3.5 py-4 text-center align-middle whitespace-nowrap">
+                      <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black ${
+                        ret.condition === "Good" || ret.condition === "Excellent"
+                          ? "bg-emerald-100 text-emerald-900"
+                          : "bg-amber-100 text-amber-900"
+                      }`}>
+                        {ret.condition || "Good"}
+                      </span>
+                    </td>
+
+                    {/* Reason */}
+                    <td className="px-4 py-4 text-center align-middle text-gray-700 whitespace-nowrap">
+                      {ret.reason || "Normal Return"}
+                    </td>
+
+                    {/* Photos (Optional) */}
+                    <td className="px-3.5 py-4 text-center align-middle whitespace-nowrap">
+                      {ret.photos ? (
+                        <button
+                          onClick={() => setPreviewPhotoUrl(ret.photos)}
+                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-900 rounded-xl text-[10px] font-extrabold border border-blue-200 inline-flex items-center gap-1"
+                        >
+                          <ImageIcon className="w-3 h-3 text-blue-700" /> View Photo
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-gray-400 font-normal">None</span>
+                      )}
+                    </td>
+
+                    {/* Remarks */}
+                    <td className="px-4 py-4 text-center align-middle text-gray-600 text-[11px] whitespace-nowrap">
+                      {ret.remarks || "No remarks provided."}
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-3.5 py-4 text-center align-middle whitespace-nowrap">
+                      <span className="px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-[10px] font-black">
+                        PENDING_RETURN
+                      </span>
+                    </td>
+
+                    {/* Actions: Accept, Send Repair, Write Off, Reject */}
+                    <td className="px-5 py-4 text-center align-middle whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => handleVerifyReturnAction(ret.id, "ACCEPT")}
+                          disabled={submitting}
+                          className="px-2.5 py-1.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white font-black text-[10px] shadow-xs transition-all inline-flex items-center gap-1 shrink-0"
+                          title="Accept Return & Restore Stock"
+                        >
+                          <Check className="w-3 h-3 text-emerald-300" /> Accept
+                        </button>
+
+                        <button
+                          onClick={() => handleVerifyReturnAction(ret.id, "REPAIR")}
+                          disabled={submitting}
+                          className="px-2.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-[10px] shadow-xs transition-all inline-flex items-center gap-1 shrink-0"
+                          title="Send to Repair Queue"
+                        >
+                          <Wrench className="w-3 h-3 text-amber-200" /> Send Repair
+                        </button>
+
+                        <button
+                          onClick={() => handleVerifyReturnAction(ret.id, "WRITE_OFF")}
+                          disabled={submitting}
+                          className="px-2.5 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-black text-[10px] shadow-xs transition-all inline-flex items-center gap-1 shrink-0"
+                          title="Write Off Equipment"
+                        >
+                          <AlertTriangle className="w-3 h-3 text-amber-300" /> Write Off
+                        </button>
+
+                        <button
+                          onClick={() => handleVerifyReturnAction(ret.id, "REJECT")}
+                          disabled={submitting}
+                          className="px-2.5 py-1.5 rounded-xl bg-gray-700 hover:bg-gray-800 text-white font-black text-[10px] shadow-xs transition-all inline-flex items-center gap-1 shrink-0"
+                          title="Reject Return Submission"
+                        >
+                          <XCircle className="w-3 h-3 text-gray-300" /> Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+
+                {pendingReturnsList.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="px-5 py-10 text-center text-gray-400 font-medium italic">
+                      No pending equipment return submissions awaiting verification.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      {/* Processed Returns Log */}
-      <div className="bg-white rounded-3xl border border-emerald-950/10 overflow-hidden shadow-xs space-y-3">
-        <div className="p-4 bg-emerald-50/40 border-b border-emerald-950/10 font-black text-xs text-emerald-950 uppercase tracking-wider">
-          Verified Return Log ({completedReturns.length})
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-emerald-50/20 border-b border-emerald-950/10 text-emerald-950 font-black uppercase text-[11px] tracking-wider">
-                <th className="px-6 py-3">Return Date</th>
-                <th className="px-6 py-3">Guard</th>
-                <th className="px-6 py-3">Equipment</th>
-                <th className="px-6 py-3">Qty</th>
-                <th className="px-6 py-3">Return Result</th>
-                <th className="px-6 py-3">Remarks</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-emerald-950/5 text-emerald-950 text-xs font-semibold">
-              {completedReturns.map((asgn) => (
-                <tr key={asgn.id} className="hover:bg-emerald-50/20">
-                  <td className="px-6 py-3 text-[11px] font-mono text-emerald-800/70">
-                    {asgn.returned_date ? new Date(asgn.returned_date).toLocaleDateString() : "-"}
-                  </td>
-                  <td className="px-6 py-3 font-extrabold text-emerald-950">{asgn.guard_name}</td>
-                  <td className="px-6 py-3 font-bold">{asgn.item_name}</td>
-                  <td className="px-6 py-3 font-mono font-bold">{asgn.quantity} {asgn.unit}</td>
-                  <td className="px-6 py-3">
-                    {asgn.status === "Returned" ? (
-                      <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-900 rounded-xl text-[10px] font-black inline-flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3 text-emerald-700" /> Accepted
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-0.5 bg-red-100 text-red-800 rounded-xl text-[10px] font-black inline-flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3 text-red-600" /> Marked Damaged
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-3 text-[11px] text-emerald-800/70 truncate max-w-xs">{asgn.remarks || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Return Verification Modal */}
-      {showVerifyModal && selectedAsgn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-emerald-950/60 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-emerald-950/10">
-            <h3 className="text-lg font-extrabold text-emerald-950 flex items-center gap-2">
-              <RotateCcw className="w-5 h-5 text-emerald-700" />
-              Verify Returned Equipment
+      {/* SECTION 2: VERIFIED RETURN HISTORY & DELETION CONTROLS */}
+      <div className="space-y-3 pt-6 border-t border-emerald-950/10">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-black text-emerald-950 flex items-center gap-2">
+              <HistoryIcon className="w-5 h-5 text-emerald-700" />
+              Verified Return History Log
             </h3>
+            <p className="text-xs font-semibold text-gray-500">
+              Archived log of completed, repaired, written off, and rejected equipment returns.
+            </p>
+          </div>
 
-            <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs space-y-1 text-emerald-950">
-              <p><strong>Forest Guard:</strong> {selectedAsgn.guard_name}</p>
-              <p><strong>Item:</strong> {selectedAsgn.item_name} ({selectedAsgn.quantity} {selectedAsgn.unit})</p>
+          <div className="flex items-center gap-2">
+            {selectedHistoryIds.length > 0 && (
+              <button
+                onClick={() =>
+                  setConfirmDeleteModal({
+                    show: true,
+                    type: "selected",
+                    title: "Delete Selected Return History",
+                    message: `Are you sure you want to delete ${selectedHistoryIds.length} selected return history record(s)? This action cannot be undone.`,
+                  })
+                }
+                className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete Selected ({selectedHistoryIds.length})
+              </button>
+            )}
+
+            {verifiedHistoryList.length > 0 && (
+              <button
+                onClick={() =>
+                  setConfirmDeleteModal({
+                    show: true,
+                    type: "all",
+                    title: "Purge All Return History",
+                    message: `Are you sure you want to purge all ${verifiedHistoryList.length} verified return history records for this station? This action cannot be undone.`,
+                  })
+                }
+                className="px-3.5 py-2 border border-red-300 text-red-700 hover:bg-red-50 font-extrabold text-xs rounded-xl transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete All History
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl border border-emerald-950/10 overflow-hidden shadow-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-center border-collapse min-w-[1250px]">
+              <thead>
+                <tr className="bg-emerald-50/50 border-b border-emerald-950/10 text-emerald-950 font-black uppercase text-[10px] tracking-wider whitespace-nowrap">
+                  <th className="px-3 py-4 text-center align-middle w-10">
+                    <input
+                      type="checkbox"
+                      checked={
+                        verifiedHistoryList.length > 0 &&
+                        selectedHistoryIds.length === verifiedHistoryList.length
+                      }
+                      onChange={handleSelectAllHistory}
+                      className="w-4 h-4 text-emerald-900 rounded-md cursor-pointer"
+                    />
+                  </th>
+                  <th className="px-4 py-4 text-center align-middle">Guard</th>
+                  <th className="px-4 py-4 text-center align-middle">Equipment</th>
+                  <th className="px-4 py-4 text-center align-middle">Return Date</th>
+                  <th className="px-3.5 py-4 text-center align-middle">Condition</th>
+                  <th className="px-4 py-4 text-center align-middle">Verified By</th>
+                  <th className="px-4 py-4 text-center align-middle">Verified Timestamp</th>
+                  <th className="px-3.5 py-4 text-center align-middle">Status</th>
+                  <th className="px-4 py-4 text-center align-middle">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-emerald-950/5 text-emerald-950 text-xs font-semibold">
+                {verifiedHistoryList.map((ret) => {
+                  const isChecked = selectedHistoryIds.includes(ret.id);
+
+                  return (
+                    <tr
+                      key={ret.id}
+                      className={`hover:bg-emerald-50/30 transition-all ${
+                        isChecked ? "bg-emerald-50/60" : ""
+                      }`}
+                    >
+                      {/* Checkbox */}
+                      <td className="px-3 py-4 text-center align-middle">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleSelectHistory(ret.id)}
+                          className="w-4 h-4 text-emerald-900 rounded-md cursor-pointer"
+                        />
+                      </td>
+
+                      {/* Guard */}
+                      <td className="px-4 py-4 text-center align-middle font-extrabold text-emerald-950 whitespace-nowrap">
+                        <div>{ret.guard_name || "Forest Guard"}</div>
+                      </td>
+
+                      {/* Equipment */}
+                      <td className="px-4 py-4 text-center align-middle font-extrabold text-emerald-950 whitespace-nowrap">
+                        {ret.item_name || "Equipment"}
+                      </td>
+
+                      {/* Return Date */}
+                      <td className="px-4 py-4 text-center align-middle font-mono text-[11px] text-gray-500 whitespace-nowrap">
+                        {formatDate(ret.submitted_date)}
+                      </td>
+
+                      {/* Condition */}
+                      <td className="px-3.5 py-4 text-center align-middle whitespace-nowrap">
+                        <span className="px-2.5 py-1 bg-gray-100 text-gray-800 rounded-xl text-[10px] font-black">
+                          {ret.condition || "Good"}
+                        </span>
+                      </td>
+
+                      {/* Verified By */}
+                      <td className="px-4 py-4 text-center align-middle font-extrabold text-emerald-900 whitespace-nowrap">
+                        {ret.verifier_name || "Officer"}
+                      </td>
+
+                      {/* Verified Timestamp */}
+                      <td className="px-4 py-4 text-center align-middle font-mono text-[11px] text-emerald-900 font-bold whitespace-nowrap">
+                        {formatDate(ret.verified_at)}
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-3.5 py-4 text-center align-middle whitespace-nowrap">
+                        <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black ${
+                          ret.status === "ACCEPT" || ret.status === "Accepted"
+                            ? "bg-emerald-100 text-emerald-900"
+                            : ret.status === "REPAIR"
+                            ? "bg-amber-100 text-amber-900"
+                            : "bg-red-100 text-red-900"
+                        }`}>
+                          {ret.status}
+                        </span>
+                      </td>
+
+                      {/* Delete One Action */}
+                      <td className="px-4 py-4 text-center align-middle whitespace-nowrap">
+                        <button
+                          onClick={() =>
+                            setConfirmDeleteModal({
+                              show: true,
+                              type: "single",
+                              targetId: ret.id,
+                              title: "Delete Return History Record",
+                              message: `Are you sure you want to delete the return history record for '${ret.item_name}'?`,
+                            })
+                          }
+                          className="p-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 transition-all border border-red-200"
+                          title="Delete History Record"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {verifiedHistoryList.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="px-5 py-8 text-center text-gray-400 font-medium italic">
+                      No verified return history records logged yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* CONFIRMATION DIALOG MODAL */}
+      {confirmDeleteModal.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-emerald-950/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white rounded-3xl border border-emerald-950/10 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="p-2.5 rounded-2xl bg-red-100 shrink-0">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-emerald-950">{confirmDeleteModal.title}</h3>
+                <p className="text-xs font-semibold text-gray-500">Database History Purge</p>
+              </div>
             </div>
 
-            <form onSubmit={handleVerifySubmit} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-black text-emerald-950 uppercase tracking-wider mb-1">
-                  Select Action *
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setVerifyAction("ACCEPT")}
-                    className={`py-2 px-2 text-xs font-black rounded-xl border transition-all ${
-                      verifyAction === "ACCEPT"
-                        ? "bg-emerald-900 text-amber-300 border-emerald-950 shadow-xs"
-                        : "bg-gray-50 text-gray-700 border-gray-200"
-                    }`}
-                  >
-                    Accept
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVerifyAction("MARK_DAMAGED")}
-                    className={`py-2 px-2 text-xs font-black rounded-xl border transition-all ${
-                      verifyAction === "MARK_DAMAGED"
-                        ? "bg-red-600 text-white border-red-700 shadow-xs"
-                        : "bg-gray-50 text-gray-700 border-gray-200"
-                    }`}
-                  >
-                    Mark Damaged
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVerifyAction("REJECT")}
-                    className={`py-2 px-2 text-xs font-black rounded-xl border transition-all ${
-                      verifyAction === "REJECT"
-                        ? "bg-amber-600 text-white border-amber-700 shadow-xs"
-                        : "bg-gray-50 text-gray-700 border-gray-200"
-                    }`}
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
+            <p className="text-xs font-semibold text-gray-700 leading-relaxed">
+              {confirmDeleteModal.message}
+            </p>
 
-              {verifyAction === "MARK_DAMAGED" && (
-                <div>
-                  <label className="block text-[11px] font-black text-emerald-950 uppercase tracking-wider mb-1">
-                    Verified Damaged Quantity *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={selectedAsgn.quantity}
-                    required
-                    value={damagedQtyInput}
-                    onChange={(e) => setDamagedQtyInput(parseInt(e.target.value) || 1)}
-                    className="w-full px-3.5 py-2.5 border border-emerald-950/10 rounded-xl bg-emerald-950/5 text-xs font-semibold text-emerald-950 focus:ring-2 focus:ring-emerald-800 outline-none"
-                  />
-                </div>
-              )}
+            <div className="flex justify-end gap-2 pt-3 border-t border-emerald-950/10">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteModal({ show: false, type: "single", title: "", message: "" })}
+                className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDeleteHistory}
+                disabled={submitting}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-2"
+              >
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-              <div>
-                <label className="block text-[11px] font-black text-emerald-950 uppercase tracking-wider mb-1">
-                  Inspection Remarks
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Note equipment condition upon physical verification..."
-                  value={remarksInput}
-                  onChange={(e) => setRemarksInput(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-emerald-950/10 rounded-xl bg-emerald-950/5 text-xs font-semibold text-emerald-950 focus:ring-2 focus:ring-emerald-800 outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowVerifyModal(false)}
-                  className="px-4 py-2 border border-gray-200 text-gray-700 text-xs font-extrabold rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className={`px-4 py-2 text-white text-xs font-extrabold rounded-xl shadow-md ${
-                    verifyAction === "ACCEPT"
-                      ? "bg-emerald-900 hover:bg-emerald-950"
-                      : verifyAction === "MARK_DAMAGED"
-                      ? "bg-red-600 hover:bg-red-700"
-                      : "bg-amber-600 hover:bg-amber-700"
-                  }`}
-                >
-                  Confirm Verification
-                </button>
-              </div>
-            </form>
+      {/* PHOTO PREVIEW MODAL */}
+      {previewPhotoUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-emerald-950/70 backdrop-blur-xs">
+          <div className="w-full max-w-lg bg-white rounded-3xl border border-emerald-950/10 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                Equipment Return Inspection Photo
+              </h4>
+              <button
+                onClick={() => setPreviewPhotoUrl(null)}
+                className="text-gray-400 hover:text-emerald-950 font-black text-base"
+              >
+                ×
+              </button>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-emerald-950/10 max-h-96 flex items-center justify-center bg-black/5">
+              <img src={previewPhotoUrl} alt="Inspection" className="max-h-96 object-contain" />
+            </div>
+            <div className="text-right">
+              <button
+                onClick={() => setPreviewPhotoUrl(null)}
+                className="px-4 py-2 bg-emerald-900 text-white font-bold text-xs rounded-xl"
+              >
+                Close Preview
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Float, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database.base import Base
@@ -10,6 +10,7 @@ class InventoryCategory(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, index=True, nullable=False)
     description = Column(Text, nullable=True)
+    procurement_type = Column(String(30), default="LOCAL_ALLOWED", nullable=False)  # LOCAL_ALLOWED, ADMIN_ONLY
     active = Column(Boolean, default=True, nullable=False)
     return_required = Column(Boolean, default=True, nullable=False)
     consumable = Column(Boolean, default=False, nullable=False)
@@ -43,9 +44,13 @@ class InventoryMaster(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     category_rel = relationship("InventoryCategory", back_populates="master_items", lazy="joined")
+    creator = relationship("User", foreign_keys=[created_by], lazy="joined")
+    updater = relationship("User", foreign_keys=[updated_by], lazy="joined")
     station_inventories = relationship("StationInventory", back_populates="master_item", cascade="all, delete-orphan")
     kits = relationship("KitMaster", back_populates="master_item", cascade="all, delete-orphan")
 
@@ -102,6 +107,14 @@ class InventoryTransaction(Base):
     performed_by = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     assigned_to = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     supplier = Column(String(100), nullable=True)
+    vendor_name = Column(String(100), nullable=True)
+    invoice_number = Column(String(100), nullable=True)
+    purchase_date = Column(DateTime, nullable=True)
+    purchase_cost = Column(Float, nullable=True)
+    gst_tax = Column(Float, nullable=True)
+    allocation_reference = Column(String(100), nullable=True)
+    received_date = Column(DateTime, nullable=True)
+    admin_dispatch_number = Column(String(100), nullable=True)
     remarks = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -118,10 +131,12 @@ class EquipmentRequest(Base):
     guard_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     station_inventory_id = Column(Integer, ForeignKey("station_inventory.id", ondelete="CASCADE"), nullable=False, index=True)
     inventory_master_id = Column(Integer, ForeignKey("inventory_master.id", ondelete="CASCADE"), nullable=True)
+    request_type = Column(String(30), default="GUARD_REQUEST", nullable=False)  # GUARD_REQUEST, HQ_STOCK_REQUEST
     quantity = Column(Integer, nullable=False)
     purpose = Column(Text, nullable=False)
     priority = Column(String(20), default="MEDIUM", nullable=False)  # LOW, MEDIUM, HIGH
-    status = Column(String(30), default="PENDING")  # PENDING, APPROVED, REJECTED, CANCELLED, ISSUED
+    status = Column(String(30), default="PENDING")  # PENDING, APPROVED, REJECTED, CANCELLED, ISSUED, ALLOCATED
+    expected_date = Column(DateTime, nullable=True)
     requested_at = Column(DateTime, default=datetime.utcnow)
     approved_at = Column(DateTime, nullable=True)
     approved_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

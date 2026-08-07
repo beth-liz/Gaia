@@ -8,6 +8,7 @@ from app.models.user import User
 from app.models.monitoring_station import MonitoringStation
 from app.models.incident_assignment import IncidentAssignment
 from app.models.incident import Incident
+from app.models.inventory import EquipmentAssignment
 from app.services.auth_service import format_user_payload
 from app.utils.deps import get_current_rfo, get_current_user
 
@@ -54,8 +55,14 @@ def get_station_guards_workflow(
             IncidentAssignment.status.in_(["Assigned", "In Progress", "Travelling", "Reached Site", "Assessment Completed", "Action Taken"])
         ).count()
 
+        equipment_count = db.query(EquipmentAssignment).filter(
+            EquipmentAssignment.guard_id == g.id,
+            EquipmentAssignment.status == "ISSUED"
+        ).count()
+
         payload["assignments_today"] = assignments_today
         payload["current_workload"] = current_workload
+        payload["equipment_count"] = equipment_count
         payload["experience_years"] = "3+ Years"
         out.append(payload)
 

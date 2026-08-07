@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Query, HTTPException
+from fastapi import APIRouter, Depends, status, Query, HTTPException, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -19,12 +19,14 @@ from app.schemas.inventory import (
     InventoryMasterUpdate,
     InventoryMasterResponse,
     StationInventoryAddStock,
+    HQStockRequestCreate,
     StationInventoryUpdateQuantity,
     StationInventoryResponse,
     InventoryTransactionResponse,
     EquipmentRequestCreate,
     EquipmentRequestAction,
     DirectIssueEquipmentRequest,
+    BatchIssueEquipmentSchema,
     EquipmentRequestResponse,
     ReturnEquipmentRequest,
     ReturnVerificationRequest,
@@ -93,6 +95,17 @@ def create_category(
 # MASTER INVENTORY CATALOG (ADMIN WRITE, ALL READ)
 # ==========================================
 
+@router.get(
+    "/master/summary",
+    summary="Get summary metrics for master inventory catalog (Admin Only)"
+)
+def get_master_summary(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    return inventory_service.get_master_catalog_summary(db=db)
+
+
 @router.post(
     "/master",
     response_model=InventoryMasterResponse,
@@ -104,7 +117,7 @@ def create_master_item(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    return inventory_service.create_inventory_master(data, db)
+    return inventory_service.create_inventory_master(data=data, current_user=admin, db=db)
 
 
 @router.put(
@@ -118,7 +131,7 @@ def update_master_item(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    return inventory_service.update_inventory_master(master_id, data, db)
+    return inventory_service.update_inventory_master(master_id=master_id, data=data, current_user=admin, db=db)
 
 
 @router.patch(
@@ -131,7 +144,19 @@ def toggle_master_item_status(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    return inventory_service.toggle_inventory_master_status(master_id, db)
+    return inventory_service.toggle_inventory_master_status(master_id=master_id, current_user=admin, db=db)
+
+
+@router.delete(
+    "/master/{master_id}",
+    summary="Permanently delete an unreferenced master inventory item (Admin Only)"
+)
+def delete_master_item(
+    master_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    return inventory_service.delete_inventory_master(master_id=master_id, current_user=admin, db=db)
 
 
 @router.get(
@@ -157,6 +182,41 @@ def list_master_items(
 # ==========================================
 # STATION INVENTORY MANAGEMENT (RFO WRITE, ADMIN READ)
 # ==========================================
+
+@router.get(
+    "/admin-overview",
+    summary="Get aggregated dashboard metrics for Admin Station Inventory Overview"
+)
+def get_admin_inventory_overview(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    return inventory_service.get_admin_inventory_overview(db=db)
+
+
+@router.get(
+    "/admin-stations",
+    summary="Get paginated station inventory list for Admin Overview"
+)
+def get_admin_paginated_station_inventory(
+    state_id: Optional[int] = None,
+    district_id: Optional[int] = None,
+    station_id: Optional[int] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    return inventory_service.get_admin_paginated_station_inventory(
+        db=db,
+        state_id=state_id,
+        district_id=district_id,
+        station_id=station_id,
+        search=search,
+        page=page,
+        page_size=page_size
+    )
 
 @router.get(
     "/station/{station_id}",
@@ -209,6 +269,30 @@ def add_station_stock(
     rfo: User = Depends(get_current_rfo)
 ):
     return inventory_service.add_stock_to_station(data=data, current_user=rfo, db=db)
+
+
+@router.get(
+    "/rfo-dashboard",
+    summary="Get aggregated dashboard summary for Range Forest Officer Command Center"
+)
+def get_rfo_inventory_dashboard(
+    db: Session = Depends(get_db),
+    rfo: User = Depends(get_current_rfo)
+):
+    return inventory_service.get_rfo_inventory_dashboard(db=db, current_user=rfo)
+
+
+@router.post(
+    "/requests/hq-stock-request",
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit stock request to Headquarters (Range Forest Officer Only)"
+)
+def create_hq_stock_request(
+    data: HQStockRequestCreate,
+    db: Session = Depends(get_db),
+    rfo: User = Depends(get_current_rfo)
+):
+    return inventory_service.create_hq_stock_request(data=data, current_user=rfo, db=db)
 
 
 @router.put(
@@ -366,6 +450,19 @@ def direct_issue_equipment(
     return inventory_service.direct_issue_equipment(data=data, current_user=rfo, db=db)
 
 
+@router.post(
+    "/assignments/batch-issue",
+    status_code=status.HTTP_201_CREATED,
+    summary="Issue multiple equipment items in a wizard batch transaction (Range Forest Officer Only)"
+)
+def batch_issue_equipment(
+    data: BatchIssueEquipmentSchema,
+    db: Session = Depends(get_db),
+    rfo: User = Depends(get_current_rfo)
+):
+    return inventory_service.batch_issue_equipment(data=data, current_user=rfo, db=db)
+
+
 # ==========================================
 # ASSIGNMENTS, RETURNS & DAMAGED ACTIONS
 # ==========================================
@@ -380,6 +477,19 @@ def get_my_assignments(
     guard: User = Depends(get_current_guard)
 ):
     return inventory_service.list_equipment_assignments(db=db, guard_id=guard.id)
+
+
+@router.get(
+    "/assignments/guard/{guard_id}",
+    response_model=List[EquipmentAssignmentResponse],
+    summary="Get active equipment assignments for a specific guard (RFO / Admin)"
+)
+def get_guard_assignments(
+    guard_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_officer_or_admin)
+):
+    return inventory_service.list_equipment_assignments(db=db, guard_id=guard_id)
 
 
 @router.get(
@@ -514,6 +624,42 @@ def verify_return(
     return inventory_service.verify_equipment_return(return_id=return_id, data=data, current_user=rfo, db=db)
 
 
+@router.delete(
+    "/returns/history/{return_id}",
+    summary="Delete a single verified return history record (RFO Only)"
+)
+def delete_return_history(
+    return_id: int,
+    db: Session = Depends(get_db),
+    rfo: User = Depends(get_current_rfo)
+):
+    return inventory_service.delete_equipment_return_history(return_id=return_id, current_user=rfo, db=db)
+
+
+@router.post(
+    "/returns/history/delete-batch",
+    summary="Delete multiple selected return history records (RFO Only)"
+)
+def delete_return_history_batch(
+    return_ids: List[int],
+    db: Session = Depends(get_db),
+    rfo: User = Depends(get_current_rfo)
+):
+    return inventory_service.delete_equipment_returns_batch(return_ids=return_ids, current_user=rfo, db=db)
+
+
+@router.delete(
+    "/returns/history/delete-all",
+    summary="Purge all verified return history records for the station (RFO Only)"
+)
+def delete_all_return_history(
+    station_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    rfo: User = Depends(get_current_rfo)
+):
+    return inventory_service.delete_all_equipment_returns_history(station_id=station_id, current_user=rfo, db=db)
+
+
 @router.get(
     "/repairs",
     response_model=List[DamagedEquipmentResponse],
@@ -586,17 +732,71 @@ def process_transfer(
 
 @router.get(
     "/audit-logs",
-    response_model=List[InventoryAuditLogResponse],
     summary="Get system-wide inventory audit logs (Admin / RFO)"
 )
 def get_audit_logs(
     user_id: Optional[int] = None,
     action: Optional[str] = None,
     entity_type: Optional[str] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_officer_or_admin)
 ):
-    return inventory_service.get_audit_logs_list(db=db, user_id=user_id, action=action, entity_type=entity_type)
+    return inventory_service.get_audit_logs_filtered(db=db, station_id=user.station_id, search=search, action=action)
+
+
+@router.get(
+    "/audit-logs/export-csv",
+    summary="Export UTF-8 inventory audit log CSV file (RFO / Admin)"
+)
+def export_audit_logs_csv(
+    search: Optional[str] = None,
+    action: Optional[str] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_officer_or_admin)
+):
+    csv_content = inventory_service.export_audit_logs_csv(db=db, search=search, action=action)
+    filename = f"gaia_inventory_audit_log_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=csv_content.encode("utf-8-sig"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@router.delete(
+    "/audit-logs/{log_id}",
+    summary="Delete a single inventory audit log entry (RFO Only)"
+)
+def delete_audit_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    rfo: User = Depends(get_current_rfo)
+):
+    return inventory_service.delete_audit_log(log_id=log_id, current_user=rfo, db=db)
+
+
+@router.post(
+    "/audit-logs/delete-batch",
+    summary="Delete multiple selected inventory audit log entries (RFO Only)"
+)
+def delete_audit_logs_batch(
+    log_ids: List[int],
+    db: Session = Depends(get_db),
+    rfo: User = Depends(get_current_rfo)
+):
+    return inventory_service.delete_audit_logs_batch(log_ids=log_ids, current_user=rfo, db=db)
+
+
+@router.delete(
+    "/audit-logs/delete-all",
+    summary="Purge all inventory audit log entries (RFO Only)"
+)
+def delete_all_audit_logs(
+    db: Session = Depends(get_db),
+    rfo: User = Depends(get_current_rfo)
+):
+    return inventory_service.delete_all_audit_logs(current_user=rfo, db=db)
 
 @router.get(
     "/transactions/filtered",

@@ -29,12 +29,9 @@ export const GuardMyEquipmentPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [asgns, myKits] = await Promise.all([
-        inventoryService.getMyAssignments(),
-        inventoryService.getKits(),
-      ]);
+      const asgns = await inventoryService.getMyAssignments();
       setAssignments(asgns);
-      setKits(myKits);
+      setKits([]);
     } catch (err: any) {
       setError(err.message || "Failed to load assigned equipment and kits.");
     } finally {

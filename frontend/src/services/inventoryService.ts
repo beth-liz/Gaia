@@ -7,6 +7,9 @@ import type {
   EquipmentAssignment,
   KitMaster,
   InventorySummaryReport,
+  AdminInventoryOverviewData,
+  AdminPaginatedStationsResponse,
+  RFOInventoryDashboardData,
 } from "@/types/inventory";
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -45,6 +48,7 @@ export const inventoryService = {
   createCategory: async (data: {
     name: string;
     description?: string;
+    procurement_type?: "LOCAL_ALLOWED" | "ADMIN_ONLY";
     return_required: boolean;
     consumable: boolean;
     requires_refill: boolean;
@@ -120,6 +124,67 @@ export const inventoryService = {
     return handleResponse<InventoryMaster>(res);
   },
 
+  deleteMasterItem: async (id: number): Promise<{ message: string }> => {
+    const res = await fetch(`${API_BASE}/inventory/master/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse<{ message: string }>(res);
+  },
+
+  getMasterSummary: async (): Promise<{
+    total_items: number;
+    active_items: number;
+    disabled_items: number;
+    categories_counts: Record<string, number>;
+  }> => {
+    const res = await fetch(`${API_BASE}/inventory/master/summary`, {
+      headers: getHeaders(),
+    });
+    return handleResponse<{
+      total_items: number;
+      active_items: number;
+      disabled_items: number;
+      categories_counts: Record<string, number>;
+    }>(res);
+  },
+
+  getAdminOverview: async (): Promise<AdminInventoryOverviewData> => {
+    const res = await fetch(`${API_BASE}/inventory/admin-overview`, {
+      headers: getHeaders(),
+    });
+    return handleResponse<AdminInventoryOverviewData>(res);
+  },
+
+  getAdminStations: async (params?: {
+    state_id?: number;
+    district_id?: number;
+    station_id?: number;
+    search?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<AdminPaginatedStationsResponse> => {
+    const query = new URLSearchParams();
+    if (params?.state_id && params.state_id !== 0) query.append("state_id", params.state_id.toString());
+    if (params?.district_id && params.district_id !== 0) query.append("district_id", params.district_id.toString());
+    if (params?.station_id && params.station_id !== 0) query.append("station_id", params.station_id.toString());
+    if (params?.search) query.append("search", params.search.trim());
+    if (params?.page) query.append("page", params.page.toString());
+    if (params?.page_size) query.append("page_size", params.page_size.toString());
+
+    const res = await fetch(`${API_BASE}/inventory/admin-stations?${query.toString()}`, {
+      headers: getHeaders(),
+    });
+    return handleResponse<AdminPaginatedStationsResponse>(res);
+  },
+
+  getRFODashboard: async (): Promise<RFOInventoryDashboardData> => {
+    const res = await fetch(`${API_BASE}/inventory/rfo-dashboard`, {
+      headers: getHeaders(),
+    });
+    return handleResponse<RFOInventoryDashboardData>(res);
+  },
+
   // --- STATION STOCK ---
   getStationInventory: async (stationId: number): Promise<StationInventory[]> => {
     const res = await fetch(`${API_BASE}/inventory/station/${stationId}`, {
@@ -166,6 +231,22 @@ export const inventoryService = {
     return handleResponse<StationInventory>(res);
   },
 
+  requestHQStock: async (data: {
+    inventory_master_id: number;
+    quantity: number;
+    priority: string;
+    reason: string;
+    expected_date?: string;
+    remarks?: string;
+  }): Promise<{ message: string }> => {
+    const res = await fetch(`${API_BASE}/inventory/requests/hq-stock-request`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<{ message: string }>(res);
+  },
+
   updateStockQuantity: async (
     stationInventoryId: number,
     dataOrQty: any,
@@ -190,6 +271,42 @@ export const inventoryService = {
       }
     );
     return handleResponse<StationInventory>(res);
+  },
+
+  batchIssueEquipment: async (data: {
+    guard_id: number;
+    items: Array<{
+      station_inventory_id: number;
+      quantity: number;
+      usage_type: string;
+      expected_return_date?: string;
+      purpose?: string;
+      remarks?: string;
+    }>;
+    mission_name?: string;
+    overall_purpose?: string;
+    remarks?: string;
+  }): Promise<{ status: string; message: string; issued_items_count: number }> => {
+    const res = await fetch(`${API_BASE}/inventory/assignments/batch-issue`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<{ status: string; message: string; issued_items_count: number }>(res);
+  },
+
+  getForestGuards: async (): Promise<any[]> => {
+    const res = await fetch(`http://127.0.0.1:8000/api/officers/guards`, {
+      headers: getHeaders(),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  getGuardAssignments: async (guardId: number): Promise<EquipmentAssignment[]> => {
+    const res = await fetch(`${API_BASE}/inventory/assignments/guard/${guardId}`, {
+      headers: getHeaders(),
+    });
+    return handleResponse<EquipmentAssignment[]>(res);
   },
 
   // --- REFILLABLE KITS ---
@@ -386,9 +503,10 @@ export const inventoryService = {
   verifyReturnOptions: async (
     assignmentId: number,
     data: {
-      action: "ACCEPT" | "MARK_DAMAGED" | "REJECT";
-      damaged_quantity?: number;
+      condition?: "Good" | "Minor Damage" | "Major Damage" | "Lost" | string;
       remarks?: string;
+      action?: string;
+      damaged_quantity?: number;
     }
   ): Promise<EquipmentAssignment> => {
     const res = await fetch(
@@ -539,6 +657,32 @@ export const inventoryService = {
     return handleResponse<any>(res);
   },
 
+  deleteReturnHistory: async (returnId: number): Promise<any> => {
+    const res = await fetch(`${API_BASE}/inventory/returns/history/${returnId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse<any>(res);
+  },
+
+  deleteReturnHistoryBatch: async (returnIds: number[]): Promise<any> => {
+    const res = await fetch(`${API_BASE}/inventory/returns/history/delete-batch`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(returnIds),
+    });
+    return handleResponse<any>(res);
+  },
+
+  deleteAllReturnHistory: async (stationId?: number): Promise<any> => {
+    const query = stationId ? `?station_id=${stationId}` : "";
+    const res = await fetch(`${API_BASE}/inventory/returns/history/delete-all${query}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse<any>(res);
+  },
+
   getDamagedRepairs: async (stationId?: number): Promise<any[]> => {
     const query = new URLSearchParams();
     if (stationId) query.append("station_id", stationId.toString());
@@ -585,16 +729,47 @@ export const inventoryService = {
     return handleResponse<any>(res);
   },
 
-  getAuditLogs: async (params?: { user_id?: number; action?: string; entity_type?: string }): Promise<any[]> => {
+  getAuditLogs: async (params?: { user_id?: number; action?: string; entity_type?: string; search?: string }): Promise<any[]> => {
     const query = new URLSearchParams();
     if (params?.user_id) query.append("user_id", params.user_id.toString());
     if (params?.action) query.append("action", params.action);
     if (params?.entity_type) query.append("entity_type", params.entity_type);
+    if (params?.search) query.append("search", params.search);
     const res = await fetch(`${API_BASE}/inventory/audit-logs?${query.toString()}`, {
       headers: getHeaders(),
     });
     return handleResponse<any[]>(res);
   },
 
-  getKits: async (stationId?: number) => inventoryService.getStationKits(stationId),
+  exportAuditLogsCSV: (params?: { search?: string; action?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.append("search", params.search);
+    if (params?.action) query.append("action", params.action);
+    window.open(`${API_BASE}/inventory/audit-logs/export-csv?${query.toString()}`, "_blank");
+  },
+
+  deleteAuditLog: async (logId: number): Promise<any> => {
+    const res = await fetch(`${API_BASE}/inventory/audit-logs/${logId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse<any>(res);
+  },
+
+  deleteAuditLogsBatch: async (logIds: number[]): Promise<any> => {
+    const res = await fetch(`${API_BASE}/inventory/audit-logs/delete-batch`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(logIds),
+    });
+    return handleResponse<any>(res);
+  },
+
+  deleteAllAuditLogs: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/inventory/audit-logs/delete-all`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse<any>(res);
+  },
 };

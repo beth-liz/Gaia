@@ -2,6 +2,7 @@ export interface InventoryCategory {
   id: number;
   name: string;
   description?: string;
+  procurement_type?: "LOCAL_ALLOWED" | "ADMIN_ONLY";
   active?: boolean;
   return_required: boolean;
   consumable: boolean;
@@ -16,6 +17,7 @@ export interface InventoryMaster {
   category: string;
   category_id?: number;
   category_name?: string;
+  procurement_type?: "LOCAL_ALLOWED" | "ADMIN_ONLY";
   item_type?: string;
   item_usage_type?: string;
   return_required: boolean;
@@ -51,13 +53,17 @@ export interface StationInventory {
   requires_refill: boolean;
   unit?: string;
   minimum_stock: number;
+  maximum_capacity?: number;
   reorder_level: number;
   total_quantity?: number;
   current_quantity: number;
+  current_stock?: number;
   available_quantity: number;
   issued_quantity?: number;
   reserved_quantity: number;
   damaged_quantity: number;
+  supplier_source?: string;
+  procurement_type?: "LOCAL_ALLOWED" | "ADMIN_ONLY";
   status: string;
   last_updated: string;
   updated_by?: number;
@@ -112,20 +118,31 @@ export interface EquipmentAssignment {
   id: number;
   station_inventory_id: number;
   item_name?: string;
+  category?: string;
   unit?: string;
   guard_id: number;
   guard_name?: string;
+  guard_badge?: string;
   quantity: number;
   issued_by: number;
   issuer_name?: string;
   issue_date: string;
   expected_return_date?: string;
   returned_date?: string;
+  actual_return?: string;
   assignment_type?: string;
   item_usage_type?: string;
+  condition?: string;
   status: string;
+  days_remaining?: string;
   purpose?: string;
   remarks?: string;
+  previous_returns?: Array<{
+    id: number;
+    return_date?: string;
+    condition?: string;
+    remarks?: string;
+  }>;
 }
 
 export interface DamagedEquipment {
@@ -248,4 +265,122 @@ export interface InventorySummaryReport {
   pending_requests_count: number;
   pending_returns_count: number;
   recent_transactions: InventoryTransaction[];
+}
+
+export interface AdminInventoryOverviewCards {
+  total_stocked_items: number;
+  stocked_stations_count: number;
+  total_stations_count: number;
+  low_stock_items_count: number;
+  low_stock_stations_count: number;
+  equipment_assigned_count: number;
+  guards_equipped_count: number;
+  damaged_quantity: number;
+  under_repair_count: number;
+  awaiting_disposal_count: number;
+}
+
+export interface AdminStationSummaryItem {
+  station_id: number;
+  station_name: string;
+  district_id?: number;
+  district_name: string;
+  state_id?: number;
+  state_name: string;
+  total_items: number;
+  total_quantity: number;
+  available_quantity: number;
+  reserved_quantity: number;
+  damaged_quantity: number;
+  low_stock_alerts: number;
+  health_status: "Healthy" | "Needs Attention" | "Critical";
+}
+
+export interface AdminCategorySummaryItem {
+  category_id: number;
+  category_name: string;
+  master_items_count: number;
+  total_quantity: number;
+  share_percentage: number;
+}
+
+export interface AdminInventoryOverviewData {
+  cards: AdminInventoryOverviewCards;
+  station_summaries: AdminStationSummaryItem[];
+  category_summary: AdminCategorySummaryItem[];
+}
+
+export interface AdminPaginatedStationItem {
+  id: number;
+  station_id: number;
+  station_name: string;
+  district_id?: number;
+  district_name: string;
+  state_id?: number;
+  state_name: string;
+  inventory_master_id: number;
+  item_name: string;
+  category: string;
+  unit: string;
+  total_quantity: number;
+  available_quantity: number;
+  reserved_quantity: number;
+  damaged_quantity: number;
+  minimum_stock: number;
+  stock_status: string;
+}
+
+export interface AdminPaginatedStationsResponse {
+  items: AdminPaginatedStationItem[];
+  total_records: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface RFOInventoryDashboardCards {
+  total_inventory_items: number;
+  total_available_stock: number;
+  currently_issued_equipment: number;
+  pending_equipment_requests: number;
+  low_stock_items: number;
+  out_of_stock_items: number;
+  returned_today: number;
+  locally_purchased_this_month: number;
+  hq_requested_pending: number;
+  damaged_items: number;
+}
+
+export interface RFOGroupedCategoryItem {
+  id: number;
+  inventory_master_id: number;
+  equipment_name: string;
+  category: string;
+  unit: string;
+  available: number;
+  reserved: number;
+  issued: number;
+  damaged: number;
+  minimum_level: number;
+  current_stock: number;
+  total_stock: number;
+  stock_status: string;
+  last_updated?: string;
+  supplier_source: string;
+}
+
+export interface RFOGroupedCategory {
+  category_id: number;
+  category_name: string;
+  procurement_type: "LOCAL_ALLOWED" | "ADMIN_ONLY";
+  items_count: number;
+  total_available: number;
+  total_quantity: number;
+  items: RFOGroupedCategoryItem[];
+}
+
+export interface RFOInventoryDashboardData {
+  cards: RFOInventoryDashboardCards;
+  grouped_categories: RFOGroupedCategory[];
+  recent_updates: InventoryTransaction[];
 }

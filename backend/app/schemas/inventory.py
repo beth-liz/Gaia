@@ -10,6 +10,7 @@ from datetime import datetime
 class InventoryCategoryCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     description: Optional[str] = None
+    procurement_type: str = Field("LOCAL_ALLOWED", description="LOCAL_ALLOWED or ADMIN_ONLY")
     active: bool = True
     return_required: bool = True
     consumable: bool = False
@@ -20,6 +21,7 @@ class InventoryCategoryResponse(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    procurement_type: str = "LOCAL_ALLOWED"
     active: bool = True
     return_required: bool = True
     consumable: bool = False
@@ -98,6 +100,10 @@ class InventoryMasterResponse(BaseModel):
     is_active: bool = True
     created_at: datetime
     updated_at: datetime
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
+    creator_name: Optional[str] = None
+    updater_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -110,8 +116,27 @@ class InventoryMasterResponse(BaseModel):
 class StationInventoryAddStock(BaseModel):
     station_id: Optional[int] = None
     inventory_master_id: int
-    quantity: int = Field(..., gt=0)
+    quantity: int = Field(..., gt=0, le=100000)
+    procurement_source: str = Field("LOCAL_PURCHASE", description="LOCAL_PURCHASE or HQ_ALLOCATION")
+    vendor_name: Optional[str] = None
+    invoice_number: Optional[str] = None
+    purchase_date: Optional[datetime] = None
+    purchase_cost: Optional[float] = None
+    gst_tax: Optional[float] = None
+    allocation_reference: Optional[str] = None
+    received_date: Optional[datetime] = None
+    admin_dispatch_number: Optional[str] = None
     supplier: Optional[str] = None
+    remarks: Optional[str] = None
+
+
+class HQStockRequestCreate(BaseModel):
+    inventory_master_id: int
+    station_id: Optional[int] = None
+    quantity: int = Field(..., gt=0, le=100000)
+    priority: str = Field("MEDIUM", description="LOW, MEDIUM, HIGH")
+    reason: str = Field(..., min_length=3)
+    expected_date: Optional[datetime] = None
     remarks: Optional[str] = None
 
 
@@ -164,13 +189,17 @@ class StationInventoryResponse(BaseModel):
     requires_refill: bool = False
     unit: Optional[str] = None
     minimum_stock: int = 0
+    maximum_capacity: int = 100
     reorder_level: int = 5
     total_quantity: int = 0
     current_quantity: int = 0
+    current_stock: int = 0
     available_quantity: int = 0
     issued_quantity: int = 0
     reserved_quantity: int = 0
     damaged_quantity: int = 0
+    supplier_source: Optional[str] = "HQ Allocation"
+    procurement_type: str = "LOCAL_ALLOWED"
     expiry_date: Optional[datetime] = None
     manufacture_date: Optional[datetime] = None
     batch_number: Optional[str] = None
@@ -241,6 +270,23 @@ class DirectIssueEquipmentRequest(BaseModel):
     remarks: Optional[str] = None
 
 
+class IssueEquipmentItemSchema(BaseModel):
+    station_inventory_id: int
+    quantity: int = Field(..., gt=0)
+    usage_type: str = Field("Temporary", description="Temporary or Permanent")
+    expected_return_date: Optional[datetime] = None
+    purpose: Optional[str] = None
+    remarks: Optional[str] = None
+
+
+class BatchIssueEquipmentSchema(BaseModel):
+    guard_id: int
+    items: List[IssueEquipmentItemSchema] = Field(..., min_items=1)
+    mission_name: Optional[str] = None
+    overall_purpose: Optional[str] = None
+    remarks: Optional[str] = None
+
+
 class EquipmentRequestResponse(BaseModel):
     id: int
     guard_id: int
@@ -292,9 +338,10 @@ class EquipmentReturnVerifyAction(BaseModel):
 
 
 class ReturnVerificationRequest(BaseModel):
-    action: str = Field(..., description="ACCEPT, REPAIR, WRITE_OFF, or REJECT")
+    condition: str = Field("Good", description="Good, Minor Damage, Major Damage, Lost")
+    remarks: str = Field(..., min_length=2, description="Mandatory officer verification remarks")
+    action: Optional[str] = Field("ACCEPT", description="ACCEPT, REPAIR, WRITE_OFF, or REJECT")
     damaged_quantity: Optional[int] = 0
-    remarks: Optional[str] = None
 
 
 class EquipmentReturnResponse(BaseModel):

@@ -1,201 +1,213 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { inventoryService } from "@/services/inventoryService";
 import { api } from "@/services/api";
-import type { StationInventory, InventorySummaryReport } from "@/types/inventory";
+import type {
+  AdminInventoryOverviewData,
+  AdminPaginatedStationItem,
+} from "@/types/inventory";
 import { PageHeader } from "@/components/common/PageHeader";
 import {
   Warehouse,
   Search,
   AlertTriangle,
-  XCircle,
   Layers,
   ShieldAlert,
-  History,
   Info,
-  Loader2,
   RefreshCw,
   LayoutGrid,
   List,
+  ChevronLeft,
+  ChevronRight,
+  PackageCheck,
+  Wrench,
+  MapPin,
 } from "lucide-react";
 
-interface DistrictItem {
-  id: number;
-  district_name: string;
-  state_name?: string;
-}
-
-interface StateItem {
-  id: number;
-  state_name: string;
-}
-
 export const AdminStationInventoryOverviewPage: React.FC = () => {
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loadingOverview, setLoadingOverview] = useState<boolean>(true);
+  const [loadingItems, setLoadingItems] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Data
-  const [stationInventories, setStationInventories] = useState<StationInventory[]>([]);
-  const [districts, setDistricts] = useState<DistrictItem[]>([]);
-  const [states, setStates] = useState<StateItem[]>([]);
-  const [summaryReport, setSummaryReport] = useState<InventorySummaryReport | null>(null);
+  // Overview Aggregation Data & Paginated Data
+  const [overviewData, setOverviewData] = useState<AdminInventoryOverviewData | null>(null);
+  const [paginatedData, setPaginatedData] = useState<{
+    items: AdminPaginatedStationItem[];
+    total_records: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+  }>({
+    items: [],
+    total_records: 0,
+    page: 1,
+    page_size: 20,
+    total_pages: 1,
+  });
 
-  // Filters & View Mode
+  // Hierarchy Filter Data
+  const [states, setStates] = useState<{ id: number; state_name: string }[]>([]);
+  const [districts, setDistricts] = useState<{ id: number; district_name: string; state_id?: number }[]>([]);
+  const [stations, setStations] = useState<{ id: number; station_name: string; district_id?: number }[]>([]);
+
+  // Selected Filters
+  const [selectedStateId, setSelectedStateId] = useState<number>(0);
+  const [selectedDistrictId, setSelectedDistrictId] = useState<number>(0);
+  const [selectedStationId, setSelectedStationId] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [selectedDistrict, setSelectedDistrict] = useState<string>("ALL");
-  const [selectedState, setSelectedState] = useState<string>("ALL");
-  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("table");
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
+  // Load Overview Aggregation Data
+  const fetchOverview = async () => {
+    setLoadingOverview(true);
     try {
-      const [stData, summaryData, distData, stateData] = await Promise.all([
-        inventoryService.getAllStationsInventory(),
-        inventoryService.getSummaryReport(),
-        api.getDistricts(),
-        api.getStates(),
-      ]);
-      setStationInventories(stData);
-      setSummaryReport(summaryData);
-      setDistricts(distData);
-      setStates(stateData);
+      const data = await inventoryService.getAdminOverview();
+      setOverviewData(data);
     } catch (err: any) {
-      setError(err.message || "Failed to load station inventory overview.");
+      setError("Unable to connect to the server. Please try again.");
     } finally {
-      setLoading(false);
+      setLoadingOverview(false);
+    }
+  };
+
+  // Load Paginated Station Items
+  const fetchPaginatedItems = async (pageToFetch: number = 1) => {
+    setLoadingItems(true);
+    try {
+      const res = await inventoryService.getAdminStations({
+        state_id: selectedStateId || undefined,
+        district_id: selectedDistrictId || undefined,
+        station_id: selectedStationId || undefined,
+        search: searchTerm || undefined,
+        page: pageToFetch,
+        page_size: 20,
+      });
+      setPaginatedData(res);
+      setCurrentPage(res.page);
+    } catch (err: any) {
+      setError("Unable to connect to the server. Please try again.");
+    } finally {
+      setLoadingItems(false);
+    }
+  };
+
+  // Load Location Hierarchy Options
+  const fetchHierarchy = async () => {
+    try {
+      const [stList, distList, stationList] = await Promise.all([
+        api.getStates().catch(() => []),
+        api.getDistricts().catch(() => []),
+        api.getMonitoringStations().catch(() => []),
+      ]);
+      setStates(stList);
+      setDistricts(distList);
+      setStations(stationList.map((s: any) => ({ id: s.id, station_name: s.station_name, district_id: s.district_id })));
+    } catch {
+      // Graceful fallback
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchOverview();
+    fetchHierarchy();
   }, []);
 
-  // Filtered station inventory items
-  const filteredInventories = useMemo(() => {
-    return stationInventories.filter((st) => {
-      const matchesSearch =
-        !searchTerm ||
-        (st.station_name && st.station_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (st.item_name && st.item_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (st.category && st.category.toLowerCase().includes(searchTerm.toLowerCase()));
+  useEffect(() => {
+    fetchPaginatedItems(1);
+  }, [selectedStateId, selectedDistrictId, selectedStationId, searchTerm]);
 
-      const matchesDistrict =
-        selectedDistrict === "ALL" ||
-        (st.district_name && st.district_name === selectedDistrict) ||
-        (st.district_id && st.district_id.toString() === selectedDistrict);
+  const handleRefreshAll = () => {
+    setError(null);
+    fetchOverview();
+    fetchPaginatedItems(currentPage);
+  };
 
-      const matchesState =
-        selectedState === "ALL" || (st.state_name && st.state_name === selectedState);
+  // Cascading Filter Logic
+  const filteredDistricts = useMemo(() => {
+    if (!selectedStateId) return districts;
+    return districts.filter((d) => d.state_id === selectedStateId);
+  }, [districts, selectedStateId]);
 
-      return matchesSearch && matchesDistrict && matchesState;
-    });
-  }, [stationInventories, searchTerm, selectedDistrict, selectedState]);
+  const filteredStations = useMemo(() => {
+    if (!selectedDistrictId) return stations;
+    return stations.filter((s) => s.district_id === selectedDistrictId);
+  }, [stations, selectedDistrictId]);
 
-  // Grouped by station
-  const stationGroups = useMemo(() => {
-    const map = new Map<string, {
-      station_id: number;
-      station_name: string;
-      district_name: string;
-      state_name: string;
-      items: StationInventory[];
-      total_items_count: number;
-      available_sum: number;
-      reserved_sum: number;
-      damaged_sum: number;
-      low_stock_count: number;
-      out_of_stock_count: number;
-    }>();
+  const handleStateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = Number(e.target.value);
+    setSelectedStateId(val);
+    setSelectedDistrictId(0);
+    setSelectedStationId(0);
+  };
 
-    filteredInventories.forEach((item) => {
-      const key = item.station_name || `Station #${item.station_id}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          station_id: item.station_id,
-          station_name: key,
-          district_name: item.district_name || "Wayanad",
-          state_name: item.state_name || "Kerala",
-          items: [],
-          total_items_count: 0,
-          available_sum: 0,
-          reserved_sum: 0,
-          damaged_sum: 0,
-          low_stock_count: 0,
-          out_of_stock_count: 0,
-        });
-      }
+  const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = Number(e.target.value);
+    setSelectedDistrictId(val);
+    setSelectedStationId(0);
+  };
 
-      const group = map.get(key)!;
-      group.items.push(item);
-      group.total_items_count += 1;
-      group.available_sum += item.available_quantity;
-      group.reserved_sum += item.reserved_quantity;
-      group.damaged_sum += item.damaged_quantity;
+  const handleStationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedStationId(Number(e.target.value));
+  };
 
-      if (item.status === "Low Stock") group.low_stock_count += 1;
-      if (item.status === "Out of Stock") group.out_of_stock_count += 1;
-    });
+  const cards = overviewData?.cards;
 
-    return Array.from(map.values());
-  }, [filteredInventories]);
-
-  // Category Distribution Math
-  const categoryBreakdown = useMemo(() => {
-    const catMap = new Map<string, { count: number; totalQty: number }>();
-    filteredInventories.forEach((item) => {
-      const cat = item.category || "General";
-      if (!catMap.has(cat)) {
-        catMap.set(cat, { count: 0, totalQty: 0 });
-      }
-      const c = catMap.get(cat)!;
-      c.count += 1;
-      c.totalQty += item.current_quantity;
-    });
-
-    const total = filteredInventories.length || 1;
-    return Array.from(catMap.entries()).map(([cat, val]) => ({
-      category: cat,
-      count: val.count,
-      totalQty: val.totalQty,
-      percentage: Math.round((val.count / total) * 100),
-    }));
-  }, [filteredInventories]);
-
-  // Low stock items alert list
-  const lowStockAlertsList = useMemo(() => {
-    return filteredInventories.filter((i) => i.status === "Low Stock" || i.status === "Out of Stock");
-  }, [filteredInventories]);
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 text-emerald-800 animate-spin mb-2" />
-        <p className="text-sm font-medium text-emerald-950">Loading Cross-Station Inventory Telemetry...</p>
-      </div>
-    );
-  }
+  const renderStockStatusBadge = (status: string) => {
+    const s = status ? status.toUpperCase() : "OPTIMAL STOCK";
+    if (s.includes("OUT OF STOCK") || s === "OUT OF STOCK") {
+      return (
+        <span className="px-3 py-1 bg-gray-100 text-gray-700 border border-gray-300 rounded-xl text-[11px] font-black inline-block">
+          Out Of Stock
+        </span>
+      );
+    } else if (s.includes("LOW STOCK") || s === "LOW STOCK") {
+      return (
+        <span className="px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-[11px] font-black inline-block">
+          Low Stock
+        </span>
+      );
+    } else if (s.includes("DAMAGED") || s === "DAMAGED") {
+      return (
+        <span className="px-3 py-1 bg-orange-100 text-orange-900 border border-orange-300 rounded-xl text-[11px] font-black inline-block">
+          Damaged
+        </span>
+      );
+    } else if (s.includes("CRITICAL") || s === "CRITICAL") {
+      return (
+        <span className="px-3 py-1 bg-red-100 text-red-900 border border-red-300 rounded-xl text-[11px] font-black inline-block">
+          Critical
+        </span>
+      );
+    } else {
+      return (
+        <span className="px-3 py-1 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-xl text-[11px] font-black inline-block">
+          Optimal Stock
+        </span>
+      );
+    }
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto">
       <PageHeader
-        title="Station Inventory Overview"
-        subtitle="Read-only monitoring of stock levels, equipment allocations, and stock alerts across all monitoring stations."
+        title="Station Inventory Monitoring Overview"
+        subtitle="Global monitoring of stock levels, field equipment assignments, damage tracking, and station balance telemetry."
         icon={Warehouse}
-        badge={`${stationGroups.length} Active Stations`}
+        badge="System Admin Read-Only Control"
       />
 
-      {/* Read Only Notice Banner */}
+      {/* Strict Read-Only Scope Notice */}
       <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-950 text-xs font-semibold flex items-start gap-3 shadow-xs">
         <Info className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
         <div className="leading-relaxed">
           <span className="font-extrabold uppercase tracking-wider text-emerald-900 block mb-0.5">
-            Read-Only Station Telemetry
+            Admin Monitoring Scope
           </span>
-          This dashboard displays live PostgreSQL inventory balances across stations. Admin does not manage or edit station stock directly. Stock additions, equipment issues, and returns are executed by Range Forest Officers (RFOs).
+          Admin maintains view-only oversight across all stations. Stock logging, equipment issuing, kit replenishment, and return verifications are performed directly by Range Forest Officers (RFOs) per station.
         </div>
       </div>
 
-      {/* Error Alert */}
+      {/* Error Banner */}
       {error && (
         <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2">
@@ -206,398 +218,511 @@ export const AdminStationInventoryOverviewPage: React.FC = () => {
         </div>
       )}
 
-      {/* Analytics Metric Cards Grid */}
-      {summaryReport && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-5 rounded-2xl bg-white border border-emerald-950/10 shadow-xs flex items-center gap-4">
-            <div className="p-3 bg-emerald-100 rounded-2xl text-emerald-900 shrink-0">
-              <Layers className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-800/70">Total Stocked Items</p>
-              <h3 className="text-2xl font-black text-emerald-950">{summaryReport.total_items_in_stock}</h3>
-              <p className="text-[11px] font-semibold text-emerald-700">Across {stationGroups.length} Stations</p>
+      {/* SECTION 2: BACKEND AGGREGATED DASHBOARD CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Stocked Items Card */}
+        <div className="p-5 bg-white rounded-3xl border border-emerald-950/10 shadow-xs space-y-2 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase text-emerald-950 tracking-wider">Total Stocked Items</span>
+            <div className="p-2.5 rounded-2xl bg-emerald-100 text-emerald-900">
+              <Warehouse className="w-5 h-5" />
             </div>
           </div>
-
-          <div className="p-5 rounded-2xl bg-white border border-emerald-950/10 shadow-xs flex items-center gap-4">
-            <div className="p-3 bg-amber-100 rounded-2xl text-amber-900 shrink-0">
-              <AlertTriangle className="w-6 h-6 text-amber-600" />
-            </div>
+          {loadingOverview ? (
+            <div className="h-8 bg-gray-200 animate-pulse rounded-xl w-32" />
+          ) : (
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-800/70">Low Stock Items</p>
-              <h3 className="text-2xl font-black text-emerald-950">
-                {summaryReport.low_stock_items_count + summaryReport.out_of_stock_items_count}
-              </h3>
-              <p className="text-[11px] font-semibold text-amber-700">
-                {summaryReport.low_stock_items_count} Low, {summaryReport.out_of_stock_items_count} Out of Stock
+              <div className="text-3xl font-black text-emerald-950">{cards?.total_stocked_items ?? 0} <span className="text-sm font-bold text-gray-500">Units</span></div>
+              <p className="text-xs font-bold text-emerald-700 mt-1">Across {cards?.stocked_stations_count ?? 0} Stations</p>
+            </div>
+          )}
+        </div>
+
+        {/* Low Stock Items Card */}
+        <div className="p-5 bg-white rounded-3xl border border-emerald-950/10 shadow-xs space-y-2 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase text-amber-950 tracking-wider">Low Stock Items</span>
+            <div className="p-2.5 rounded-2xl bg-amber-100 text-amber-900">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+          </div>
+          {loadingOverview ? (
+            <div className="h-8 bg-gray-200 animate-pulse rounded-xl w-32" />
+          ) : (
+            <div>
+              <div className="text-3xl font-black text-amber-950">{cards?.low_stock_items_count ?? 0} <span className="text-sm font-bold text-gray-500">Items</span></div>
+              <p className="text-xs font-bold text-amber-800 mt-1">{cards?.low_stock_stations_count ?? 0} Stations Affected</p>
+            </div>
+          )}
+        </div>
+
+        {/* Equipment Assigned Card */}
+        <div className="p-5 bg-white rounded-3xl border border-emerald-950/10 shadow-xs space-y-2 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase text-blue-950 tracking-wider">Equipment Assigned</span>
+            <div className="p-2.5 rounded-2xl bg-blue-100 text-blue-900">
+              <PackageCheck className="w-5 h-5" />
+            </div>
+          </div>
+          {loadingOverview ? (
+            <div className="h-8 bg-gray-200 animate-pulse rounded-xl w-32" />
+          ) : (
+            <div>
+              <div className="text-3xl font-black text-blue-950">{cards?.equipment_assigned_count ?? 0} <span className="text-sm font-bold text-gray-500">Equipment Issued</span></div>
+              <p className="text-xs font-bold text-blue-800 mt-1">{cards?.guards_equipped_count ?? 0} Guards Equipped</p>
+            </div>
+          )}
+        </div>
+
+        {/* Damaged Equipment Card */}
+        <div className="p-5 bg-white rounded-3xl border border-emerald-950/10 shadow-xs space-y-2 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase text-red-950 tracking-wider">Damaged Equipment</span>
+            <div className="p-2.5 rounded-2xl bg-red-100 text-red-900">
+              <Wrench className="w-5 h-5" />
+            </div>
+          </div>
+          {loadingOverview ? (
+            <div className="h-8 bg-gray-200 animate-pulse rounded-xl w-32" />
+          ) : (
+            <div>
+              <div className="text-3xl font-black text-red-950">{cards?.damaged_quantity ?? 0} <span className="text-sm font-bold text-gray-500">Damaged Units</span></div>
+              <p className="text-xs font-bold text-red-800 mt-1">
+                {cards?.under_repair_count ?? 0} Under Repair | {cards?.awaiting_disposal_count ?? 0} Awaiting Disposal
               </p>
             </div>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-white border border-emerald-950/10 shadow-xs flex items-center gap-4">
-            <div className="p-3 bg-blue-100 rounded-2xl text-blue-900 shrink-0">
-              <Warehouse className="w-6 h-6 text-blue-700" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-800/70">Equipment Assigned</p>
-              <h3 className="text-2xl font-black text-emerald-950">{summaryReport.total_items_reserved}</h3>
-              <p className="text-[11px] font-semibold text-blue-700">Issued to Field Guards</p>
-            </div>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-white border border-emerald-950/10 shadow-xs flex items-center gap-4">
-            <div className="p-3 bg-red-100 rounded-2xl text-red-900 shrink-0">
-              <History className="w-6 h-6 text-red-600" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-800/70">Damaged Equipment</p>
-              <h3 className="text-2xl font-black text-emerald-950">{summaryReport.total_items_damaged}</h3>
-              <p className="text-[11px] font-semibold text-red-700">Out of Service</p>
-            </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Analytics Visual Breakdown Charts & Lists Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Chart 1: Inventory Stock & Reservation by Station */}
-        <div className="p-5 rounded-3xl bg-white border border-emerald-950/10 shadow-xs space-y-4">
-          <div className="flex justify-between items-center border-b border-emerald-950/10 pb-3">
-            <h3 className="text-xs font-black uppercase tracking-wider text-emerald-950 flex items-center gap-2">
+      {/* SECTION 3 & 4: INVENTORY BALANCE BY STATION & DISTRIBUTION BY CATEGORY */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* SECTION 3: INVENTORY BALANCE BY STATION (VERTICAL STACK) */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-emerald-950 uppercase tracking-wider flex items-center gap-2">
               <Warehouse className="w-4 h-4 text-emerald-700" />
               Inventory Balance by Station
             </h3>
-            <span className="text-[11px] font-extrabold text-emerald-800/70">Available vs Reserved</span>
+            <span className="text-xs font-extrabold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-xl">
+              {overviewData?.station_summaries.length ?? 0} Stations
+            </span>
           </div>
 
-          <div className="space-y-3 pt-1">
-            {stationGroups.map((group) => {
-              const maxQty = Math.max(1, group.available_sum + group.reserved_sum + group.damaged_sum);
-              const availWidth = Math.round((group.available_sum / maxQty) * 100);
-              const resWidth = Math.round((group.reserved_sum / maxQty) * 100);
+          {loadingOverview ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="p-5 bg-white rounded-3xl border border-emerald-950/10 h-32 animate-pulse" />
+              ))}
+            </div>
+          ) : (overviewData?.station_summaries || []).length === 0 ? (
+            <div className="p-8 bg-white rounded-3xl border border-emerald-950/10 text-center text-xs font-semibold text-gray-500">
+              No inventory data available across monitoring stations.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {(overviewData?.station_summaries || []).map((stSummary) => {
+                const total = stSummary.total_quantity || 1;
+                const availPct = Math.round((stSummary.available_quantity / total) * 100);
+                const resPct = Math.round((stSummary.reserved_quantity / total) * 100);
+                const damPct = Math.round((stSummary.damaged_quantity / total) * 100);
 
-              return (
-                <div key={group.station_name} className="space-y-1 text-xs font-semibold text-emerald-950">
-                  <div className="flex justify-between items-center">
-                    <span className="font-extrabold">{group.station_name}</span>
-                    <span className="font-mono text-[11px] text-emerald-800">
-                      {group.available_sum} Available | {group.reserved_sum} Reserved | {group.damaged_sum} Damaged
-                    </span>
-                  </div>
+                return (
+                  <div
+                    key={stSummary.station_id}
+                    className="p-5 rounded-3xl bg-white border border-emerald-950/10 shadow-xs space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-base font-black text-emerald-950 flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-emerald-700 shrink-0" />
+                          {stSummary.station_name}
+                        </h4>
+                        <p className="text-xs font-semibold text-gray-500">
+                          {stSummary.district_name}, {stSummary.state_name} • {stSummary.total_items} Items Defined
+                        </p>
+                      </div>
 
-                  <div className="w-full bg-emerald-950/5 h-3 rounded-full overflow-hidden flex">
-                    <div
-                      className="bg-emerald-700 h-full transition-all"
-                      style={{ width: `${availWidth}%` }}
-                      title={`Available: ${group.available_sum}`}
-                    />
-                    <div
-                      className="bg-blue-600 h-full transition-all"
-                      style={{ width: `${resWidth}%` }}
-                      title={`Reserved: ${group.reserved_sum}`}
-                    />
+                      <span
+                        className={`px-3 py-1 rounded-xl text-xs font-black self-start sm:self-center ${
+                          stSummary.health_status === "Healthy"
+                            ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                            : stSummary.health_status === "Needs Attention"
+                            ? "bg-amber-100 text-amber-900 border border-amber-300"
+                            : "bg-red-100 text-red-900 border border-red-300"
+                        }`}
+                      >
+                        {stSummary.health_status}
+                      </span>
+                    </div>
+
+                    {/* Progress Bar Stack */}
+                    <div className="space-y-1.5">
+                      <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden flex">
+                        <div style={{ width: `${availPct}%` }} className="bg-emerald-600 h-full" title={`Available: ${stSummary.available_quantity}`} />
+                        <div style={{ width: `${resPct}%` }} className="bg-blue-600 h-full" title={`Reserved: ${stSummary.reserved_quantity}`} />
+                        <div style={{ width: `${damPct}%` }} className="bg-red-600 h-full" title={`Damaged: ${stSummary.damaged_quantity}`} />
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between text-xs font-bold pt-1 gap-2">
+                        <div className="flex items-center gap-1.5 text-emerald-900">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block" />
+                          Available: <strong>{stSummary.available_quantity}</strong>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-blue-900">
+                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" />
+                          Reserved: <strong>{stSummary.reserved_quantity}</strong>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-red-900">
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block" />
+                          Damaged: <strong>{stSummary.damaged_quantity}</strong>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-amber-900 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                          <AlertTriangle className="w-3 h-3 text-amber-600" />
+                          Low Stock Alerts: <strong>{stSummary.low_stock_alerts}</strong>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-            {stationGroups.length === 0 && (
-              <p className="text-xs text-emerald-800/60 font-medium py-4 text-center">No station telemetry available.</p>
-            )}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Chart 2: Category Distribution Breakdown */}
-        <div className="p-5 rounded-3xl bg-white border border-emerald-950/10 shadow-xs space-y-4">
-          <div className="flex justify-between items-center border-b border-emerald-950/10 pb-3">
-            <h3 className="text-xs font-black uppercase tracking-wider text-emerald-950 flex items-center gap-2">
+        {/* SECTION 4: INVENTORY DISTRIBUTION BY CATEGORY */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-emerald-950 uppercase tracking-wider flex items-center gap-2">
               <Layers className="w-4 h-4 text-emerald-700" />
-              Inventory Distribution by Category
+              Category Distribution
             </h3>
-            <span className="text-[11px] font-extrabold text-emerald-800/70">Category Shares</span>
+            <span className="text-xs font-extrabold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-xl">
+              {overviewData?.category_summary.length ?? 0} Categories
+            </span>
           </div>
 
-          <div className="space-y-3 pt-1">
-            {categoryBreakdown.map((cat) => (
-              <div key={cat.category} className="space-y-1 text-xs font-semibold text-emerald-950">
-                <div className="flex justify-between items-center">
-                  <span className="font-extrabold">{cat.category}</span>
-                  <span className="font-mono text-[11px] text-emerald-800">
-                    {cat.count} Items ({cat.totalQty} Units) - {cat.percentage}%
-                  </span>
-                </div>
-                <div className="w-full bg-emerald-950/5 h-2.5 rounded-full overflow-hidden">
-                  <div className="bg-emerald-800 h-full transition-all" style={{ width: `${cat.percentage}%` }} />
-                </div>
+          <div className="p-5 rounded-3xl bg-white border border-emerald-950/10 shadow-xs space-y-4">
+            {loadingOverview ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map((n) => (
+                  <div key={n} className="h-14 bg-gray-100 animate-pulse rounded-2xl" />
+                ))}
               </div>
-            ))}
-            {categoryBreakdown.length === 0 && (
-              <p className="text-xs text-emerald-800/60 font-medium py-4 text-center">No category metrics logged.</p>
+            ) : (overviewData?.category_summary || []).length === 0 ? (
+              <div className="text-center text-xs font-semibold text-gray-500 py-6">
+                No category distribution data available.
+              </div>
+            ) : (
+              (overviewData?.category_summary || []).map((catItem) => (
+                <div key={catItem.category_id} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-black text-emerald-950">
+                    <span>{catItem.category_name}</span>
+                    <span className="text-emerald-800">{catItem.share_percentage}%</span>
+                  </div>
+
+                  <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      style={{ width: `${Math.min(100, Math.max(2, catItem.share_percentage))}%` }}
+                      className="h-full bg-emerald-800 rounded-full transition-all"
+                    />
+                  </div>
+
+                  <div className="flex justify-between text-[11px] font-semibold text-gray-500">
+                    <span>Master Items: <strong className="text-emerald-950">{catItem.master_items_count}</strong></span>
+                    <span>Total Quantity: <strong className="text-emerald-950">{catItem.total_quantity} Units</strong></span>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>
       </div>
 
-      {/* Filter & View Mode Bar */}
+      {/* SECTION 7, 8, 9, 10: SEARCH, CASCADING FILTERS, VIEW MODE TOGGLE & TABLE/CARD DATA */}
       <div className="p-4 rounded-2xl bg-white border border-emerald-950/10 shadow-xs space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-4">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          {/* Search Station */}
+          {/* Search Input */}
           <div className="relative w-full sm:w-64">
             <Search className="w-4 h-4 absolute left-3 top-3 text-emerald-700/50" />
             <input
               type="text"
-              placeholder="Search station or item..."
+              placeholder="Search station, item, category..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-xs font-semibold rounded-xl border border-emerald-950/10 bg-emerald-950/5 text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-800 placeholder-emerald-900/40"
             />
           </div>
 
-          {/* Filter by District */}
+          {/* Cascading State Dropdown */}
           <select
-            value={selectedDistrict}
-            onChange={(e) => setSelectedDistrict(e.target.value)}
+            value={selectedStateId}
+            onChange={handleStateChange}
             className="px-3 py-2 text-xs font-extrabold rounded-xl border border-emerald-950/10 bg-emerald-950/5 text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-800"
           >
-            <option value="ALL">All Districts</option>
-            {districts.map((d) => (
-              <option key={d.id} value={d.district_name}>
+            <option value={0}>All States</option>
+            {states.map((st) => (
+              <option key={st.id} value={st.id}>
+                {st.state_name}
+              </option>
+            ))}
+          </select>
+
+          {/* Cascading District Dropdown */}
+          <select
+            value={selectedDistrictId}
+            onChange={handleDistrictChange}
+            className="px-3 py-2 text-xs font-extrabold rounded-xl border border-emerald-950/10 bg-emerald-950/5 text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-800"
+          >
+            <option value={0}>All Districts</option>
+            {filteredDistricts.map((d) => (
+              <option key={d.id} value={d.id}>
                 {d.district_name}
               </option>
             ))}
           </select>
 
-          {/* Filter by State */}
+          {/* Cascading Station Dropdown */}
           <select
-            value={selectedState}
-            onChange={(e) => setSelectedState(e.target.value)}
+            value={selectedStationId}
+            onChange={handleStationChange}
             className="px-3 py-2 text-xs font-extrabold rounded-xl border border-emerald-950/10 bg-emerald-950/5 text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-800"
           >
-            <option value="ALL">All States</option>
-            {states.map((s) => (
-              <option key={s.id} value={s.state_name}>
-                {s.state_name}
+            <option value={0}>All Stations</option>
+            {filteredStations.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.station_name}
               </option>
             ))}
           </select>
         </div>
 
+        {/* View Mode Toggle & Refresh Button */}
         <div className="flex items-center gap-2 justify-end w-full sm:w-auto">
-          <div className="flex items-center p-1 bg-emerald-950/5 border border-emerald-950/10 rounded-xl">
-            <button
-              onClick={() => setViewMode("cards")}
-              className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                viewMode === "cards" ? "bg-white text-emerald-950 shadow-xs" : "text-emerald-800/70"
-              }`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" /> Cards
-            </button>
+          <div className="p-1 bg-emerald-950/5 rounded-2xl border border-emerald-950/10 flex items-center gap-1">
             <button
               onClick={() => setViewMode("table")}
-              className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                viewMode === "table" ? "bg-white text-emerald-950 shadow-xs" : "text-emerald-800/70"
+              className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                viewMode === "table"
+                  ? "bg-white text-emerald-950 shadow-xs"
+                  : "text-gray-500 hover:text-emerald-900"
               }`}
             >
-              <List className="w-3.5 h-3.5" /> Table
+              <List className="w-4 h-4" /> Table View
+            </button>
+
+            <button
+              onClick={() => setViewMode("cards")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                viewMode === "cards"
+                  ? "bg-white text-emerald-950 shadow-xs"
+                  : "text-gray-500 hover:text-emerald-900"
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" /> Card View
             </button>
           </div>
 
           <button
-            onClick={fetchData}
+            onClick={handleRefreshAll}
             className="p-2.5 text-emerald-900 hover:bg-emerald-100 rounded-xl border border-emerald-950/10 transition-all"
-            title="Refresh Data"
+            title="Refresh Station Data"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Low Stock Restock Alerts List (If any) */}
-      {lowStockAlertsList.length > 0 && (
-        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 space-y-2">
-          <h4 className="text-xs font-extrabold uppercase tracking-wider text-amber-900 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600" />
-            Station Restock Warning Alerts ({lowStockAlertsList.length} Items Below Threshold)
-          </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs font-semibold">
-            {lowStockAlertsList.map((item) => (
-              <div key={item.id} className="p-2.5 bg-white rounded-xl border border-amber-200 flex items-center justify-between">
-                <div>
-                  <span className="font-extrabold text-amber-950">{item.item_name}</span>
-                  <span className="text-[10px] text-amber-800 block">{item.station_name}</span>
-                </div>
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                    item.status === "Out of Stock" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"
-                  }`}
-                >
-                  {item.available_quantity} {item.unit} (Min: {item.minimum_stock})
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Cards View Mode */}
-      {viewMode === "cards" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {stationGroups.map((group) => (
-            <div
-              key={group.station_name}
-              className="bg-white rounded-3xl border border-emerald-950/10 p-6 space-y-4 shadow-xs"
-            >
-              <div className="flex justify-between items-start border-b border-emerald-950/10 pb-3">
-                <div>
-                  <h3 className="text-base font-extrabold text-emerald-950 flex items-center gap-2">
-                    <Warehouse className="w-5 h-5 text-emerald-700 shrink-0" />
-                    {group.station_name}
-                  </h3>
-                  <span className="text-xs text-emerald-800/70 font-semibold">
-                    {group.district_name}, {group.state_name}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  {group.out_of_stock_count > 0 ? (
-                    <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-red-100 text-red-800 border border-red-200">
-                      ⚠ Out of Stock Alerts ({group.out_of_stock_count})
-                    </span>
-                  ) : group.low_stock_count > 0 ? (
-                    <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200">
-                      ⚠ Low Stock Alerts ({group.low_stock_count})
-                    </span>
-                  ) : (
-                    <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-900">
-                      Optimal Stock
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Station Summary Metrics */}
-              <div className="grid grid-cols-4 gap-2 text-center text-xs font-semibold">
-                <div className="p-2.5 bg-emerald-50/60 rounded-2xl border border-emerald-950/5">
-                  <span className="text-[10px] uppercase font-black text-emerald-800/70 block">Total Items</span>
-                  <span className="text-lg font-black text-emerald-950">{group.total_items_count}</span>
-                </div>
-
-                <div className="p-2.5 bg-emerald-100/50 rounded-2xl border border-emerald-950/5">
-                  <span className="text-[10px] uppercase font-black text-emerald-800/70 block">Available</span>
-                  <span className="text-lg font-black text-emerald-700">{group.available_sum}</span>
-                </div>
-
-                <div className="p-2.5 bg-blue-50 rounded-2xl border border-blue-200/50">
-                  <span className="text-[10px] uppercase font-black text-blue-800/70 block">Reserved</span>
-                  <span className="text-lg font-black text-blue-700">{group.reserved_sum}</span>
-                </div>
-
-                <div className="p-2.5 bg-red-50 rounded-2xl border border-red-200/50">
-                  <span className="text-[10px] uppercase font-black text-red-800/70 block">Damaged</span>
-                  <span className="text-lg font-black text-red-600">{group.damaged_sum}</span>
-                </div>
-              </div>
-
-              {/* Station Inventory Items List */}
-              <div className="space-y-2 pt-2 border-t border-emerald-950/5">
-                <h4 className="text-[11px] font-black uppercase text-emerald-950 tracking-wider">
-                  Station Stock Breakdown ({group.items.length})
-                </h4>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {group.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-2.5 bg-emerald-950/5 rounded-xl flex items-center justify-between text-xs font-semibold"
-                    >
-                      <div>
-                        <span className="font-extrabold text-emerald-950">{item.item_name}</span>
-                        <span className="text-[10px] text-emerald-800/60 ml-2 font-normal">({item.category})</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-emerald-700 font-bold">
-                          {item.available_quantity} / {item.current_quantity} {item.unit}
-                        </span>
-                        {item.status === "In Stock" && (
-                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded-full text-[10px] font-bold">
-                            In Stock
-                          </span>
-                        )}
-                        {item.status === "Low Stock" && (
-                          <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-full text-[10px] font-bold">
-                            Low Stock
-                          </span>
-                        )}
-                        {item.status === "Out of Stock" && (
-                          <span className="px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-[10px] font-bold">
-                            Out
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {stationGroups.length === 0 && (
-            <div className="col-span-2 p-8 bg-white rounded-3xl border border-emerald-950/10 text-center text-emerald-800/60 font-medium">
-              No monitoring stations found matching your search or location filters.
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Detailed Table View Mode */}
-      {viewMode === "table" && (
+      {/* SECTION 5 & 6: TABLE VIEW WITH ALIGNMENT & CALCULATED STOCK STATUS BADGES */}
+      {viewMode === "table" ? (
         <div className="bg-white rounded-3xl border border-emerald-950/10 overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-emerald-50/50 border-b border-emerald-950/10 text-emerald-950 font-black uppercase text-[11px] tracking-wider">
-                  <th className="px-6 py-4">Station Name</th>
-                  <th className="px-6 py-4">Location</th>
-                  <th className="px-6 py-4">Item Name</th>
-                  <th className="px-6 py-4">Total Stock</th>
-                  <th className="px-6 py-4">Available</th>
-                  <th className="px-6 py-4">Reserved (Issued)</th>
-                  <th className="px-6 py-4">Damaged</th>
-                  <th className="px-6 py-4">Stock Status</th>
+                  <th className="px-6 py-4 text-left align-middle">Station Name</th>
+                  <th className="px-6 py-4 text-center align-middle">Location</th>
+                  <th className="px-6 py-4 text-left align-middle">Item Name</th>
+                  <th className="px-6 py-4 text-center align-middle">Total Stock</th>
+                  <th className="px-6 py-4 text-center align-middle">Available</th>
+                  <th className="px-6 py-4 text-center align-middle">Reserved</th>
+                  <th className="px-6 py-4 text-center align-middle">Damaged</th>
+                  <th className="px-6 py-4 text-center align-middle">Stock Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-emerald-950/5 text-emerald-950 text-xs font-semibold">
-                {filteredInventories.map((st) => (
-                  <tr key={st.id} className="hover:bg-emerald-50/30 transition-all">
-                    <td className="px-6 py-4 font-extrabold text-emerald-950">{st.station_name}</td>
-                    <td className="px-6 py-4 text-emerald-800/70 text-[11px]">
-                      {st.district_name || "Wayanad"}, {st.state_name || "Kerala"}
-                    </td>
-                    <td className="px-6 py-4 font-bold">{st.item_name}</td>
-                    <td className="px-6 py-4 font-mono font-extrabold">{st.current_quantity} {st.unit}</td>
-                    <td className="px-6 py-4 font-mono text-emerald-700 font-extrabold">{st.available_quantity}</td>
-                    <td className="px-6 py-4 font-mono text-blue-700 font-extrabold">{st.reserved_quantity}</td>
-                    <td className="px-6 py-4 font-mono text-red-600 font-extrabold">{st.damaged_quantity}</td>
-                    <td className="px-6 py-4">
-                      {st.status === "In Stock" && (
-                        <span className="px-2.5 py-1 bg-emerald-100 text-emerald-900 rounded-xl text-[11px] font-black">
-                          Optimal Stock
-                        </span>
-                      )}
-                      {st.status === "Low Stock" && (
-                        <span className="px-2.5 py-1 bg-amber-100 text-amber-900 rounded-xl text-[11px] font-black inline-flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3 text-amber-700" /> Low Stock Alert
-                        </span>
-                      )}
-                      {st.status === "Out of Stock" && (
-                        <span className="px-2.5 py-1 bg-red-100 text-red-800 rounded-xl text-[11px] font-black inline-flex items-center gap-1">
-                          <XCircle className="w-3 h-3 text-red-600" /> Out of Stock
-                        </span>
-                      )}
+                {loadingItems ? (
+                  [1, 2, 3, 4, 5].map((n) => (
+                    <tr key={n}>
+                      <td colSpan={8} className="px-6 py-4">
+                        <div className="h-6 bg-gray-100 animate-pulse rounded-xl" />
+                      </td>
+                    </tr>
+                  ))
+                ) : paginatedData.items.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-8 text-center text-emerald-800/60 font-medium">
+                      No inventory data available for selected filter criteria.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  paginatedData.items.map((row) => (
+                    <tr key={row.id} className="hover:bg-emerald-50/30 transition-all">
+                      {/* Left Aligned Station Name */}
+                      <td className="px-6 py-4 text-left align-middle font-extrabold text-emerald-950">
+                        {row.station_name}
+                      </td>
+
+                      {/* Center Aligned Location */}
+                      <td className="px-6 py-4 text-center align-middle text-emerald-800/70">
+                        {row.district_name}, {row.state_name}
+                      </td>
+
+                      {/* Left Aligned Item Name & Category */}
+                      <td className="px-6 py-4 text-left align-middle">
+                        <div className="font-extrabold text-emerald-950">{row.item_name}</div>
+                        <div className="text-[10px] text-emerald-800/60 font-bold">{row.category}</div>
+                      </td>
+
+                      {/* Center Aligned Total Stock */}
+                      <td className="px-6 py-4 text-center align-middle font-mono font-black text-emerald-950">
+                        {row.total_quantity} {row.unit}
+                      </td>
+
+                      {/* Center Aligned Available */}
+                      <td className="px-6 py-4 text-center align-middle font-mono font-black text-emerald-700">
+                        {row.available_quantity} {row.unit}
+                      </td>
+
+                      {/* Center Aligned Reserved */}
+                      <td className="px-6 py-4 text-center align-middle font-mono font-bold text-blue-800">
+                        {row.reserved_quantity} {row.unit}
+                      </td>
+
+                      {/* Center Aligned Damaged */}
+                      <td className="px-6 py-4 text-center align-middle font-mono font-bold text-red-700">
+                        {row.damaged_quantity} {row.unit}
+                      </td>
+
+                      {/* Center Aligned Stock Status Badge */}
+                      <td className="px-6 py-4 text-center align-middle">
+                        {renderStockStatusBadge(row.stock_status)}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
+          </div>
+
+          {/* SECTION 12: BACKEND PAGINATION BAR */}
+          <div className="p-4 bg-emerald-50/30 border-t border-emerald-950/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-semibold text-emerald-950">
+            <span className="text-emerald-800/70">
+              Showing {paginatedData.items.length > 0 ? (paginatedData.page - 1) * paginatedData.page_size + 1 : 0} -{" "}
+              {Math.min(paginatedData.page * paginatedData.page_size, paginatedData.total_records)} of {paginatedData.total_records} Records
+            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                disabled={currentPage === 1 || loadingItems}
+                onClick={() => fetchPaginatedItems(currentPage - 1)}
+                className="p-1.5 rounded-xl border border-emerald-950/10 bg-white text-emerald-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-100 transition-all"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="font-extrabold text-emerald-950">
+                Page {paginatedData.page} of {paginatedData.total_pages}
+              </span>
+              <button
+                disabled={currentPage >= paginatedData.total_pages || loadingItems}
+                onClick={() => fetchPaginatedItems(currentPage + 1)}
+                className="p-1.5 rounded-xl border border-emerald-950/10 bg-white text-emerald-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-100 transition-all"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* SECTION 10: CLEAN CARD VIEW */
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {loadingItems ? (
+              [1, 2, 3, 4, 5, 6].map((n) => (
+                <div key={n} className="p-5 bg-white rounded-3xl border border-emerald-950/10 h-44 animate-pulse" />
+              ))
+            ) : paginatedData.items.length === 0 ? (
+              <div className="col-span-3 p-8 bg-white rounded-3xl border border-emerald-950/10 text-center text-xs font-semibold text-gray-500">
+                No inventory data available for selected filter criteria.
+              </div>
+            ) : (
+              paginatedData.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-5 bg-white rounded-3xl border border-emerald-950/10 shadow-xs space-y-3 flex flex-col justify-between"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="text-sm font-black text-emerald-950">{item.item_name}</h4>
+                      <p className="text-[11px] font-bold text-emerald-700">{item.station_name}</p>
+                      <span className="text-[10px] text-gray-500 font-semibold">{item.district_name}, {item.state_name}</span>
+                    </div>
+                    {renderStockStatusBadge(item.stock_status)}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 bg-emerald-50/50 p-3 rounded-2xl text-center border border-emerald-950/5">
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase block">Available</span>
+                      <strong className="text-xs font-black text-emerald-900">{item.available_quantity} {item.unit}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase block">Reserved</span>
+                      <strong className="text-xs font-black text-blue-900">{item.reserved_quantity} {item.unit}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase block">Damaged</span>
+                      <strong className="text-xs font-black text-red-900">{item.damaged_quantity} {item.unit}</strong>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[11px] font-bold text-gray-500 border-t border-emerald-950/5 pt-2">
+                    <span>Min Stock Threshold: <strong className="text-amber-800">{item.minimum_stock}</strong></span>
+                    <span>Total: <strong className="text-emerald-950">{item.total_quantity} {item.unit}</strong></span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* CARD VIEW PAGINATION BAR */}
+          <div className="p-4 bg-white rounded-3xl border border-emerald-950/10 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-semibold text-emerald-950">
+            <span className="text-emerald-800/70">
+              Showing {paginatedData.items.length > 0 ? (paginatedData.page - 1) * paginatedData.page_size + 1 : 0} -{" "}
+              {Math.min(paginatedData.page * paginatedData.page_size, paginatedData.total_records)} of {paginatedData.total_records} Records
+            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                disabled={currentPage === 1 || loadingItems}
+                onClick={() => fetchPaginatedItems(currentPage - 1)}
+                className="p-1.5 rounded-xl border border-emerald-950/10 bg-white text-emerald-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-100 transition-all"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="font-extrabold text-emerald-950">
+                Page {paginatedData.page} of {paginatedData.total_pages}
+              </span>
+              <button
+                disabled={currentPage >= paginatedData.total_pages || loadingItems}
+                onClick={() => fetchPaginatedItems(currentPage + 1)}
+                className="p-1.5 rounded-xl border border-emerald-950/10 bg-white text-emerald-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-100 transition-all"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}
