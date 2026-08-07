@@ -46,7 +46,20 @@ export interface StationInventory {
   item_code?: string;
   item_type?: string;
   item_usage_type?: string;
+  equipment_name?: string;
   category?: string;
+  category_name?: string;
+  master_item?: {
+    id: number;
+    item_name: string;
+    category: string;
+    unit: string;
+    purchase_source?: string;
+    category_rel?: {
+      procurement_type?: "LOCAL_ALLOWED" | "ADMIN_ONLY";
+    };
+  };
+  supplier?: string;
   category_id?: number;
   return_required: boolean;
   consumable: boolean;
@@ -59,13 +72,15 @@ export interface StationInventory {
   current_quantity: number;
   current_stock?: number;
   available_quantity: number;
-  issued_quantity?: number;
+  available_stock?: number;
+  issued_quantity: number;
   reserved_quantity: number;
   damaged_quantity: number;
   supplier_source?: string;
   procurement_type?: "LOCAL_ALLOWED" | "ADMIN_ONLY";
   status: string;
   last_updated: string;
+  updated_at?: string;
   updated_by?: number;
   updater_name?: string;
 }

@@ -179,10 +179,12 @@ class StationInventoryResponse(BaseModel):
     state_name: Optional[str] = None
     inventory_master_id: int
     item_name: Optional[str] = None
+    equipment_name: Optional[str] = None
     item_code: Optional[str] = None
     item_type: Optional[str] = "PERSONAL"
     item_usage_type: Optional[str] = "RETURNABLE"
     category: Optional[str] = None
+    category_name: Optional[str] = None
     category_id: Optional[int] = None
     return_required: bool = True
     consumable: bool = False
@@ -195,6 +197,7 @@ class StationInventoryResponse(BaseModel):
     current_quantity: int = 0
     current_stock: int = 0
     available_quantity: int = 0
+    available_stock: int = 0
     issued_quantity: int = 0
     reserved_quantity: int = 0
     damaged_quantity: int = 0
@@ -205,6 +208,7 @@ class StationInventoryResponse(BaseModel):
     batch_number: Optional[str] = None
     status: str
     last_updated: datetime
+    updated_at: Optional[datetime] = None
     updated_by: Optional[int] = None
     updater_name: Optional[str] = None
 

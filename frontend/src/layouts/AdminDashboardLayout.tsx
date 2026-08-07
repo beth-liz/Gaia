@@ -28,6 +28,7 @@ const adminNavItems: NavItem[] = [
   // Inventory Management section
   { label: "Inventory Master", path: "/admin/inventory/master", icon: Package, sectionHeader: "Inventory Management" },
   { label: "Station Inventory Overview", path: "/admin/inventory/stations", icon: Warehouse },
+  { label: "Headquarters Requests", path: "/admin/inventory/hq-requests", icon: Building2 },
 
   // Operations & Governance section
   { label: "Villagers", path: "/admin/villagers", icon: Users, sectionHeader: "Operations & Governance" },

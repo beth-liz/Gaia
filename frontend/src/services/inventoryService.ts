@@ -772,4 +772,40 @@ export const inventoryService = {
     });
     return handleResponse<any>(res);
   },
+
+  addStationStock: async (data: any) => inventoryService.addStockToStation(data),
+  getInventoryMasters: async () => inventoryService.getMasterItems(),
+
+  getAdminHQRequests: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/inventory/admin/hq-requests`, {
+      headers: getHeaders(),
+    });
+    return handleResponse<any>(res);
+  },
+
+  approveAdminHQRequest: async (requestId: number): Promise<any> => {
+    const res = await fetch(`${API_BASE}/inventory/admin/hq-requests/${requestId}/approve`, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    return handleResponse<any>(res);
+  },
+
+  rejectAdminHQRequest: async (requestId: number, remarks?: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/inventory/admin/hq-requests/${requestId}/reject`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ remarks }),
+    });
+    return handleResponse<any>(res);
+  },
+
+  issueAdminHQEquipment: async (requestId: number, data: { issue_quantity: number; remarks?: string }): Promise<any> => {
+    const res = await fetch(`${API_BASE}/inventory/admin/hq-requests/${requestId}/issue`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
 };

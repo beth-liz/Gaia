@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Query, HTTPException, Response
+from fastapi import APIRouter, Depends, status, Query, HTTPException, Response, Body
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -293,6 +293,95 @@ def create_hq_stock_request(
     rfo: User = Depends(get_current_rfo)
 ):
     return inventory_service.create_hq_stock_request(data=data, current_user=rfo, db=db)
+
+
+@router.put(
+    "/stock/{station_inventory_id}/update-quantity",
+    response_model=StationInventoryResponse,
+    summary="Update available quantity for a station inventory item (Range Forest Officer Only)"
+)
+def update_station_inventory_quantity(
+    station_inventory_id: int,
+    data: StationInventoryUpdateQuantity,
+    db: Session = Depends(get_db),
+    rfo: User = Depends(get_current_rfo)
+):
+    return inventory_service.update_station_inventory_quantity(
+        station_inventory_id=station_inventory_id,
+        data=data,
+        current_user=rfo,
+        db=db
+    )
+
+
+@router.post(
+    "/requests/{request_id}/hq-fulfill",
+    summary="Fulfill an HQ stock request and auto-update station inventory (Admin Only)"
+)
+def fulfill_hq_stock_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    return inventory_service.fulfill_hq_stock_request(request_id=request_id, current_user=admin, db=db)
+
+
+@router.get(
+    "/admin/hq-requests",
+    summary="Get all Headquarters stock requests and metrics for Admin Overview"
+)
+def get_admin_hq_requests(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    return inventory_service.get_admin_hq_requests(db=db)
+
+
+@router.post(
+    "/admin/hq-requests/{request_id}/approve",
+    summary="Approve an HQ stock request (Admin Only)"
+)
+def approve_admin_hq_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    return inventory_service.approve_hq_request(request_id=request_id, current_user=admin, db=db)
+
+
+@router.post(
+    "/admin/hq-requests/{request_id}/reject",
+    summary="Reject an HQ stock request (Admin Only)"
+)
+def reject_admin_hq_request(
+    request_id: int,
+    data: Optional[dict] = Body(None),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    remarks = data.get("remarks") if data else "Request rejected by HQ Admin"
+    return inventory_service.reject_hq_request(request_id=request_id, remarks=remarks, current_user=admin, db=db)
+
+
+@router.post(
+    "/admin/hq-requests/{request_id}/issue",
+    summary="Issue equipment for an HQ stock request and update stock (Admin Only)"
+)
+def issue_admin_hq_equipment(
+    request_id: int,
+    data: dict = Body(...),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    issue_quantity = data.get("issue_quantity", 1)
+    remarks = data.get("remarks", "Dispatched by HQ Admin")
+    return inventory_service.issue_hq_equipment(
+        request_id=request_id,
+        issue_quantity=issue_quantity,
+        remarks=remarks,
+        current_user=admin,
+        db=db
+    )
 
 
 @router.put(

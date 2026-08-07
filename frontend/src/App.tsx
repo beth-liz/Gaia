@@ -26,6 +26,7 @@ import DesignationsManagement from "@/pages/admin/DesignationsManagement";
 import AdminIncidentsPage from "@/pages/admin/AdminIncidentsPage";
 import { AdminInventoryMasterPage } from "@/pages/admin/AdminInventoryMasterPage";
 import { AdminStationInventoryOverviewPage } from "@/pages/admin/AdminStationInventoryOverviewPage";
+import { AdminHQRequestsPage } from "@/pages/admin/inventory/AdminHQRequestsPage";
 
 // Officer & Guard Pages
 import OfficerDashboardHome from "@/pages/officer/OfficerDashboardHome";
@@ -114,6 +115,7 @@ function App() {
             <Route path="inventory" element={<Navigate to="/admin/inventory/master" replace />} />
             <Route path="inventory/master" element={<AdminInventoryMasterPage />} />
             <Route path="inventory/stations" element={<AdminStationInventoryOverviewPage />} />
+            <Route path="inventory/hq-requests" element={<AdminHQRequestsPage />} />
             <Route path="villagers" element={<VillagersManagement />} />
             <Route path="officers" element={<AdminOfficersPage />} />
             <Route path="designations" element={<DesignationsManagement />} />

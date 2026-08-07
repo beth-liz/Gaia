@@ -168,15 +168,19 @@ def format_station_inventory(inv: StationInventory) -> dict:
 
     proc_type = getattr(cat_rel, "procurement_type", "LOCAL_ALLOWED") if cat_rel else "LOCAL_ALLOWED"
 
-    supplier_source = "HQ Allocation"
-    if inv.transactions:
-        last_tx = sorted(inv.transactions, key=lambda x: x.created_at, reverse=True)[0]
-        if last_tx.vendor_name:
-            supplier_source = f"Local: {last_tx.vendor_name}"
-        elif last_tx.supplier:
-            supplier_source = last_tx.supplier
-        elif last_tx.allocation_reference:
-            supplier_source = f"HQ: {last_tx.allocation_reference}"
+    if proc_type == "ADMIN_ONLY":
+        supplier_source = "HQ Allocation"
+    else:
+        supplier_source = "Station Purchase"
+        if inv.transactions:
+            last_tx = sorted(inv.transactions, key=lambda x: x.created_at, reverse=True)[0]
+            if last_tx.vendor_name and last_tx.vendor_name.strip():
+                supplier_source = f"Local: {last_tx.vendor_name}"
+            elif last_tx.supplier and last_tx.supplier.strip():
+                supplier_source = last_tx.supplier
+
+    eq_name = master.item_name if master else "Equipment"
+    cat_name = cat_rel.name if cat_rel else (master.category if master else "Consumable")
 
     return {
         "id": inv.id,
@@ -186,11 +190,13 @@ def format_station_inventory(inv: StationInventory) -> dict:
         "district_name": district_name,
         "state_name": state_name,
         "inventory_master_id": inv.inventory_master_id,
-        "item_name": master.item_name if master else None,
+        "item_name": eq_name,
+        "equipment_name": eq_name,
         "item_code": master.item_code if master else None,
         "item_type": item_type,
         "item_usage_type": item_usage_type,
-        "category": master.category if master else None,
+        "category": cat_name,
+        "category_name": cat_name,
         "category_id": master.category_id if master else None,
         "procurement_type": proc_type,
         "return_required": cat_rel.return_required if cat_rel else (item_usage_type != "CONSUMABLE"),
@@ -204,6 +210,7 @@ def format_station_inventory(inv: StationInventory) -> dict:
         "current_quantity": current_stock,
         "current_stock": current_stock,
         "available_quantity": avail,
+        "available_stock": avail,
         "issued_quantity": issued,
         "reserved_quantity": reserved,
         "damaged_quantity": damaged,
@@ -213,6 +220,7 @@ def format_station_inventory(inv: StationInventory) -> dict:
         "batch_number": inv.batch_number or (master.batch_number if master else None),
         "status": inv.status,
         "last_updated": inv.last_updated,
+        "updated_at": inv.last_updated,
         "updated_by": inv.updated_by,
         "updater_name": inv.updater.full_name if inv.updater else None,
     }
@@ -1056,10 +1064,8 @@ def add_stock_to_station(data: StationInventoryAddStock, current_user: User, db:
     if data.procurement_source == "LOCAL_PURCHASE":
         if not data.vendor_name or not data.vendor_name.strip():
             raise HTTPException(status_code=400, detail="Vendor Name is required for Local Purchase.")
-        if not data.invoice_number or not data.invoice_number.strip():
-            raise HTTPException(status_code=400, detail="Invoice Number is required for Local Purchase.")
         if not data.purchase_date:
-            raise HTTPException(status_code=400, detail="Purchase Date is required for Local Purchase.")
+            data.purchase_date = datetime.utcnow()
     elif data.procurement_source == "HQ_ALLOCATION" or procurement_type == "ADMIN_ONLY":
         if not data.allocation_reference or not data.allocation_reference.strip():
             raise HTTPException(status_code=400, detail="Allocation Reference Number is required for Headquarters Allocation.")
@@ -1071,7 +1077,7 @@ def add_stock_to_station(data: StationInventoryAddStock, current_user: User, db:
 
     qty_before = st_inv.available_quantity if st_inv else 0
     min_stk = st_inv.minimum_stock if st_inv else master.minimum_stock
-    max_capacity = min_stk * 5 if min_stk > 0 else 1000
+    max_capacity = max(10000, min_stk * 50)
 
     if st_inv:
         curr_stock = (st_inv.available_quantity or 0) + (st_inv.reserved_quantity or 0) + (st_inv.issued_quantity or 0) + (st_inv.damaged_quantity or 0)
@@ -1214,6 +1220,119 @@ def create_hq_stock_request(data: HQStockRequestCreate, current_user: User, db: 
         "requested_at": req.requested_at.isoformat() if req.requested_at else None,
         "message": "Stock request successfully submitted to Headquarters."
     }
+
+
+def update_station_inventory_quantity(
+    station_inventory_id: int,
+    data: StationInventoryUpdateQuantity,
+    current_user: User,
+    db: Session
+) -> dict:
+    st_inv = db.query(StationInventory).filter(StationInventory.id == station_inventory_id).first()
+    if not st_inv:
+        raise HTTPException(status_code=404, detail="Station inventory item not found.")
+
+    qty_before = st_inv.available_quantity
+    qty_changed = data.available_quantity - qty_before
+
+    st_inv.available_quantity = data.available_quantity
+    st_inv.current_quantity = (
+        st_inv.available_quantity +
+        st_inv.issued_quantity +
+        st_inv.reserved_quantity +
+        st_inv.damaged_quantity
+    )
+    st_inv.total_quantity = max(st_inv.total_quantity, st_inv.current_quantity)
+    st_inv.last_updated = datetime.utcnow()
+    st_inv.updated_by = current_user.id
+
+    master = st_inv.master_item
+    st_inv.status = calculate_stock_status(
+        st_inv.available_quantity,
+        st_inv.minimum_stock,
+        getattr(master, "reorder_level", 5) if master else 5
+    )
+
+    log_inventory_transaction(
+        db=db,
+        st_inv=st_inv,
+        tx_type="STOCK_UPDATE",
+        qty_before=qty_before,
+        qty_changed=qty_changed,
+        qty_after=st_inv.available_quantity,
+        performed_by=current_user.id,
+        remarks=f"{data.reason}: {data.remarks}",
+    )
+
+    log_audit(
+        db=db,
+        user=current_user,
+        action="Station Stock Quantity Updated",
+        entity_type="station_inventory",
+        entity_id=st_inv.id,
+        old_value=f"Available: {qty_before}",
+        new_value=f"Available: {st_inv.available_quantity} ({data.remarks})",
+    )
+
+    db.commit()
+    db.refresh(st_inv)
+    return format_station_inventory(st_inv)
+
+
+def fulfill_hq_stock_request(request_id: int, current_user: User, db: Session) -> dict:
+    req = db.query(EquipmentRequest).filter(EquipmentRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="HQ Stock Request not found.")
+
+    st_inv = req.station_inventory
+    if not st_inv:
+        raise HTTPException(status_code=404, detail="Associated station inventory record not found.")
+
+    qty_before = st_inv.available_quantity
+    st_inv.available_quantity += req.quantity
+    st_inv.current_quantity = (
+        st_inv.available_quantity +
+        st_inv.issued_quantity +
+        st_inv.reserved_quantity +
+        st_inv.damaged_quantity
+    )
+    st_inv.total_quantity = max(st_inv.total_quantity, st_inv.current_quantity)
+    st_inv.last_updated = datetime.utcnow()
+
+    master = st_inv.master_item
+    st_inv.status = calculate_stock_status(
+        st_inv.available_quantity,
+        st_inv.minimum_stock,
+        getattr(master, "reorder_level", 5) if master else 5
+    )
+
+    req.status = "COMPLETED"
+    req.approved_at = datetime.utcnow()
+
+    log_inventory_transaction(
+        db=db,
+        st_inv=st_inv,
+        tx_type="STOCK_IN",
+        qty_before=qty_before,
+        qty_changed=req.quantity,
+        qty_after=st_inv.available_quantity,
+        performed_by=current_user.id,
+        supplier="HQ Allocation",
+        remarks=f"HQ Stock Request #{req.id} Fulfilled by Admin",
+    )
+
+    log_audit(
+        db=db,
+        user=current_user,
+        action="HQ Stock Request Fulfilled",
+        entity_type="equipment_request",
+        entity_id=req.id,
+        new_value=f"Dispatched {req.quantity} units to Station Inventory #{st_inv.id}",
+    )
+
+    db.commit()
+    db.refresh(req)
+    return {"status": "success", "message": f"HQ Stock Request #{req.id} fulfilled and station stock updated.", "request_id": req.id}
 
 
 def create_stock_adjustment(data: InventoryAdjustmentCreate, current_user: User, db: Session) -> dict:
@@ -2736,4 +2855,202 @@ def get_rfo_inventory_dashboard(db: Session, current_user: User) -> dict:
         },
         "grouped_categories": grouped_categories,
         "recent_updates": recent_updates,
+    }
+
+
+def get_admin_hq_requests(db: Session) -> dict:
+    reqs = db.query(EquipmentRequest).filter(
+        EquipmentRequest.request_type == "HQ_STOCK_REQUEST"
+    ).order_by(EquipmentRequest.requested_at.desc()).all()
+
+    now = datetime.utcnow()
+    start_of_today = datetime(now.year, now.month, now.day)
+
+    pending_cnt = sum(1 for r in reqs if r.status == "PENDING")
+    approved_today_cnt = sum(1 for r in reqs if r.status in ["APPROVED", "COMPLETED", "ISSUED"] and r.approved_at and r.approved_at >= start_of_today)
+    rejected_cnt = sum(1 for r in reqs if r.status == "REJECTED")
+    issued_cnt = sum(1 for r in reqs if r.status in ["ISSUED", "COMPLETED"])
+    high_priority_cnt = sum(1 for r in reqs if (r.priority or "").upper() in ["HIGH", "URGENT"] and r.status == "PENDING")
+
+    formatted_reqs = []
+    for r in reqs:
+        st_inv = r.station_inventory
+        master = r.master_item or (st_inv.master_item if st_inv else None)
+        guard_user = r.guard
+        station = st_inv.station if st_inv and st_inv.station else (guard_user.station if guard_user and guard_user.station else None)
+
+        hq_stock = 100
+        if master:
+            if hasattr(master, "total_quantity") and master.total_quantity is not None:
+                hq_stock = master.total_quantity
+            elif hasattr(master, "minimum_stock"):
+                hq_stock = master.minimum_stock * 5
+
+        formatted_reqs.append({
+            "id": r.id,
+            "request_code": f"HQR-{r.id:04d}",
+            "station_id": station.id if station else None,
+            "station_name": getattr(station, "station_name", getattr(station, "name", "Forest Station")) if station else "Forest Station",
+            "officer_id": guard_user.id if guard_user else None,
+            "officer_name": guard_user.full_name if guard_user else "Range Forest Officer",
+            "inventory_master_id": master.id if master else None,
+            "equipment_name": master.item_name if master else "Equipment",
+            "category": master.category if master else "HQ Asset",
+            "quantity_requested": r.quantity,
+            "priority": (r.priority or "MEDIUM").upper(),
+            "reason": r.purpose or "Requisition",
+            "remarks": r.remarks,
+            "requested_date": r.requested_at.isoformat() if r.requested_at else None,
+            "approved_at": r.approved_at.isoformat() if r.approved_at else None,
+            "status": r.status or "PENDING",
+            "hq_available_stock": hq_stock,
+            "station_inventory_id": r.station_inventory_id,
+        })
+
+    return {
+        "metrics": {
+            "pending_requests": pending_cnt,
+            "approved_today": approved_today_cnt,
+            "rejected_requests": rejected_cnt,
+            "issued_equipment": issued_cnt,
+            "high_priority": high_priority_cnt,
+        },
+        "requests": formatted_reqs,
+    }
+
+
+def approve_hq_request(request_id: int, current_user: User, db: Session) -> dict:
+    req = db.query(EquipmentRequest).filter(
+        EquipmentRequest.id == request_id,
+        EquipmentRequest.request_type == "HQ_STOCK_REQUEST"
+    ).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="HQ Stock Request not found.")
+
+    req.status = "APPROVED"
+    req.approved_at = datetime.utcnow()
+
+    log_audit(
+        db=db,
+        user=current_user,
+        action="HQ Stock Request Approved",
+        entity_type="equipment_request",
+        entity_id=req.id,
+        new_value=f"Approved HQ Request #{req.id} for {req.quantity} units",
+    )
+
+    db.commit()
+    return {"message": f"HQ Request #{req.id} Approved successfully.", "status": "APPROVED"}
+
+
+def reject_hq_request(request_id: int, remarks: str, current_user: User, db: Session) -> dict:
+    req = db.query(EquipmentRequest).filter(
+        EquipmentRequest.id == request_id,
+        EquipmentRequest.request_type == "HQ_STOCK_REQUEST"
+    ).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="HQ Stock Request not found.")
+
+    req.status = "REJECTED"
+    req.remarks = remarks or req.remarks
+
+    log_audit(
+        db=db,
+        user=current_user,
+        action="HQ Stock Request Rejected",
+        entity_type="equipment_request",
+        entity_id=req.id,
+        new_value=f"Rejected HQ Request #{req.id}: {remarks}",
+    )
+
+    db.commit()
+    return {"message": f"HQ Request #{req.id} Rejected.", "status": "REJECTED"}
+
+
+def issue_hq_equipment(
+    request_id: int,
+    issue_quantity: int,
+    remarks: str,
+    current_user: User,
+    db: Session
+) -> dict:
+    req = db.query(EquipmentRequest).filter(
+        EquipmentRequest.id == request_id,
+        EquipmentRequest.request_type == "HQ_STOCK_REQUEST"
+    ).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="HQ Stock Request not found.")
+
+    if issue_quantity <= 0:
+        raise HTTPException(status_code=400, detail="Issue quantity must be greater than zero.")
+
+    st_inv = req.station_inventory
+    if not st_inv:
+        raise HTTPException(status_code=404, detail="Associated station inventory record not found.")
+
+    master = st_inv.master_item or req.master_item
+    hq_stock = 100
+    if master and hasattr(master, "total_quantity") and master.total_quantity is not None:
+        hq_stock = master.total_quantity
+
+    if issue_quantity > hq_stock:
+        raise HTTPException(status_code=400, detail=f"Cannot issue {issue_quantity} units. Only {hq_stock} available in Central HQ stock.")
+
+    # 1. Decrease HQ Master Stock (if applicable)
+    if master and hasattr(master, "total_quantity") and master.total_quantity is not None:
+        master.total_quantity = max(0, master.total_quantity - issue_quantity)
+
+    # 2. Increase Station Inventory Stock
+    qty_before = st_inv.available_quantity
+    st_inv.available_quantity += issue_quantity
+    st_inv.current_quantity = (
+        st_inv.available_quantity +
+        (st_inv.issued_quantity or 0) +
+        st_inv.reserved_quantity +
+        st_inv.damaged_quantity
+    )
+    st_inv.total_quantity = max(st_inv.total_quantity, st_inv.current_quantity)
+    st_inv.last_updated = datetime.utcnow()
+    st_inv.updated_by = current_user.id
+
+    st_inv.status = calculate_stock_status(
+        st_inv.available_quantity,
+        st_inv.minimum_stock,
+        getattr(master, "reorder_level", 5) if master else 5
+    )
+
+    # 3. Create Inventory Transaction Log
+    log_inventory_transaction(
+        db=db,
+        st_inv=st_inv,
+        tx_type="STOCK_IN",
+        qty_before=qty_before,
+        qty_changed=issue_quantity,
+        qty_after=st_inv.available_quantity,
+        performed_by=current_user.id,
+        supplier="HQ Allocation",
+        remarks=f"HQ Stock Issued by Admin (Req #{req.id}): {remarks or 'Dispatched'}",
+    )
+
+    # 4. Update Equipment Request Status to ISSUED
+    req.status = "ISSUED"
+    req.approved_at = datetime.utcnow()
+    req.remarks = remarks or req.remarks
+
+    # 5. Log Audit Activity
+    log_audit(
+        db=db,
+        user=current_user,
+        action="HQ Equipment Issued",
+        entity_type="equipment_request",
+        entity_id=req.id,
+        new_value=f"Issued {issue_quantity} units of {master.item_name if master else 'Equipment'} to Station Inventory #{st_inv.id}",
+    )
+
+    db.commit()
+    return {
+        "status": "success",
+        "message": "Equipment Issued Successfully",
+        "request_id": req.id,
+        "issued_quantity": issue_quantity
     }
