@@ -38,11 +38,12 @@ import { RFODashboardPage } from "@/pages/officer/inventory/RFODashboardPage";
 import { RFOStationStockPage } from "@/pages/officer/inventory/RFOStationStockPage";
 import { RFOEquipmentRequestsPage } from "@/pages/officer/inventory/RFOEquipmentRequestsPage";
 import { RFOIssueEquipmentPage } from "@/pages/officer/inventory/RFOIssueEquipmentPage";
-import { RFOAssignedEquipmentPage } from "@/pages/officer/inventory/RFOAssignedEquipmentPage";
-import { RFOReturnsPage } from "@/pages/officer/inventory/RFOReturnsPage";
+import { RFOIssuedEquipmentPage } from "@/pages/officer/inventory/RFOIssuedEquipmentPage";
+import { RFOPendingReturnsPage } from "@/pages/officer/inventory/RFOPendingReturnsPage";
+import { RFOVerifyReturnsPage } from "@/pages/officer/inventory/RFOVerifyReturnsPage";
+import { RFOReturnedEquipmentPage } from "@/pages/officer/inventory/RFOReturnedEquipmentPage";
 import { RFODamagedEquipmentPage } from "@/pages/officer/inventory/RFODamagedEquipmentPage";
 import { RFOAuditHistoryPage } from "@/pages/officer/inventory/RFOAuditHistoryPage";
-import { InventoryAnalyticsPage } from "@/pages/officer/inventory/InventoryAnalyticsPage";
 import GuardDashboardHome from "@/pages/officer/GuardDashboardHome";
 import GuardIncidentsPage from "@/pages/officer/GuardIncidentsPage";
 import GuardCompletedReportsPage from "@/pages/officer/GuardCompletedReportsPage";
@@ -147,11 +148,15 @@ function App() {
             <Route path="inventory/stock" element={<RFOStationStockPage />} />
             <Route path="inventory/requests" element={<RFOEquipmentRequestsPage />} />
             <Route path="inventory/issue" element={<RFOIssueEquipmentPage />} />
-            <Route path="inventory/assigned" element={<RFOAssignedEquipmentPage />} />
-            <Route path="inventory/verify-returns" element={<RFOReturnsPage />} />
-            <Route path="inventory/returns" element={<RFOReturnsPage />} />
-            <Route path="inventory/damaged" element={<RFODamagedEquipmentPage />} />
-            <Route path="inventory/analytics" element={<InventoryAnalyticsPage />} />
+            <Route path="inventory/assigned" element={<Navigate to="/officer/inventory/assigned/issued" replace />} />
+            <Route path="inventory/assigned/issued" element={<RFOIssuedEquipmentPage />} />
+            <Route path="inventory/assigned/pending-returns" element={<RFOPendingReturnsPage />} />
+            <Route path="inventory/assigned/verify-returns" element={<RFOVerifyReturnsPage />} />
+            <Route path="inventory/assigned/returned" element={<RFOReturnedEquipmentPage />} />
+            <Route path="inventory/assigned/damaged" element={<RFODamagedEquipmentPage />} />
+            <Route path="inventory/verify-returns" element={<Navigate to="/officer/inventory/assigned/verify-returns" replace />} />
+            <Route path="inventory/returns" element={<Navigate to="/officer/inventory/assigned/returned" replace />} />
+            <Route path="inventory/damaged" element={<Navigate to="/officer/inventory/assigned/damaged" replace />} />
             <Route path="inventory/audit" element={<RFOAuditHistoryPage />} />
             <Route path="inventory/history" element={<RFOAuditHistoryPage />} />
             <Route path="create-incident" element={<OfficerCreateIncidentPage />} />

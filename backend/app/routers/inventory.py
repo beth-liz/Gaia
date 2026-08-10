@@ -601,6 +601,26 @@ def get_station_assignments(
     )
 
 
+@router.post(
+    "/assignments/{assignment_id}/return",
+    response_model=EquipmentAssignmentResponse,
+    summary="Request or initiate equipment return (RFO / Guard)"
+)
+def request_assignment_return(
+    assignment_id: int,
+    data: Optional[dict] = Body(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    remarks = data.get("remarks") if data else None
+    return inventory_service.request_return_equipment(
+        assignment_id=assignment_id,
+        remarks=remarks,
+        db=db,
+        current_user=user
+    )
+
+
 @router.put(
     "/assignments/{assignment_id}/verify-return",
     response_model=EquipmentAssignmentResponse,

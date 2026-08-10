@@ -11,6 +11,7 @@ import {
   Bell,
   User as UserIcon,
   ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 
 export interface NavItem {
@@ -19,6 +20,7 @@ export interface NavItem {
   icon: React.ElementType;
   badge?: number;
   sectionHeader?: string;
+  children?: NavItem[];
 }
 
 interface BaseDashboardLayoutProps {
@@ -52,9 +54,20 @@ export const BaseDashboardLayout: React.FC<BaseDashboardLayoutProps> = ({
     if (user) fetchNotifications();
   }, [user, location.pathname]);
 
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
+
+  const toggleMenu = (label: string) => {
+    setExpandedMenus((prev) => ({
+      ...prev,
+      [label]: !prev[label],
+    }));
+  };
+
   // Determine page title from active route
   const activeItem = navItems.find((item) =>
-    location.pathname === item.path || (item.path !== "/" && location.pathname.startsWith(item.path))
+    location.pathname === item.path ||
+    (item.children && item.children.some((c) => location.pathname.startsWith(c.path))) ||
+    (item.path !== "/" && location.pathname.startsWith(item.path))
   );
   const pageTitle = activeItem ? activeItem.label : "Dashboard";
 
@@ -191,7 +204,11 @@ export const BaseDashboardLayout: React.FC<BaseDashboardLayoutProps> = ({
             <nav className="p-4 space-y-1 overflow-y-auto flex-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.path || (item.path !== "/" && location.pathname.startsWith(item.path));
+                const hasChildren = Boolean(item.children && item.children.length > 0);
+                const isChildActive = hasChildren && Boolean(item.children?.some((c) => location.pathname.startsWith(c.path)));
+                const isActive = (location.pathname === item.path || (item.path !== "/" && location.pathname.startsWith(item.path))) || isChildActive;
+                const isExpanded = expandedMenus[item.label] !== undefined ? expandedMenus[item.label] : isChildActive;
+
                 return (
                   <React.Fragment key={item.path}>
                     {item.sectionHeader && (
@@ -199,25 +216,74 @@ export const BaseDashboardLayout: React.FC<BaseDashboardLayoutProps> = ({
                         {item.sectionHeader}
                       </div>
                     )}
-                    <Link
-                      to={item.path}
-                      onClick={() => setMobileOpen(false)}
-                      className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all duration-200 ${
-                        isActive
-                          ? "bg-emerald-900 text-white shadow-md shadow-emerald-950/15"
-                          : "text-emerald-950/80 hover:bg-emerald-50 hover:text-emerald-950"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-amber-300" : "text-emerald-700"}`} />
-                        <span className="truncate">{item.label}</span>
+
+                    {hasChildren ? (
+                      <div className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleMenu(item.label)}
+                          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                            isActive
+                              ? "bg-emerald-950 text-white shadow-md shadow-emerald-950/15"
+                              : "text-emerald-950/80 hover:bg-emerald-50 hover:text-emerald-950"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-amber-300" : "text-emerald-700"}`} />
+                            <span className="truncate">{item.label}</span>
+                          </div>
+                          {isExpanded ? (
+                            <ChevronDown className="w-4 h-4 text-emerald-300" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-emerald-600" />
+                          )}
+                        </button>
+
+                        {isExpanded && item.children && (
+                          <div className="pl-3.5 pr-1 py-1 space-y-1 border-l-2 border-emerald-800/30 ml-4">
+                            {item.children.map((child) => {
+                              const ChildIcon = child.icon;
+                              const isSubActive = location.pathname === child.path || location.pathname.startsWith(child.path);
+                              return (
+                                <Link
+                                  key={child.path}
+                                  to={child.path}
+                                  onClick={() => setMobileOpen(false)}
+                                  className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
+                                    isSubActive
+                                      ? "bg-emerald-900 text-white shadow-xs"
+                                      : "text-emerald-950/80 hover:bg-emerald-50 hover:text-emerald-950"
+                                  }`}
+                                >
+                                  <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${isSubActive ? "text-amber-300" : "text-emerald-700"}`} />
+                                  <span className="truncate">{child.label}</span>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                      {item.badge !== undefined && item.badge > 0 && (
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${isActive ? "bg-amber-400 text-emerald-950" : "bg-emerald-100 text-emerald-900"}`}>
-                          {item.badge}
-                        </span>
-                      )}
-                    </Link>
+                    ) : (
+                      <Link
+                        to={item.path}
+                        onClick={() => setMobileOpen(false)}
+                        className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all duration-200 ${
+                          isActive
+                            ? "bg-emerald-900 text-white shadow-md shadow-emerald-950/15"
+                            : "text-emerald-950/80 hover:bg-emerald-50 hover:text-emerald-950"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-amber-300" : "text-emerald-700"}`} />
+                          <span className="truncate">{item.label}</span>
+                        </div>
+                        {item.badge !== undefined && item.badge > 0 && (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${isActive ? "bg-amber-400 text-emerald-950" : "bg-emerald-100 text-emerald-900"}`}>
+                            {item.badge}
+                          </span>
+                        )}
+                      </Link>
+                    )}
                   </React.Fragment>
                 );
               })}

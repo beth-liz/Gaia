@@ -18,7 +18,6 @@ import {
   RotateCcw,
   History,
   Clock,
-  BarChart2,
 } from "lucide-react";
 
 const rfoNavItems: NavItem[] = [
@@ -27,14 +26,23 @@ const rfoNavItems: NavItem[] = [
   { label: "Forest Guards", path: "/officer/guards", icon: Users },
   { label: "Station Overview", path: "/officer/station", icon: Building2 },
 
-  // Inventory Management section
   { label: "Inventory Dashboard", path: "/officer/inventory/dashboard", icon: LayoutDashboard, sectionHeader: "Inventory Management" },
   { label: "Add / Update Station Stock", path: "/officer/inventory/stock", icon: Warehouse },
   { label: "Equipment Requests", path: "/officer/inventory/requests", icon: Clock },
   { label: "Issue Equipment", path: "/officer/inventory/issue", icon: Send },
-  { label: "Assigned Equipment", path: "/officer/inventory/assigned", icon: PackageCheck },
-  { label: "Verify Returns", path: "/officer/inventory/verify-returns", icon: RotateCcw },
-  { label: "Inventory Analytics", path: "/officer/inventory/analytics", icon: BarChart2 },
+  {
+    label: "Assigned Equipment",
+    path: "/officer/inventory/assigned",
+    icon: PackageCheck,
+    children: [
+      { label: "Issued Equipment", path: "/officer/inventory/assigned/issued", icon: ShieldCheck },
+      { label: "Pending Returns", path: "/officer/inventory/assigned/pending-returns", icon: Clock },
+      { label: "Verify Returns", path: "/officer/inventory/assigned/verify-returns", icon: RotateCcw },
+      { label: "Returned Equipment", path: "/officer/inventory/assigned/returned", icon: CheckCircle2 },
+      { label: "Damaged Equipment", path: "/officer/inventory/assigned/damaged", icon: ShieldCheck },
+    ],
+  },
+
   { label: "Audit History", path: "/officer/inventory/audit", icon: History },
 
   { label: "Notifications", path: "/officer/notifications", icon: Bell, sectionHeader: "System" },

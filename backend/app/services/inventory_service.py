@@ -258,16 +258,29 @@ def format_transaction(tx: InventoryTransaction) -> dict:
 
 
 def format_assignment(asgn: EquipmentAssignment) -> dict:
-    item_name = None
-    unit = None
+    item_name = getattr(asgn, "item_name", None)
+    unit = getattr(asgn, "unit", "Units")
     category = "General"
-    if asgn.station_inventory and asgn.station_inventory.master_item:
-        item_name = asgn.station_inventory.master_item.item_name
-        unit = asgn.station_inventory.master_item.unit
-        category = asgn.station_inventory.master_item.category or "General"
+
+    if asgn.station_inventory:
+        st_inv = asgn.station_inventory
+        if st_inv.master_item:
+            item_name = item_name or st_inv.master_item.item_name
+            unit = unit or st_inv.master_item.unit or "Units"
+            category = st_inv.master_item.category or category
+        elif hasattr(st_inv, "item_name") and st_inv.item_name:
+            item_name = item_name or st_inv.item_name
+            category = getattr(st_inv, "category", category) or category
+
+    if not item_name and hasattr(asgn, "master_item") and asgn.master_item:
+        item_name = asgn.master_item.item_name
+        unit = unit or asgn.master_item.unit or "Units"
+        category = asgn.master_item.category or category
+
+    item_name = item_name or "Equipment Item"
 
     days_remaining = "Completed"
-    if asgn.status in ["ISSUED", "PENDING_RETURN"]:
+    if (asgn.status or "").upper() in ["ISSUED", "PENDING_RETURN", "ACTIVE"]:
         if getattr(asgn, "item_usage_type", "RETURNABLE") == "PERSONAL" or not asgn.expected_return_date:
             days_remaining = "Permanent Issue"
         else:
@@ -282,9 +295,10 @@ def format_assignment(asgn: EquipmentAssignment) -> dict:
     prev_returns = []
     if hasattr(asgn, "returns") and asgn.returns:
         for r in asgn.returns:
+            ret_dt = getattr(r, "submitted_date", None) or getattr(r, "verified_at", None)
             prev_returns.append({
                 "id": r.id,
-                "return_date": r.return_date.isoformat() if r.return_date else None,
+                "return_date": ret_dt.isoformat() if ret_dt else None,
                 "condition": getattr(r, "condition", "Good"),
                 "remarks": r.remarks,
             })
@@ -1605,6 +1619,7 @@ def verify_returned_equipment_options(
     elif cond == "Lost":
         asgn.status = "LOST"
         st_inv.issued_quantity = max(0, (st_inv.issued_quantity or 0) - asgn.quantity)
+        st_inv.current_quantity = max(0, (st_inv.current_quantity or 0) - asgn.quantity)
         tx_type = "LOST"
     else:
         asgn.status = "RETURNED"
@@ -1627,6 +1642,25 @@ def verify_returned_equipment_options(
         ref_id=asgn.id,
         remarks=f"Return Verified ({cond}): {remarks_str}",
     )
+
+    # Notify Guard
+    notif = Notification(
+        user_id=asgn.guard_id,
+        title="Equipment Return Verified",
+        message=f"Your return for {item_name} has been verified as {cond} by Officer {current_user.full_name}.",
+    )
+    db.add(notif)
+
+    # If it was reported lost, approve the EquipmentLossReport
+    loss_report = db.query(EquipmentLossReport).filter(
+        EquipmentLossReport.assignment_id == asgn.id,
+        EquipmentLossReport.status == "PENDING"
+    ).first()
+    if loss_report:
+        loss_report.status = "APPROVED" if cond == "Lost" else "REJECTED"
+        loss_report.processed_at = now
+        loss_report.processed_by = current_user.id
+        loss_report.remarks = remarks_str
 
     log_audit(
         db=db,
@@ -1861,16 +1895,49 @@ def submit_equipment_return(data: EquipmentReturnCreate, current_user: User, db:
     if not asgn:
         raise HTTPException(status_code=404, detail="Equipment assignment not found.")
 
+    cond_upper = (data.condition or "").upper().strip()
+    reason_upper = (data.reason or "").upper().strip()
+
+    # Determine status
+    if cond_upper == "LOST" or reason_upper == "LOST":
+        asgn.status = "Reported Lost"
+        # Create Lost Equipment record (EquipmentLossReport)
+        loss_report = EquipmentLossReport(
+            assignment_id=asgn.id,
+            station_inventory_id=asgn.station_inventory_id,
+            reported_by=current_user.id,
+            reason=data.reason or "Reported Lost",
+            status="PENDING",
+            remarks=data.remarks or "Reported Lost by Guard",
+            photo=data.photos,
+            reported_at=datetime.utcnow()
+        )
+        db.add(loss_report)
+    elif cond_upper in ["MINOR DAMAGE", "MAJOR DAMAGE", "REPAIR NEEDED", "BROKEN"] or reason_upper == "DAMAGED":
+        asgn.status = "Pending Inspection"
+    else:
+        asgn.status = "Pending Head Officer Verification"
+
     ret = EquipmentReturn(
         equipment_assignment_id=asgn.id,
         condition=data.condition,
         reason=data.reason,
         remarks=data.remarks,
         photos=data.photos,
-        status="Pending Verification",
+        status="Pending Head Officer Verification",
         submitted_date=datetime.utcnow(),
     )
     db.add(ret)
+
+    # Notify Head Officer / RFOs at the guard's station
+    rfo_users = db.query(User).filter(User.station_id == current_user.station_id, User.role == "RFO").all()
+    for rfo in rfo_users:
+        notif = Notification(
+            user_id=rfo.id,
+            title="Equipment Return Submitted",
+            message=f"Guard {current_user.full_name} submitted a return request for {asgn.item_name}. Condition: {data.condition}.",
+        )
+        db.add(notif)
 
     log_audit(
         db=db,
@@ -1883,6 +1950,69 @@ def submit_equipment_return(data: EquipmentReturnCreate, current_user: User, db:
     db.commit()
     db.refresh(ret)
     return format_return(ret)
+
+
+def report_equipment_loss(
+    assignment_id: int,
+    reason: str,
+    mission: Optional[str],
+    current_user: User,
+    db: Session
+) -> dict:
+    asgn = db.query(EquipmentAssignment).filter(EquipmentAssignment.id == assignment_id).first()
+    if not asgn:
+        raise HTTPException(status_code=404, detail="Equipment assignment not found.")
+
+    asgn.status = "Reported Lost"
+
+    report = EquipmentLossReport(
+        assignment_id=asgn.id,
+        station_inventory_id=asgn.station_inventory_id,
+        reported_by=current_user.id,
+        reason=reason,
+        mission=mission,
+        status="PENDING",
+        reported_at=datetime.utcnow()
+    )
+    db.add(report)
+
+    # Notify RFOs
+    rfo_users = db.query(User).filter(User.station_id == current_user.station_id, User.role == "RFO").all()
+    for rfo in rfo_users:
+        notif = Notification(
+            user_id=rfo.id,
+            title="Equipment Reported Lost",
+            message=f"Guard {current_user.full_name} reported {asgn.item_name} as lost. Reason: {reason}",
+        )
+        db.add(notif)
+
+    log_audit(
+        db=db,
+        user=current_user,
+        action="Reported Lost Equipment",
+        entity_type="equipment_loss_reports",
+        entity_id=asgn.id,
+    )
+    db.commit()
+    db.refresh(report)
+
+    return {
+        "id": report.id,
+        "assignment_id": report.assignment_id,
+        "station_inventory_id": report.station_inventory_id,
+        "item_name": asgn.item_name,
+        "reported_by": report.reported_by,
+        "reporter_name": current_user.full_name,
+        "reason": report.reason,
+        "mission": report.mission,
+        "photo": report.photo,
+        "status": report.status,
+        "remarks": report.remarks,
+        "reported_at": report.reported_at,
+        "processed_at": report.processed_at,
+        "processed_by": report.processed_by,
+        "processor_name": report.processor.full_name if report.processor else None
+    }
 
 
 def verify_equipment_return(return_id: int, data: EquipmentReturnVerifyAction, current_user: User, db: Session) -> dict:
@@ -3078,3 +3208,26 @@ def issue_hq_equipment(
         "request_id": req.id,
         "issued_quantity": issue_quantity
     }
+
+
+def request_return_equipment(assignment_id: int, remarks: Optional[str], db: Session, current_user: User) -> dict:
+    asgn = db.query(EquipmentAssignment).filter(EquipmentAssignment.id == assignment_id).first()
+    if not asgn:
+        raise HTTPException(status_code=404, detail="Equipment assignment not found.")
+
+    asgn.status = "PENDING_RETURN"
+    asgn.remarks = remarks or "Return requested by Range Forest Officer"
+    asgn.returned_date = datetime.utcnow()
+
+    log_audit(
+        db=db,
+        user=current_user,
+        action="Requested Return",
+        entity_type="equipment_assignments",
+        entity_id=asgn.id,
+        new_value=f"Return requested for assignment #{asgn.id} ({asgn.item_name or 'Item'})",
+    )
+
+    db.commit()
+    db.refresh(asgn)
+    return format_assignment(asgn)

@@ -32,6 +32,7 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
 
   // Raw DB Lists
   const [guardRequests, setGuardRequests] = useState<EquipmentRequest[]>([]);
+  const [issuedGearAssignments, setIssuedGearAssignments] = useState<any[]>([]);
   const [hqRequests, setHqRequests] = useState<any[]>([]);
 
   // Search Terms
@@ -61,8 +62,9 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [stationReqs, hqData] = await Promise.all([
+      const [stationReqs, stationAsgns, hqData] = await Promise.all([
         inventoryService.getStationRequests(),
+        inventoryService.getStationAssignments(),
         inventoryService.getAdminHQRequests(),
       ]);
 
@@ -71,6 +73,12 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
         (r) => (r.request_type || "").toUpperCase() !== "HQ_STOCK_REQUEST"
       );
       setGuardRequests(rawGuardList);
+
+      // Active issued gear assignments currently possessed by officers in station
+      const activeAsgns = (stationAsgns || []).filter(
+        (a) => ["ISSUED", "ACTIVE", "ASSIGNED", "PENDING_RETURN"].includes((a.status || "").toUpperCase())
+      );
+      setIssuedGearAssignments(activeAsgns);
 
       // HQ Requests come directly from HQ admin request endpoints
       setHqRequests(hqData.requests || []);
@@ -95,16 +103,54 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
     return `${day} ${month} ${year}`;
   };
 
-  // Section 1: Guard Requests Filtered List
+  // Section 1: Guard Requests & Issued Gear Filtered List
   const filteredGuardRequests = useMemo(() => {
     const searchLower = guardSearchTerm.toLowerCase().trim();
+
+    if (guardStatusFilter === "ISSUED") {
+      // 1. Requisitions with ISSUED status
+      const reqIssued = guardRequests.filter((r) =>
+        ["ISSUED", "COMPLETED", "FULFILLED"].includes((r.status || "").toUpperCase())
+      );
+
+      // 2. Active station assignments currently possessed by officers
+      const asgnIssued = issuedGearAssignments.map((a) => ({
+        id: `asgn-${a.id}`,
+        guard_id: a.guard_id,
+        guard_name: a.guard_name || "Forest Guard",
+        badge_id: a.guard_badge || `FG-${a.guard_id}`,
+        station_name: a.station_name || "Muthanga Range Office",
+        item_name: a.item_name || "Equipment Item",
+        equipment_name: a.item_name || "Equipment Item",
+        quantity: a.quantity,
+        unit: a.unit || "Units",
+        priority: a.assignment_type || "DIRECT_ISSUE",
+        requested_at: a.issue_date,
+        status: "ISSUED",
+        remarks: a.purpose || a.remarks || "Direct Officer Possession",
+        is_direct_assignment: true,
+        original_data: a,
+      }));
+
+      const combined = [...reqIssued, ...asgnIssued];
+
+      if (!searchLower) return combined;
+
+      return combined.filter((r) => {
+        const gName = (r.guard_name || "").toLowerCase();
+        const bId = (r.badge_id || "").toLowerCase();
+        const eq = (r.item_name || r.equipment_name || "").toLowerCase();
+        return gName.includes(searchLower) || bId.includes(searchLower) || eq.includes(searchLower);
+      });
+    }
+
+    // Pending, Approved, Rejected filtering
     return guardRequests.filter((r) => {
       const statusUpper = (r.status || "PENDING").toUpperCase();
       let matchesFilter = false;
 
       if (guardStatusFilter === "PENDING") matchesFilter = statusUpper === "PENDING";
       else if (guardStatusFilter === "APPROVED") matchesFilter = statusUpper === "APPROVED";
-      else if (guardStatusFilter === "ISSUED") matchesFilter = statusUpper === "ISSUED" || statusUpper === "COMPLETED" || statusUpper === "FULFILLED";
       else if (guardStatusFilter === "REJECTED") matchesFilter = statusUpper === "REJECTED";
 
       if (!matchesFilter) return false;
@@ -115,7 +161,7 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
       const eq = (r.item_name || r.equipment_name || "").toLowerCase();
       return gName.includes(searchLower) || bId.includes(searchLower) || eq.includes(searchLower);
     });
-  }, [guardRequests, guardStatusFilter, guardSearchTerm]);
+  }, [guardRequests, issuedGearAssignments, guardStatusFilter, guardSearchTerm]);
 
   // Section 2: HQ Requests Filtered List
   const filteredHqRequests = useMemo(() => {
@@ -132,7 +178,12 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
   // Counts for Guard Tabs
   const pendingCount = useMemo(() => guardRequests.filter((r) => (r.status || "").toUpperCase() === "PENDING").length, [guardRequests]);
   const approvedCount = useMemo(() => guardRequests.filter((r) => (r.status || "").toUpperCase() === "APPROVED").length, [guardRequests]);
-  const issuedCount = useMemo(() => guardRequests.filter((r) => ["ISSUED", "COMPLETED", "FULFILLED"].includes((r.status || "").toUpperCase())).length, [guardRequests]);
+  const issuedCount = useMemo(() => {
+    const reqIssuedCount = guardRequests.filter((r) =>
+      ["ISSUED", "COMPLETED", "FULFILLED"].includes((r.status || "").toUpperCase())
+    ).length;
+    return reqIssuedCount + issuedGearAssignments.length;
+  }, [guardRequests, issuedGearAssignments]);
   const rejectedCount = useMemo(() => guardRequests.filter((r) => (r.status || "").toUpperCase() === "REJECTED").length, [guardRequests]);
 
   // Status Badges
@@ -351,7 +402,7 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
 
             <button
               onClick={fetchData}
-              className="px-4 py-2.5 text-xs font-extrabold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-2xl border border-emerald-950/10 transition-all flex items-center gap-2 shrink-0"
+              className="px-4 py-2.5 text-xs font-extrabold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-2xl border border-emerald-950/10 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Refresh Section 1</span>
@@ -400,7 +451,7 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
               </span>
             </button>
 
-            {/* Tab 3: Issued Equipment */}
+            {/* Tab 3: Issued Equipment (DISPLAYS ALL ACTIVE ISSUED GEAR POSSESSED BY OFFICERS) */}
             <button
               onClick={() => setGuardStatusFilter("ISSUED")}
               className={`p-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-between gap-2 border cursor-pointer ${
@@ -442,7 +493,7 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* SECTION 1 TABLE: GUARD REQUESTS */}
+        {/* SECTION 1 TABLE: GUARD REQUESTS & ACTIVE ISSUED GEAR */}
         <div className="bg-white rounded-3xl border border-emerald-950/10 overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
             <table className="w-full text-center border-collapse">
@@ -453,8 +504,8 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
                   <th className="px-4 py-3.5 text-center align-middle">Station</th>
                   <th className="px-4 py-3.5 text-center align-middle">Equipment</th>
                   <th className="px-3 py-3.5 text-center align-middle">Quantity</th>
-                  <th className="px-3 py-3.5 text-center align-middle">Priority</th>
-                  <th className="px-4 py-3.5 text-center align-middle">Requested Date</th>
+                  <th className="px-3 py-3.5 text-center align-middle">Priority / Type</th>
+                  <th className="px-4 py-3.5 text-center align-middle">Requested / Issue Date</th>
                   <th className="px-3 py-3.5 text-center align-middle">Status</th>
                   <th className="px-4 py-3.5 text-center align-middle">Head Officer Response</th>
                   <th className="px-4 py-3.5 text-center align-middle">Actions</th>
@@ -488,14 +539,14 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
                       {renderStatusBadge(req.status)}
                     </td>
                     <td className="px-4 py-3.5 text-center align-middle text-gray-600 font-semibold text-[11px]">
-                      {req.rejection_reason || req.remarks || (guardStatusFilter === "PENDING" ? "Awaiting Officer Review" : "Processed")}
+                      {(req as any).rejection_reason || (req as any).remarks || (guardStatusFilter === "PENDING" ? "Awaiting Officer Review" : "Active Officer Possession")}
                     </td>
                     <td className="px-4 py-3.5 text-center align-middle">
                       <div className="flex items-center justify-center gap-1.5">
                         {/* View Button */}
                         <button
                           onClick={() => {
-                            setSelectedReq(req);
+                            setSelectedReq(req as any);
                             setShowDetailsModal(true);
                           }}
                           className="p-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all cursor-pointer"
@@ -508,7 +559,7 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
                         {guardStatusFilter === "PENDING" && (
                           <>
                             <button
-                              onClick={() => handleApproveGuardRequest(req)}
+                              onClick={() => handleApproveGuardRequest(req as any)}
                               disabled={submitting}
                               className="px-2.5 py-1 bg-blue-900 hover:bg-blue-950 text-white font-black text-[10px] rounded-lg shadow-xs transition-all flex items-center gap-1 cursor-pointer"
                               title="Approve Guard Request"
@@ -561,7 +612,7 @@ export const RFOEquipmentRequestsPage: React.FC = () => {
                 {filteredGuardRequests.length === 0 && (
                   <tr>
                     <td colSpan={10} className="py-12 text-center text-xs font-semibold text-gray-400 italic">
-                      No requisitions found in this section matching your filter criteria.
+                      No requisitions or active equipment found in this section matching your filter criteria.
                     </td>
                   </tr>
                 )}
