@@ -96,6 +96,7 @@ class InventoryMasterResponse(BaseModel):
     minimum_stock_default: int = 0
     reorder_level: int = 5
     description: Optional[str] = None
+    total_quantity: int = 100
     active: bool = True
     is_active: bool = True
     created_at: datetime

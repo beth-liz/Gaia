@@ -26,6 +26,7 @@ export const RFOStationStockPage: React.FC = () => {
 
   const [inventoryList, setInventoryList] = useState<StationInventory[]>([]);
   const [masterCatalog, setMasterCatalog] = useState<any[]>([]);
+  const [hqControlledAssets, setHqControlledAssets] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   // VIEW MODE TOGGLE (DEFAULT: "card")
@@ -76,12 +77,14 @@ export const RFOStationStockPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [inv, masters] = await Promise.all([
+      const [inv, masters, hqAssets] = await Promise.all([
         inventoryService.getMyStationInventory(),
         inventoryService.getInventoryMasters(),
+        inventoryService.getHQControlledAssets(),
       ]);
       setInventoryList(inv);
       setMasterCatalog(masters);
+      setHqControlledAssets(hqAssets);
     } catch (err: any) {
       setError(err.message || "Failed to load station stock levels.");
     } finally {
@@ -151,19 +154,20 @@ export const RFOStationStockPage: React.FC = () => {
 
   // HQ Master Catalog Options for HQ Modal (HQ Controlled Only)
   const hqMasterOptions = useMemo(() => {
-    return masterCatalog.filter((m) => {
-      const procType = m.category_rel?.procurement_type || "LOCAL_ALLOWED";
-      return procType === "ADMIN_ONLY";
-    });
-  }, [masterCatalog]);
+    return hqControlledAssets;
+  }, [hqControlledAssets]);
 
   // Local Master Catalog Options for Add Stock Modal (Local Purchases Only)
   const localMasterOptions = useMemo(() => {
     return masterCatalog.filter((m) => {
-      const procType = m.category_rel?.procurement_type || "LOCAL_ALLOWED";
+      const procType = m.procurement_type || "LOCAL_ALLOWED";
       return procType !== "ADMIN_ONLY";
     });
   }, [masterCatalog]);
+
+  const selectedHQAsset = useMemo(() => {
+    return hqMasterOptions.find((m) => m.id === hqRequestForm.inventory_master_id) || null;
+  }, [hqMasterOptions, hqRequestForm.inventory_master_id]);
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "N/A";
@@ -241,6 +245,16 @@ export const RFOStationStockPage: React.FC = () => {
     if (!hqRequestForm.inventory_master_id || hqRequestForm.quantity <= 0) {
       alert("Please select an HQ equipment item and enter a valid quantity.");
       return;
+    }
+    if (selectedHQAsset) {
+      if (selectedHQAsset.total_quantity === 0) {
+        alert("This item is currently Out of Stock at HQ.");
+        return;
+      }
+      if (hqRequestForm.quantity > selectedHQAsset.total_quantity) {
+        alert("Requested quantity cannot exceed the available HQ stock.");
+        return;
+      }
     }
     setSubmitting(true);
     try {
@@ -943,11 +957,41 @@ export const RFOStationStockPage: React.FC = () => {
                   <option value={0}>-- Select HQ Controlled Asset --</option>
                   {hqMasterOptions.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.item_name} ({m.category} • {m.unit})
+                      {m.item_name} — {m.category_name || m.category} (Available: {m.total_quantity} {m.unit || "u"})
                     </option>
                   ))}
                 </select>
+                {hqMasterOptions.length === 0 && (
+                  <p className="text-[11px] text-amber-600 font-extrabold mt-1">
+                    No HQ-controlled equipment is currently available.
+                  </p>
+                )}
               </div>
+
+              {selectedHQAsset && (
+                <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-[11px] space-y-1 text-indigo-950 font-bold">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Category:</span>
+                    <span>{selectedHQAsset.category_name || selectedHQAsset.category}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Available at HQ:</span>
+                    <span className={selectedHQAsset.total_quantity === 0 ? "text-red-600 font-extrabold" : ""}>
+                      {selectedHQAsset.total_quantity} {selectedHQAsset.unit || "units"}
+                    </span>
+                  </div>
+                  {selectedHQAsset.total_quantity === 0 && (
+                    <p className="text-[10px] text-red-600 font-extrabold italic pt-1 border-t border-red-100">
+                      ⚠️ Out of Stock at HQ. Requisition is currently unavailable.
+                    </p>
+                  )}
+                  {hqRequestForm.quantity > selectedHQAsset.total_quantity && selectedHQAsset.total_quantity > 0 && (
+                    <p className="text-[10px] text-red-600 font-extrabold italic pt-1 border-t border-red-100">
+                      ⚠️ Requested quantity cannot exceed the available HQ stock.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1010,8 +1054,12 @@ export const RFOStationStockPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2 bg-indigo-900 hover:bg-indigo-950 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-2"
+                  disabled={
+                    submitting ||
+                    !hqRequestForm.inventory_master_id ||
+                    (selectedHQAsset && (selectedHQAsset.total_quantity === 0 || hqRequestForm.quantity > selectedHQAsset.total_quantity))
+                  }
+                  className="px-5 py-2 bg-indigo-900 hover:bg-indigo-950 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-2 disabled:opacity-50"
                 >
                   {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                   Submit Requisition to HQ

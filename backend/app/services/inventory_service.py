@@ -135,6 +135,7 @@ def format_master_item(item: InventoryMaster) -> dict:
         "minimum_stock_default": item.minimum_stock_default,
         "reorder_level": item.reorder_level,
         "description": item.description,
+        "total_quantity": getattr(item, "total_quantity", 100),
         "active": item.is_active,
         "is_active": item.is_active,
         "created_at": item.created_at,
@@ -1038,6 +1039,19 @@ def list_inventory_masters(
     return [format_master_item(m) for m in masters]
 
 
+def list_hq_controlled_assets(db: Session) -> List[dict]:
+    # Query active InventoryMaster items where their category has procurement_type == 'ADMIN_ONLY'
+    masters = db.query(InventoryMaster).join(
+        InventoryCategory,
+        InventoryMaster.category_id == InventoryCategory.id
+    ).filter(
+        InventoryCategory.procurement_type == "ADMIN_ONLY",
+        InventoryMaster.is_active == True
+    ).order_by(InventoryMaster.item_name.asc()).all()
+
+    return [format_master_item(m) for m in masters]
+
+
 # ==========================================
 # STATION INVENTORY SERVICES
 # ==========================================
@@ -1170,13 +1184,27 @@ def create_hq_stock_request(data: HQStockRequestCreate, current_user: User, db: 
     if data.quantity <= 0:
         raise HTTPException(status_code=400, detail="Stock request quantity must be a positive integer.")
 
-    target_station_id = data.station_id or current_user.station_id
+    target_station_id = current_user.station_id
     if not target_station_id:
-        raise HTTPException(status_code=400, detail="Station ID is required.")
+        raise HTTPException(status_code=400, detail="Officer has no assigned station.")
 
     master = db.query(InventoryMaster).filter(InventoryMaster.id == data.inventory_master_id).first()
     if not master:
         raise HTTPException(status_code=404, detail="Master inventory item not found.")
+
+    # Validate that it is actually an HQ-controlled asset (procurement_type == "ADMIN_ONLY")
+    cat_rel = master.category_rel
+    proc_type = getattr(cat_rel, "procurement_type", "LOCAL_ALLOWED") if cat_rel else "LOCAL_ALLOWED"
+    if proc_type != "ADMIN_ONLY":
+        raise HTTPException(status_code=400, detail=f"Item '{master.item_name}' is not classified as an HQ Controlled Asset.")
+
+    # Validate requested quantity does not exceed available stock in HQ
+    hq_avail = getattr(master, "total_quantity", 100)
+    if data.quantity > hq_avail:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Requested quantity ({data.quantity}) exceeds the available HQ stock ({hq_avail} units)."
+        )
 
     st_inv = db.query(StationInventory).filter(
         StationInventory.station_id == target_station_id,

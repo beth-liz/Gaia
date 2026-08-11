@@ -775,6 +775,12 @@ export const inventoryService = {
 
   addStationStock: async (data: any) => inventoryService.addStockToStation(data),
   getInventoryMasters: async () => inventoryService.getMasterItems(),
+  getHQControlledAssets: async (): Promise<InventoryMaster[]> => {
+    const res = await fetch(`${API_BASE}/inventory/hq-controlled-assets`, {
+      headers: getHeaders(),
+    });
+    return handleResponse<InventoryMaster[]>(res);
+  },
 
   getAdminHQRequests: async (): Promise<any> => {
     const res = await fetch(`${API_BASE}/inventory/admin/hq-requests`, {

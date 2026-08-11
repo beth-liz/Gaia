@@ -40,6 +40,7 @@ class InventoryMaster(Base):
     manufacture_date = Column(DateTime, nullable=True)
     batch_number = Column(String(50), nullable=True)
     description = Column(Text, nullable=True)
+    total_quantity = Column(Integer, default=100, nullable=False)
     active = Column(Boolean, default=True, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
