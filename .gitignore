@@ -1,0 +1,105 @@
+# =========================================================
+# ENVIRONMENT / SECRETS
+# =========================================================
+
+.env
+.env.*
+!.env.example
+
+# =========================================================
+# PYTHON
+# =========================================================
+
+__pycache__/
+*.py[cod]
+*.pyo
+
+.pytest_cache/
+.mypy_cache/
+
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Gaia AI virtual environment
+ai/venv/
+
+# =========================================================
+# AI MODEL WEIGHTS
+# =========================================================
+
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.safetensors
+
+# =========================================================
+# AI CACHE / GENERATED OUTPUTS
+# =========================================================
+
+ai/results/
+
+ai/speciesnet_test/speciesnet_results/annotated/
+
+# Python/model caches
+**/.cache/
+ai/**/.cache/
+
+# =========================================================
+# NODE / REACT
+# =========================================================
+
+node_modules/
+**/node_modules/
+
+dist/
+build/
+
+# =========================================================
+# LOGS
+# =========================================================
+
+*.log
+
+# =========================================================
+# IDE
+# =========================================================
+
+.vscode/
+.idea/
+
+# =========================================================
+# OS
+# =========================================================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================================================
+# YOLO / GENERATED DETECTION OUTPUTS
+# =========================================================
+
+runs/detect/results/
+runs/detect/predict*/
+
+# =========================================================
+# GAIA SPECIESNET TEST DATA
+# =========================================================
+
+ai/speciesnet_test/images/
+ai/speciesnet_test/annotated/
+ai/speciesnet_test/annotated_named/
+
+# SpeciesNet generated results
+ai/speciesnet_test/speciesnet_results/
+ai/speciesnet_test/predictions.json
+
+# =========================================================
+# GAIA EVALUATION TEST DATA
+# =========================================================
+
+ai/evaluation/elephant/
