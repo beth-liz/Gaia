@@ -27,7 +27,7 @@ export const RFOPendingReturnsPage: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const data = await inventoryService.getStationAssignments();
+      const data = await inventoryService.getStationAssignments(undefined, "PENDING");
       const pendingReturns = (data || []).filter((a: any) => {
         const cat = (a.category || "").toUpperCase();
         const isConsumableCat = [
@@ -236,20 +236,18 @@ export const RFOPendingReturnsPage: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-3 py-3.5 text-center align-middle">
-                    <span className="px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-[10px] font-black inline-flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span> Pending Verification
-                    </span>
+                    {(asgn.status || "").toUpperCase() === "RETURN_REQUESTED" ? (
+                      <span className="px-3 py-1 bg-blue-100 text-blue-900 border border-blue-300 rounded-xl text-[10px] font-black inline-flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span> Awaiting Guard Return
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-[10px] font-black inline-flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span> Returned - Awaiting Verification
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3.5 text-center align-middle">
                     <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
-                      <button
-                        onClick={() => navigate("/officer/inventory/assigned/verify-returns", { state: { selectedAssignment: asgn } })}
-                        className="px-3 py-1 bg-emerald-900 hover:bg-emerald-950 text-white font-black text-[10px] rounded-lg shadow-xs transition-all flex items-center gap-1 cursor-pointer"
-                        title="Inspect Equipment"
-                      >
-                        <RotateCcw className="w-3 h-3 text-amber-300" /> Inspect
-                      </button>
-
                       <button
                         onClick={() => {
                           setSelectedAsgn(asgn);

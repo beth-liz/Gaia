@@ -577,10 +577,11 @@ def batch_issue_equipment(
     summary="Get active equipment assignments for current guard"
 )
 def get_my_assignments(
+    status_filter: Optional[str] = "ACTIVE",
     db: Session = Depends(get_db),
     guard: User = Depends(get_current_guard)
 ):
-    return inventory_service.list_equipment_assignments(db=db, guard_id=guard.id)
+    return inventory_service.list_equipment_assignments(db=db, guard_id=guard.id, status_filter=status_filter)
 
 
 @router.get(
@@ -590,10 +591,11 @@ def get_my_assignments(
 )
 def get_guard_assignments(
     guard_id: int,
+    status_filter: Optional[str] = "ACTIVE",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_officer_or_admin)
 ):
-    return inventory_service.list_equipment_assignments(db=db, guard_id=guard_id)
+    return inventory_service.list_equipment_assignments(db=db, guard_id=guard_id, status_filter=status_filter)
 
 
 @router.get(
@@ -603,7 +605,7 @@ def get_guard_assignments(
 )
 def get_station_assignments(
     station_id: Optional[int] = None,
-    status_filter: Optional[str] = None,
+    status_filter: Optional[str] = "ACTIVE",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_officer_or_admin)
 ):
@@ -704,6 +706,20 @@ def report_loss(
         current_user=user,
         db=db
     )
+
+
+@router.get(
+    "/loss-reports",
+    response_model=List[EquipmentLossReportResponse],
+    summary="List all equipment loss reports for station (RFO / Admin)"
+)
+def list_loss_reports(
+    station_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_officer_or_admin)
+):
+    target_station = station_id or (user.station_id if user.role != "Admin" else None)
+    return inventory_service.list_loss_reports(db=db, station_id=target_station)
 
 
 @router.post(

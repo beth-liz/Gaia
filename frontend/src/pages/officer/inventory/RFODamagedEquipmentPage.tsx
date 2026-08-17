@@ -21,6 +21,8 @@ interface DamagedRecord {
   station_inventory_id?: number;
   item_name?: string;
   station_name?: string;
+  guard_name?: string;
+  category_name?: string;
   reported_by?: number;
   reporter_name?: string;
   damage_type?: string;
@@ -33,6 +35,24 @@ interface DamagedRecord {
   remarks?: string;
   reported_at?: string;
   repaired_at?: string;
+}
+
+// Lost Equipment record as returned by GET /inventory/loss-reports
+interface LostRecord {
+  id: number;
+  assignment_id?: number;
+  station_inventory_id?: number;
+  item_name?: string;
+  guard_name?: string;
+  station_name?: string;
+  category_name?: string;
+  reported_by?: number;
+  reporter_name?: string;
+  reason?: string;
+  status?: string;
+  remarks?: string;
+  reported_at?: string;
+  processed_at?: string;
 }
 
 // Consumable categories to exclude
@@ -52,6 +72,7 @@ export const RFODamagedEquipmentPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [damagedRecords, setDamagedRecords] = useState<DamagedRecord[]>([]);
+  const [lossRecords, setLossRecords] = useState<LostRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [toastMsg, setToastMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
@@ -74,21 +95,25 @@ export const RFODamagedEquipmentPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // Primary source: DamagedEquipment table via GET /inventory/repairs
+      // Fetch damaged records from DamagedEquipment table
       const records: DamagedRecord[] = await inventoryService.getDamagedRepairs();
-
-      // Filter out consumable equipment and already-scrapped/completed items from
-      // active view (optionally show all, un-comment filter to restrict to active only)
       const filtered = (records || []).filter((r) => {
         const nameLower = (r.item_name || "").toLowerCase();
         const isConsumable = CONSUMABLE_CATEGORIES.some((c) =>
           nameLower.includes(c.toLowerCase())
         );
-        // Include all damage statuses (Waiting, Repairing, Completed, Scrapped) so admin sees full picture
         return !isConsumable;
       });
-
       setDamagedRecords(filtered);
+
+      // Fetch loss reports from EquipmentLossReport table
+      try {
+        const lossData: LostRecord[] = await inventoryService.getLossReports();
+        setLossRecords(lossData || []);
+      } catch {
+        // Non-fatal: loss reports may be empty
+        setLossRecords([]);
+      }
     } catch (err: any) {
       setError(err.message || "Failed to load damaged equipment records.");
     } finally {
@@ -272,15 +297,15 @@ export const RFODamagedEquipmentPage: React.FC = () => {
           <table className="w-full text-center border-collapse">
             <thead>
               <tr className="bg-emerald-950/5 border-b border-emerald-950/10 text-emerald-950 font-black uppercase text-[10px] tracking-wider whitespace-nowrap">
-                <th className="px-5 py-3.5 text-left align-middle w-[22%]">Equipment</th>
-                <th className="px-4 py-3.5 text-center align-middle w-[16%]">Station</th>
-                <th className="px-3 py-3.5 text-center align-middle w-[13%]">Damage Type</th>
+                <th className="px-5 py-3.5 text-left align-middle w-[20%]">Equipment</th>
+                <th className="px-4 py-3.5 text-center align-middle w-[14%]">Guard / Officer</th>
+                <th className="px-4 py-3.5 text-center align-middle w-[12%]">Station</th>
+                <th className="px-3 py-3.5 text-center align-middle w-[12%]">Damage Type</th>
                 <th className="px-3 py-3.5 text-center align-middle w-[9%]">Severity</th>
-                <th className="px-4 py-3.5 text-center align-middle w-[14%]">Reported By</th>
+                <th className="px-4 py-3.5 text-center align-middle w-[12%]">Reported By</th>
                 <th className="px-3 py-3.5 text-center align-middle w-[11%]">Reported Date</th>
-                <th className="px-3 py-3.5 text-center align-middle w-[9%]">Repairable</th>
                 <th className="px-3 py-3.5 text-center align-middle w-[12%]">Status</th>
-                <th className="px-4 py-3.5 text-center align-middle w-[18%]">Actions</th>
+                <th className="px-4 py-3.5 text-center align-middle w-[14%]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-emerald-950/5 text-emerald-950 text-xs font-semibold">
@@ -297,7 +322,10 @@ export const RFODamagedEquipmentPage: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-center align-middle text-gray-700 truncate max-w-[140px]" title={record.station_name}>
+                    <td className="px-4 py-3.5 text-center align-middle font-extrabold text-emerald-900 truncate max-w-[130px]" title={record.guard_name || record.reporter_name}>
+                      {record.guard_name || record.reporter_name || "—"}
+                    </td>
+                    <td className="px-4 py-3.5 text-center align-middle text-gray-700 truncate max-w-[120px]" title={record.station_name}>
                       {record.station_name || "—"}
                     </td>
                     <td className="px-3 py-3.5 text-center align-middle font-bold text-rose-900">
@@ -321,15 +349,6 @@ export const RFODamagedEquipmentPage: React.FC = () => {
                     </td>
                     <td className="px-3 py-3.5 text-center align-middle font-mono text-gray-500 text-[11px]">
                       {formatDate(record.reported_at)}
-                    </td>
-                    <td className="px-3 py-3.5 text-center align-middle">
-                      <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black inline-block ${
-                        record.repairable !== false
-                          ? "bg-emerald-100 text-emerald-900"
-                          : "bg-gray-200 text-gray-700"
-                      }`}>
-                        {record.repairable !== false ? "Yes" : "No"}
-                      </span>
                     </td>
                     <td className="px-3 py-3.5 text-center align-middle">
                       <span className={`px-3 py-1 ${badge.bg} ${badge.text} border ${badge.border} rounded-xl text-[10px] font-black inline-flex items-center gap-1`}>
@@ -397,6 +416,68 @@ export const RFODamagedEquipmentPage: React.FC = () => {
                     {damagedRecords.length === 0
                       ? "No damaged equipment records found. All reusable equipment is in good condition."
                       : "No records match your search filter."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* LOST EQUIPMENT SECTION – from EquipmentLossReport table */}
+      <div className="bg-white rounded-3xl border border-purple-200/80 overflow-hidden shadow-xs">
+        <div className="p-5 border-b border-purple-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-black text-purple-950 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-purple-700" /> Lost Equipment
+            </h2>
+            <p className="text-[11px] font-semibold text-purple-700 mt-0.5">Equipment verified as lost during return verification. Not returned to normal inventory.</p>
+          </div>
+          <span className="px-3 py-1 bg-purple-100 text-purple-900 border border-purple-300 rounded-xl text-[10px] font-black">
+            {lossRecords.length} Records
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-center border-collapse">
+            <thead>
+              <tr className="bg-purple-950/5 border-b border-purple-200/60 text-purple-950 font-black uppercase text-[10px] tracking-wider whitespace-nowrap">
+                <th className="px-5 py-3.5 text-left align-middle w-[22%]">Equipment</th>
+                <th className="px-4 py-3.5 text-center align-middle w-[16%]">Guard</th>
+                <th className="px-4 py-3.5 text-center align-middle w-[14%]">Station</th>
+                <th className="px-4 py-3.5 text-center align-middle w-[18%]">Reason</th>
+                <th className="px-3 py-3.5 text-center align-middle w-[11%]">Reported Date</th>
+                <th className="px-3 py-3.5 text-center align-middle w-[11%]">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-purple-950/5 text-emerald-950 text-xs font-semibold">
+              {lossRecords.map((rec) => (
+                <tr key={rec.id} className="hover:bg-purple-50/30 transition-all whitespace-nowrap">
+                  <td className="px-5 py-3.5 text-left align-middle font-black text-emerald-950">
+                    <div className="truncate max-w-[180px]" title={rec.item_name}>{rec.item_name || "—"}</div>
+                    {rec.category_name && <div className="text-[10px] font-normal text-gray-400">{rec.category_name}</div>}
+                  </td>
+                  <td className="px-4 py-3.5 text-center align-middle font-extrabold text-emerald-900">{rec.guard_name || rec.reporter_name || "—"}</td>
+                  <td className="px-4 py-3.5 text-center align-middle text-gray-700">{rec.station_name || "—"}</td>
+                  <td className="px-4 py-3.5 text-center align-middle text-gray-600 truncate max-w-[160px]" title={rec.reason}>{rec.reason || "—"}</td>
+                  <td className="px-3 py-3.5 text-center align-middle font-mono text-gray-500 text-[11px]">{formatDate(rec.reported_at)}</td>
+                  <td className="px-3 py-3.5 text-center align-middle">
+                    <span className={`px-3 py-1 rounded-xl text-[10px] font-black inline-flex items-center gap-1 ${
+                      (rec.status || "").toUpperCase() === "APPROVED"
+                        ? "bg-purple-100 text-purple-900 border border-purple-300"
+                        : "bg-amber-100 text-amber-900 border border-amber-300"
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        (rec.status || "").toUpperCase() === "APPROVED" ? "bg-purple-600" : "bg-amber-600"
+                      }`}></span>
+                      {(rec.status || "PENDING").toUpperCase() === "APPROVED" ? "Confirmed Lost" : "Pending"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {lossRecords.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-10 text-center text-xs font-semibold text-gray-400 italic">
+                    No lost equipment records found.
                   </td>
                 </tr>
               )}

@@ -35,6 +35,7 @@ export const AdminAnimalSpeciesPage: React.FC = () => {
   // Form State
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [animalName, setAnimalName] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
   const [scientificName, setScientificName] = useState("");
   const [category, setCategory] = useState("Mammal");
   const [dangerLevel, setDangerLevel] = useState("Medium");
@@ -73,6 +74,7 @@ export const AdminAnimalSpeciesPage: React.FC = () => {
     setIsActive(true);
     setSelectedFile(null);
     setImagePreview(null);
+    setNameError(null);
     setError(null);
     setIsModalOpen(true);
   };
@@ -88,8 +90,18 @@ export const AdminAnimalSpeciesPage: React.FC = () => {
     setIsActive(spec.is_active);
     setSelectedFile(null);
     setImagePreview(spec.image ? (spec.image.startsWith("/static") ? `http://127.0.0.1:8000${spec.image}` : spec.image) : null);
+    setNameError(null);
     setError(null);
     setIsModalOpen(true);
+  };
+
+  const handleNameChange = (val: string) => {
+    setAnimalName(val);
+    if (val.trim() && !/^[a-zA-Z\s]+$/.test(val)) {
+      setNameError("Animal species name can contain only letters and spaces.");
+    } else {
+      setNameError(null);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,6 +116,11 @@ export const AdminAnimalSpeciesPage: React.FC = () => {
     e.preventDefault();
     if (!animalName.trim()) {
       setError("Animal Name is required.");
+      return;
+    }
+    if (!/^[a-zA-Z\s]+$/.test(animalName)) {
+      setNameError("Animal species name can contain only letters and spaces.");
+      setError("Animal species name can contain only letters and spaces.");
       return;
     }
 
@@ -395,9 +412,14 @@ export const AdminAnimalSpeciesPage: React.FC = () => {
                     required
                     placeholder="e.g. Elephant, Tiger"
                     value={animalName}
-                    onChange={(e) => setAnimalName(e.target.value)}
-                    className="w-full px-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-semibold"
+                    onChange={(e) => handleNameChange(e.target.value)}
+                    className={`w-full px-4 py-2.5 text-xs rounded-xl border ${
+                      nameError ? "border-red-500 ring-2 ring-red-100" : "border-emerald-950/15"
+                    } bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-semibold`}
                   />
+                  {nameError && (
+                    <p className="mt-1 text-[11px] text-red-600 font-semibold">{nameError}</p>
+                  )}
                 </div>
 
                 <div>

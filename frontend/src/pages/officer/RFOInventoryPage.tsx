@@ -62,7 +62,7 @@ export const RFOInventoryPage: React.FC = () => {
         inventoryService.getMyStationInventory(),
         inventoryService.getMasterItems({ active_only: true }),
         inventoryService.getStationRequests(),
-        inventoryService.getStationAssignments(),
+        inventoryService.getStationAssignments(undefined, "ALL"),
         inventoryService.getTransactions(),
       ]);
       setStationInventory(stStock);

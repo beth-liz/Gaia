@@ -637,6 +637,7 @@ export const inventoryService = {
     reason: string;
     remarks?: string;
     photos?: string;
+    return_destination?: string;
   }): Promise<any> => {
     const res = await fetch(`${API_BASE}/inventory/returns`, {
       method: "POST",
@@ -670,6 +671,13 @@ export const inventoryService = {
       headers: getHeaders(),
     });
     return handleResponse<any>(res);
+  },
+
+  getLossReports: async (): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/inventory/loss-reports`, {
+      headers: getHeaders(),
+    });
+    return handleResponse<any[]>(res);
   },
 
   deleteReturnHistoryBatch: async (returnIds: number[]): Promise<any> => {

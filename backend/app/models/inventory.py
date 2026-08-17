@@ -186,6 +186,7 @@ class EquipmentReturn(Base):
     reason = Column(String(50), default="Normal Return", nullable=False)  # Normal Return, Damaged, Lost, Consumed
     remarks = Column(Text, nullable=True)
     photos = Column(String(255), nullable=True)
+    return_destination = Column(String(50), default="STATION", nullable=True)
     status = Column(String(30), default="Pending Verification", nullable=False)  # Pending Verification, Accepted, Repair Sent, Written Off, Rejected
     submitted_date = Column(DateTime, default=datetime.utcnow)
     verified_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

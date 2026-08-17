@@ -36,6 +36,8 @@ class MonitoringStationResponse(MonitoringStationBase):
     district_name: Optional[str] = None
     state_name: Optional[str] = None
     officer_count: Optional[int] = 0
+    head_officer_id: Optional[int] = None
+    head_officer_name: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

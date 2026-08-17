@@ -35,6 +35,7 @@ export const AdminDistrictsPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDistrict, setEditingDistrict] = useState<DistrictItem | null>(null);
   const [formName, setFormName] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
   const [formStateId, setFormStateId] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -63,6 +64,7 @@ export const AdminDistrictsPage: React.FC = () => {
     setEditingDistrict(null);
     setFormName("");
     setFormStateId(states.length > 0 ? states[0].id : "");
+    setNameError(null);
     setError(null);
     setIsModalOpen(true);
   };
@@ -71,14 +73,29 @@ export const AdminDistrictsPage: React.FC = () => {
     setEditingDistrict(d);
     setFormName(d.district_name);
     setFormStateId(d.state_id);
+    setNameError(null);
     setError(null);
     setIsModalOpen(true);
+  };
+
+  const handleNameChange = (val: string) => {
+    setFormName(val);
+    if (val.trim() && !/^[a-zA-Z\s]+$/.test(val)) {
+      setNameError("District name can contain only letters and spaces.");
+    } else {
+      setNameError(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
       setError("District name is required.");
+      return;
+    }
+    if (!/^[a-zA-Z\s]+$/.test(formName)) {
+      setNameError("District name can contain only letters and spaces.");
+      setError("District name can contain only letters and spaces.");
       return;
     }
     if (!formStateId) {
@@ -304,9 +321,14 @@ export const AdminDistrictsPage: React.FC = () => {
                   required
                   placeholder="e.g. Wayanad, Palakkad"
                   value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-semibold"
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  className={`w-full px-4 py-2.5 text-xs rounded-xl border ${
+                    nameError ? "border-red-500 ring-2 ring-red-100" : "border-emerald-950/15"
+                  } bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-semibold`}
                 />
+                {nameError && (
+                  <p className="mt-1 text-[11px] text-red-600 font-semibold">{nameError}</p>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-emerald-950/10">

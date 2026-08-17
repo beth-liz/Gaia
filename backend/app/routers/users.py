@@ -41,6 +41,55 @@ def get_user_profile(current_user: User = Depends(get_current_user)):
     return format_user_payload(current_user)
 
 
+from fastapi import UploadFile, File
+import os
+import uuid
+
+@router.post("/profile-image", response_model=UserOut)
+async def upload_profile_image(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file format. Only JPG, JPEG, PNG, and WEBP are allowed."
+        )
+
+    # Resolve upload directory
+    router_dir = os.path.dirname(os.path.abspath(__file__))
+    app_dir = os.path.dirname(router_dir)
+    upload_dir = os.path.join(app_dir, "static", "uploads", "profile")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    filename = f"profile_{current_user.id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = os.path.join(upload_dir, filename)
+
+    # Clean up previous profile image if it exists
+    if current_user.profile_image and current_user.profile_image.startswith("/static/uploads/profile/"):
+        old_filename = os.path.basename(current_user.profile_image)
+        old_file_path = os.path.join(upload_dir, old_filename)
+        if os.path.exists(old_file_path):
+            try:
+                os.remove(old_file_path)
+            except Exception:
+                pass
+
+    # Save incoming image to disk
+    with open(file_path, "wb") as f:
+        contents = await file.read()
+        f.write(contents)
+
+    # Save to user model and commit
+    current_user.profile_image = f"/static/uploads/profile/{filename}"
+    db.commit()
+    db.refresh(current_user)
+
+    return format_user_payload(current_user)
+
+
 # --- VILLAGER MANAGEMENT ---
 
 @router.get("/villagers", response_model=List[UserOut])
@@ -50,12 +99,12 @@ def get_villagers(
     admin=Depends(get_current_admin)
 ):
     query = db.query(User).filter(User.role == "Villager")
-    
+
     if status_filter == "pending":
         query = query.filter(User.is_verified == False)
     elif status_filter == "approved":
         query = query.filter(User.is_verified == True)
-        
+
     villagers = query.order_by(User.created_at.desc()).all()
     return [format_user_out(v, db) for v in villagers]
 
@@ -73,10 +122,23 @@ def approve_villager(
 
     villager.is_verified = data.is_approved
     villager.is_active = data.is_approved
-    
+
     db.commit()
     db.refresh(villager)
     return format_user_out(villager, db)
+
+
+@router.delete("/villagers/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def reject_villager(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin)
+):
+    villager = db.query(User).filter(User.id == user_id, User.role == "Villager").first()
+    if not villager:
+        raise HTTPException(status_code=404, detail="Villager account not found")
+    db.delete(villager)
+    db.commit()
 
 
 # --- OFFICER MANAGEMENT & STATIONS ---
@@ -90,7 +152,7 @@ def get_officers(
     query = db.query(User).filter(User.role.in_(["Range Forest Officer", "Forest Guard", "Officer"]))
     if role:
         query = query.filter(User.role == role)
-    
+
     officers = query.order_by(User.full_name.asc()).all()
     return [format_user_out(u, db) for u in officers]
 
@@ -104,7 +166,7 @@ def create_officer(
     exists = db.query(User).filter(User.email == data.email).first()
     if exists:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+
     desig = db.query(Designation).filter(Designation.id == data.designation_id).first()
     if not desig:
         raise HTTPException(status_code=400, detail="Invalid designation ID")
@@ -112,7 +174,7 @@ def create_officer(
     station = db.query(MonitoringStation).filter(MonitoringStation.id == data.station_id).first()
     if not station:
         raise HTTPException(status_code=400, detail="Invalid monitoring station ID")
-    
+
     role = desig.designation_name
     is_act = True if (data.status is None or data.status == "Active") else False
 
@@ -179,7 +241,7 @@ def update_officer(
     officer = db.query(User).filter(User.id == user_id).first()
     if not officer:
         raise HTTPException(status_code=404, detail="Officer not found")
-    
+
     if data.full_name is not None:
         officer.full_name = data.full_name
     if data.email is not None:
@@ -188,14 +250,47 @@ def update_officer(
         officer.phone = data.phone
     if data.is_active is not None:
         officer.is_active = data.is_active
+
+    old_role = officer.role
     if data.designation_id is not None:
         desig = db.query(Designation).filter(Designation.id == data.designation_id).first()
         if desig:
+            role = desig.designation_name
+            if role in ["Range Forest Officer", "Officer"]:
+                if officer.station_id:
+                    station = db.query(MonitoringStation).filter(MonitoringStation.id == officer.station_id).first()
+                    if station:
+                        existing_rfo = db.query(User).filter(
+                            User.station_id == station.id,
+                            User.role.in_(["Range Forest Officer", "Officer"]),
+                            User.is_active == True,
+                            User.id != officer.id
+                        ).first()
+                        if existing_rfo or (station.head_officer_id and station.head_officer_id != officer.id):
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="This monitoring station already has a Head Officer assigned. Only one Head Officer can be assigned to a station."
+                            )
             officer.designation_id = desig.id
             officer.role = desig.designation_name
 
     db.commit()
     db.refresh(officer)
+
+    # Sync station head_officer_id separately to avoid circular dependency
+    if data.designation_id is not None:
+        if officer.station_id:
+            station = db.query(MonitoringStation).filter(MonitoringStation.id == officer.station_id).first()
+            if station:
+                if officer.role in ["Range Forest Officer", "Officer"]:
+                    station.head_officer_id = officer.id
+                    station.status = "Active"
+                elif old_role in ["Range Forest Officer", "Officer"] and officer.role not in ["Range Forest Officer", "Officer"]:
+                    if station.head_officer_id == officer.id:
+                        station.head_officer_id = None
+                        station.status = "No Head Officer Assigned"
+                db.commit()
+
     return format_user_out(officer, db)
 
 
@@ -322,7 +417,7 @@ def toggle_officer_status(
     officer = db.query(User).filter(User.id == user_id).first()
     if not officer:
         raise HTTPException(status_code=404, detail="Officer not found")
-    
+
     officer.is_active = not officer.is_active
     db.commit()
     db.refresh(officer)
@@ -338,7 +433,7 @@ def delete_officer(
     officer = db.query(User).filter(User.id == user_id).first()
     if not officer:
         raise HTTPException(status_code=404, detail="Officer not found")
-    
+
     # If officer was head officer of station, update station status
     if officer.station_id:
         st = db.query(MonitoringStation).filter(MonitoringStation.id == officer.station_id).first()
@@ -362,10 +457,10 @@ def get_available_guards(
         User.is_active == True,
         User.work_status == "Available"
     )
-    
+
     target_st_id = station_id or current_user.station_id
     if target_st_id:
         query = query.filter(User.station_id == target_st_id)
-        
+
     guards = query.order_by(User.full_name.asc()).all()
     return [format_user_out(g, db) for g in guards]

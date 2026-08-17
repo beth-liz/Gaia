@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
+import re
 
 
 class AnimalSpeciesBase(BaseModel):
@@ -12,6 +13,13 @@ class AnimalSpeciesBase(BaseModel):
     description: Optional[str] = None
     image: Optional[str] = None
     is_active: Optional[bool] = True
+
+    @field_validator("animal_name")
+    @classmethod
+    def validate_animal_name(cls, value: str) -> str:
+        if not re.match(r"^[a-zA-Z\s]+$", value):
+            raise ValueError("Animal species name can contain only letters and spaces.")
+        return value
 
 
 class AnimalSpeciesCreate(AnimalSpeciesBase):

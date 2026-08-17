@@ -1626,6 +1626,38 @@ def verify_returned_equipment_options(
     asgn.condition = cond
     asgn.remarks = f"{asgn.remarks or ''} | Verified: {cond} - {remarks_str}".strip(" | ")
 
+    # Update or create return request record
+    ret = db.query(EquipmentReturn).filter(
+        EquipmentReturn.equipment_assignment_id == asgn.id,
+        EquipmentReturn.status.in_(["RETURN_REQUESTED", "Pending Verification", "Pending Head Officer Verification", "Pending Inspection"])
+    ).first()
+
+    ret_status = "ACCEPT"
+    if cond == "Major Damage":
+        ret_status = "REPAIR"
+    elif cond == "Lost":
+        ret_status = "WRITE_OFF"
+
+    if ret:
+        ret.status = ret_status
+        ret.verified_by = current_user.id
+        ret.verified_at = now
+        ret.condition = cond
+        ret.remarks = remarks_str
+    else:
+        ret = EquipmentReturn(
+            equipment_assignment_id=asgn.id,
+            condition=cond,
+            reason="Verified Return",
+            remarks=remarks_str,
+            return_destination="STATION",
+            status=ret_status,
+            submitted_date=now,
+            verified_by=current_user.id,
+            verified_at=now
+        )
+        db.add(ret)
+
     qty_before = st_inv.available_quantity
     item_name = st_inv.master_item.item_name if st_inv.master_item else "Equipment"
 
@@ -1639,16 +1671,66 @@ def verify_returned_equipment_options(
         st_inv.available_quantity += asgn.quantity
         st_inv.issued_quantity = max(0, (st_inv.issued_quantity or 0) - asgn.quantity)
         tx_type = "RETURN_DAMAGED"
+
+        # Create DamagedEquipment record if not exists
+        existing_dmg = db.query(DamagedEquipment).filter(DamagedEquipment.assignment_id == asgn.id).first()
+        if not existing_dmg:
+            dmg_rec = DamagedEquipment(
+                assignment_id=asgn.id,
+                station_inventory_id=asgn.station_inventory_id,
+                reported_by=current_user.id,
+                damage_type="Minor Damage",
+                damage_severity="Minor",
+                damage_description=remarks_str,
+                repairable=True,
+                repair_status="Waiting",
+                remarks=f"Verified return: {remarks_str}",
+                reported_at=now
+            )
+            db.add(dmg_rec)
     elif cond == "Major Damage":
         asgn.status = "DAMAGED"
         st_inv.damaged_quantity = (st_inv.damaged_quantity or 0) + asgn.quantity
         st_inv.issued_quantity = max(0, (st_inv.issued_quantity or 0) - asgn.quantity)
         tx_type = "DAMAGED"
+
+        # Create DamagedEquipment record if not exists
+        existing_dmg = db.query(DamagedEquipment).filter(DamagedEquipment.assignment_id == asgn.id).first()
+        if not existing_dmg:
+            dmg_rec = DamagedEquipment(
+                assignment_id=asgn.id,
+                station_inventory_id=asgn.station_inventory_id,
+                reported_by=current_user.id,
+                damage_type="Major Damage",
+                damage_severity="Major",
+                damage_description=remarks_str,
+                repairable=True,
+                repair_status="Waiting",
+                remarks=f"Verified return: {remarks_str}",
+                reported_at=now
+            )
+            db.add(dmg_rec)
     elif cond == "Lost":
         asgn.status = "LOST"
         st_inv.issued_quantity = max(0, (st_inv.issued_quantity or 0) - asgn.quantity)
         st_inv.current_quantity = max(0, (st_inv.current_quantity or 0) - asgn.quantity)
         tx_type = "LOST"
+
+        # Create EquipmentLossReport record if not exists
+        existing_loss = db.query(EquipmentLossReport).filter(EquipmentLossReport.assignment_id == asgn.id).first()
+        if not existing_loss:
+            loss = EquipmentLossReport(
+                assignment_id=asgn.id,
+                station_inventory_id=asgn.station_inventory_id,
+                reported_by=asgn.guard_id or current_user.id,
+                reason=remarks_str or "Lost during assignment",
+                status="APPROVED",
+                remarks=remarks_str,
+                reported_at=now,
+                processed_at=now,
+                processed_by=current_user.id
+            )
+            db.add(loss)
     else:
         asgn.status = "RETURNED"
         st_inv.available_quantity += asgn.quantity
@@ -1907,8 +1989,28 @@ def list_equipment_assignments(
         query = query.filter(StationInventory.station_id == station_id)
     if guard_id:
         query = query.filter(EquipmentAssignment.guard_id == guard_id)
-    if status_filter and status_filter != "ALL":
-        query = query.filter(EquipmentAssignment.status == status_filter)
+
+    # Implement database-backed state checking
+    if status_filter:
+        sf_upper = status_filter.upper().strip()
+        if sf_upper == "ACTIVE":
+            query = query.filter(EquipmentAssignment.status.in_([
+                "ISSUED", "ACTIVE", "ASSIGNED", "PENDING_RETURN", "RETURN_REQUESTED",
+                "Pending Head Officer Verification", "Pending Inspection"
+            ]))
+        elif sf_upper == "PENDING":
+            query = query.filter(EquipmentAssignment.status.in_(["Pending Head Officer Verification", "Pending Inspection", "PENDING_RETURN", "RETURN_REQUESTED"]))
+        elif sf_upper == "RETURNED":
+            query = query.filter(EquipmentAssignment.status.in_(["RETURNED", "COMPLETED", "VERIFIED"]))
+        elif sf_upper != "ALL":
+            query = query.filter(EquipmentAssignment.status == status_filter)
+    else:
+        # Default: outstanding / possessed by guard (ISSUED, Pending Return, etc.)
+        query = query.filter(
+            EquipmentAssignment.status.in_(
+                ["ISSUED", "ACTIVE", "ASSIGNED", "Pending Head Officer Verification", "Pending Inspection", "PENDING_RETURN", "RETURN_REQUESTED"]
+            )
+        )
 
     asgns = query.order_by(EquipmentAssignment.issue_date.desc()).all()
     return [format_assignment(a) for a in asgns]
@@ -1923,8 +2025,13 @@ def submit_equipment_return(data: EquipmentReturnCreate, current_user: User, db:
     if not asgn:
         raise HTTPException(status_code=404, detail="Equipment assignment not found.")
 
+    if current_user.role == "Forest Guard" and asgn.guard_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Unauthorized: This assignment does not belong to you.")
+
     cond_upper = (data.condition or "").upper().strip()
     reason_upper = (data.reason or "").upper().strip()
+
+    status_to_set = "Pending Head Officer Verification"
 
     # Determine status
     if cond_upper == "LOST" or reason_upper == "LOST":
@@ -1943,27 +2050,44 @@ def submit_equipment_return(data: EquipmentReturnCreate, current_user: User, db:
         db.add(loss_report)
     elif cond_upper in ["MINOR DAMAGE", "MAJOR DAMAGE", "REPAIR NEEDED", "BROKEN"] or reason_upper == "DAMAGED":
         asgn.status = "Pending Inspection"
+        status_to_set = "Pending Inspection"
     else:
         asgn.status = "Pending Head Officer Verification"
 
-    ret = EquipmentReturn(
-        equipment_assignment_id=asgn.id,
-        condition=data.condition,
-        reason=data.reason,
-        remarks=data.remarks,
-        photos=data.photos,
-        status="Pending Head Officer Verification",
-        submitted_date=datetime.utcnow(),
-    )
-    db.add(ret)
+    # Check if a return request already exists in the database
+    ret = db.query(EquipmentReturn).filter(
+        EquipmentReturn.equipment_assignment_id == asgn.id,
+        EquipmentReturn.status == "RETURN_REQUESTED"
+    ).first()
+
+    if ret:
+        ret.condition = data.condition
+        ret.reason = data.reason
+        ret.remarks = data.remarks
+        ret.photos = data.photos
+        ret.return_destination = data.return_destination or "STATION"
+        ret.status = status_to_set
+        ret.submitted_date = datetime.utcnow()
+    else:
+        ret = EquipmentReturn(
+            equipment_assignment_id=asgn.id,
+            condition=data.condition,
+            reason=data.reason,
+            remarks=data.remarks,
+            photos=data.photos,
+            return_destination=data.return_destination or "STATION",
+            status=status_to_set,
+            submitted_date=datetime.utcnow(),
+        )
+        db.add(ret)
 
     # Notify Head Officer / RFOs at the guard's station
-    rfo_users = db.query(User).filter(User.station_id == current_user.station_id, User.role == "RFO").all()
+    rfo_users = db.query(User).filter(User.station_id == current_user.station_id, User.role == "Range Forest Officer").all()
     for rfo in rfo_users:
         notif = Notification(
             user_id=rfo.id,
             title="Equipment Return Submitted",
-            message=f"Guard {current_user.full_name} submitted a return request for {asgn.item_name}. Condition: {data.condition}.",
+            message=f"Guard {current_user.full_name} submitted a return request for {asgn.station_inventory.master_item.item_name if asgn.station_inventory and asgn.station_inventory.master_item else 'Item'}. Condition: {data.condition}.",
         )
         db.add(notif)
 
@@ -2043,6 +2167,36 @@ def report_equipment_loss(
     }
 
 
+def list_loss_reports(db: Session, station_id: Optional[int] = None) -> List[dict]:
+    query = db.query(EquipmentLossReport).join(StationInventory)
+    if station_id:
+        query = query.filter(StationInventory.station_id == station_id)
+    reports = query.order_by(EquipmentLossReport.reported_at.desc()).all()
+    return [
+        {
+            "id": r.id,
+            "assignment_id": r.assignment_id,
+            "station_inventory_id": r.station_inventory_id,
+            "item_name": r.station_inventory.master_item.item_name if r.station_inventory and r.station_inventory.master_item else None,
+            "reported_by": r.reported_by,
+            "reporter_name": r.reporter.full_name if r.reporter else None,
+            "reason": r.reason,
+            "mission": r.mission,
+            "photo": r.photo,
+            "status": r.status,
+            "remarks": r.remarks,
+            "reported_at": r.reported_at,
+            "processed_at": r.processed_at,
+            "processed_by": r.processed_by,
+            "processor_name": r.processor.full_name if r.processor else None,
+            "guard_name": r.assignment.guard.full_name if r.assignment and r.assignment.guard else None,
+            "station_name": r.station_inventory.station.station_name if r.station_inventory and r.station_inventory.station else None,
+            "category_name": r.station_inventory.master_item.category if r.station_inventory and r.station_inventory.master_item else None,
+        }
+        for r in reports
+    ]
+
+
 def verify_equipment_return(return_id: int, data: EquipmentReturnVerifyAction, current_user: User, db: Session) -> dict:
     if current_user.role == "Admin":
         raise HTTPException(status_code=403, detail="Admins cannot verify equipment returns.")
@@ -2063,7 +2217,20 @@ def verify_equipment_return(return_id: int, data: EquipmentReturnVerifyAction, c
     if act == "ACCEPT":
         st_inv.issued_quantity = max(0, (st_inv.issued_quantity or 0) - asgn.quantity)
         st_inv.reserved_quantity = st_inv.issued_quantity
-        st_inv.available_quantity += asgn.quantity
+
+        # Check if returned to Headquarters
+        if ret.return_destination == "HQ":
+            # Increase Central HQ stock
+            master = st_inv.master_item
+            if master and hasattr(master, "total_quantity") and master.total_quantity is not None:
+                master.total_quantity += asgn.quantity
+            # Decrease station current quantity and total quantity
+            st_inv.current_quantity = max(0, st_inv.current_quantity - asgn.quantity)
+            st_inv.total_quantity = max(0, st_inv.total_quantity - asgn.quantity)
+        else:
+            # Return to Station Available stock
+            st_inv.available_quantity += asgn.quantity
+
         st_inv.status = calculate_stock_status(st_inv.available_quantity, st_inv.minimum_stock, 5)
         st_inv.updated_by = current_user.id
 
@@ -2313,6 +2480,8 @@ def list_damaged_repairs(db: Session, station_id: Optional[int] = None) -> List[
             "remarks": dmg.remarks,
             "reported_at": dmg.reported_at,
             "repaired_at": dmg.repaired_at,
+            "guard_name": dmg.assignment.guard.full_name if dmg.assignment and dmg.assignment.guard else None,
+            "category_name": dmg.station_inventory.master_item.category if dmg.station_inventory and dmg.station_inventory.master_item else None,
         }
         for dmg in damages
     ]
@@ -3247,9 +3416,32 @@ def request_return_equipment(assignment_id: int, remarks: Optional[str], db: Ses
     if not asgn:
         raise HTTPException(status_code=404, detail="Equipment assignment not found.")
 
-    asgn.status = "PENDING_RETURN"
+    if current_user.role != "Admin":
+        if current_user.station_id and asgn.station_inventory.station_id != current_user.station_id:
+            raise HTTPException(status_code=403, detail="Unauthorized to request return for this equipment.")
+
+    # Check if a return request already exists in the database
+    existing_return = db.query(EquipmentReturn).filter(
+        EquipmentReturn.equipment_assignment_id == assignment_id,
+        EquipmentReturn.status.in_(["RETURN_REQUESTED", "Pending Verification", "Pending Head Officer Verification", "Pending Inspection"])
+    ).first()
+
+    if existing_return:
+        return format_assignment(asgn)
+
+    asgn.status = "RETURN_REQUESTED"
     asgn.remarks = remarks or "Return requested by Range Forest Officer"
-    asgn.returned_date = datetime.utcnow()
+
+    ret = EquipmentReturn(
+        equipment_assignment_id=asgn.id,
+        condition="Good",
+        reason="Requested Return",
+        remarks=asgn.remarks,
+        return_destination="STATION",
+        status="RETURN_REQUESTED",
+        submitted_date=datetime.utcnow()
+    )
+    db.add(ret)
 
     log_audit(
         db=db,
@@ -3257,7 +3449,7 @@ def request_return_equipment(assignment_id: int, remarks: Optional[str], db: Ses
         action="Requested Return",
         entity_type="equipment_assignments",
         entity_id=asgn.id,
-        new_value=f"Return requested for assignment #{asgn.id} ({asgn.item_name or 'Item'})",
+        new_value=f"Return requested for assignment #{asgn.id} ({asgn.station_inventory.master_item.item_name if asgn.station_inventory and asgn.station_inventory.master_item else 'Item'})",
     )
 
     db.commit()

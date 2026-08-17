@@ -55,6 +55,32 @@ export const api = {
     return handleResponse<any>(res);
   },
 
+  // --- ADMIN: VILLAGER MANAGEMENT ---
+  getVillagers: async (statusFilter?: string): Promise<any[]> => {
+    const query = statusFilter ? `?status_filter=${statusFilter}` : "";
+    const res = await fetch(`${API_BASE}/api/users/villagers${query}`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  approveVillager: async (userId: number): Promise<any> => {
+    const res = await fetch(`${API_BASE}/api/users/villagers/${userId}/approve`, {
+      method: "PUT",
+      headers: getHeaders(true),
+      body: JSON.stringify({ is_approved: true }),
+    });
+    return handleResponse<any>(res);
+  },
+
+  rejectVillager: async (userId: number): Promise<void> => {
+    const res = await fetch(`${API_BASE}/api/users/villagers/${userId}`, {
+      method: "DELETE",
+      headers: getHeaders(true),
+    });
+    return handleResponse<void>(res);
+  },
+
   getMe: async () => {
     const res = await fetch(`${API_BASE}/auth/me`, {
       headers: getHeaders(true),
@@ -244,30 +270,6 @@ export const api = {
     return handleResponse<any>(res);
   },
 
-  // --- VILLAGERS & OFFICERS MANAGEMENT ---
-  getVillagers: async (status?: string) => {
-    const query = status ? `?status=${status}` : "";
-    const res = await fetch(`${API_BASE}/api/users/villagers${query}`, {
-      headers: getHeaders(true),
-    });
-    return handleResponse<any[]>(res);
-  },
-
-  approveVillager: async (id: number) => {
-    const res = await fetch(`${API_BASE}/api/users/villagers/${id}/approve`, {
-      method: "PUT",
-      headers: getHeaders(true),
-    });
-    return handleResponse<any>(res);
-  },
-
-  rejectVillager: async (id: number) => {
-    const res = await fetch(`${API_BASE}/api/users/villagers/${id}/reject`, {
-      method: "PUT",
-      headers: getHeaders(true),
-    });
-    return handleResponse<any>(res);
-  },
 
   getOfficers: async (role?: string) => {
     const query = role ? `?role=${encodeURIComponent(role)}` : "";

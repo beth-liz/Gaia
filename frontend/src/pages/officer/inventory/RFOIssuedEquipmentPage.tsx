@@ -57,7 +57,10 @@ export const RFOIssuedEquipmentPage: React.FC = () => {
           "CONSUMABLES",
         ].includes(cat);
         const isConsumableFlag = a.station_inventory?.consumable === true;
-        const isIssuedStatus = ["ISSUED", "ACTIVE", "ASSIGNED"].includes((a.status || "").toUpperCase());
+        const isIssuedStatus = [
+          "ISSUED", "ACTIVE", "ASSIGNED", "PENDING_RETURN", "RETURN_REQUESTED",
+          "PENDING_VERIFICATION", "PENDING HEAD OFFICER VERIFICATION", "PENDING INSPECTION"
+        ].includes((a.status || "").toUpperCase());
 
         return !isConsumableCat && !isConsumableFlag && isIssuedStatus;
       });
@@ -301,9 +304,15 @@ export const RFOIssuedEquipmentPage: React.FC = () => {
                   </td>
                   {/* Center Aligned Status Single-Line Badge */}
                   <td className="px-3 py-3.5 text-center align-middle">
-                    <span className="px-3 py-1 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-xl text-[10px] font-black inline-flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Issued
-                    </span>
+                    {["PENDING_RETURN", "RETURN_REQUESTED", "PENDING_VERIFICATION", "PENDING HEAD OFFICER VERIFICATION", "PENDING INSPECTION"].includes((asgn.status || "").toUpperCase()) ? (
+                      <span className="px-2.5 py-1 bg-amber-50/80 text-amber-900 border border-amber-300 rounded-xl text-[10px] font-black inline-flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Pending Return
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-xl text-[10px] font-black inline-flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Issued
+                      </span>
+                    )}
                   </td>
                   {/* Center Aligned Actions Single Line */}
                   <td className="px-4 py-3.5 text-center align-middle">
@@ -320,13 +329,23 @@ export const RFOIssuedEquipmentPage: React.FC = () => {
                       </button>
 
                       {/* STYLED IN DISTINCT PROFESSIONAL PURPLE (#7C3AED / bg-purple-600) */}
-                      <button
-                        onClick={() => handleOpenRequestReturnModal(asgn)}
-                        className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-black text-[10px] rounded-lg shadow-xs transition-all flex items-center gap-1 cursor-pointer border border-purple-700"
-                        title="Request Return"
-                      >
-                        <RotateCcw className="w-3 h-3 text-white" /> Request Return
-                      </button>
+                      {["PENDING_RETURN", "RETURN_REQUESTED", "PENDING_VERIFICATION", "PENDING HEAD OFFICER VERIFICATION", "PENDING INSPECTION"].includes((asgn.status || "").toUpperCase()) ? (
+                        <button
+                          disabled
+                          className="px-2.5 py-1 bg-gray-100 border border-gray-300 text-gray-400 font-extrabold text-[10px] rounded-lg cursor-not-allowed flex items-center gap-1 opacity-70"
+                          title="Return already requested"
+                        >
+                          <Clock className="w-3 h-3 text-gray-400" /> Return Requested
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenRequestReturnModal(asgn)}
+                          className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-black text-[10px] rounded-lg shadow-xs transition-all flex items-center gap-1 cursor-pointer border border-purple-700"
+                          title="Request Return"
+                        >
+                          <RotateCcw className="w-3 h-3 text-white" /> Request Return
+                        </button>
+                      )}
 
                       <button
                         onClick={() => {

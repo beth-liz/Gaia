@@ -44,6 +44,7 @@ export const GuardReturnEquipmentPage: React.FC = () => {
   const [remarks, setRemarks] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [returnDestination, setReturnDestination] = useState("STATION");
 
   const fetchData = async () => {
     setLoading(true);
@@ -119,6 +120,7 @@ export const GuardReturnEquipmentPage: React.FC = () => {
     setRemarks("");
     setPhoto(null);
     setPhotoPreview(null);
+    setReturnDestination("STATION");
     setShowFormModal(true);
   };
 
@@ -155,6 +157,7 @@ export const GuardReturnEquipmentPage: React.FC = () => {
         reason,
         remarks,
         photos: photoPreview || undefined,
+        return_destination: returnDestination,
       });
 
       setSuccessMsg(`Return request for "${selectedItem.item_name}" submitted successfully!`);
@@ -636,6 +639,21 @@ export const GuardReturnEquipmentPage: React.FC = () => {
                   <option value="Damaged">Damaged</option>
                   <option value="Lost">Lost</option>
                   <option value="Other">Other</option>
+                </select>
+              </div>
+
+              {/* Return Destination */}
+              <div>
+                <label className="block text-[10px] font-black text-emerald-950 uppercase tracking-wider mb-1">
+                  Return Destination *
+                </label>
+                <select
+                  value={returnDestination}
+                  onChange={(e) => setReturnDestination(e.target.value)}
+                  className="w-full px-3 py-2 border border-emerald-950/15 rounded-xl bg-emerald-950/5 text-xs font-extrabold text-emerald-950 outline-none appearance-none cursor-pointer"
+                >
+                  <option value="STATION">Station Inventory</option>
+                  <option value="HQ">Central Headquarters Inventory</option>
                 </select>
               </div>
 

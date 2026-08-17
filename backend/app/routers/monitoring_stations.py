@@ -44,6 +44,12 @@ def get_monitoring_stations(
             User.role.in_(["Range Forest Officer", "Forest Guard"])
         ).count()
 
+        head_officer_name = None
+        if st.head_officer_id:
+            head_user = db.query(User).filter(User.id == st.head_officer_id).first()
+            if head_user:
+                head_officer_name = head_user.full_name
+
         res.append(MonitoringStationResponse(
             id=st.id,
             station_name=st.station_name,
@@ -58,6 +64,8 @@ def get_monitoring_stations(
             district_name=district_name,
             state_name=state_name,
             officer_count=officer_count,
+            head_officer_id=st.head_officer_id,
+            head_officer_name=head_officer_name,
             created_at=st.created_at,
             updated_at=st.updated_at
         ))
@@ -115,6 +123,8 @@ def create_monitoring_station(
         district_name=district.district_name,
         state_name=state_obj.state_name if state_obj else "Unknown",
         officer_count=0,
+        head_officer_id=None,
+        head_officer_name=None,
         created_at=station.created_at,
         updated_at=station.updated_at
     )
@@ -182,6 +192,12 @@ def update_monitoring_station(
         User.role.in_(["Range Forest Officer", "Forest Guard"])
     ).count()
 
+    head_officer_name = None
+    if station.head_officer_id:
+        head_user = db.query(User).filter(User.id == station.head_officer_id).first()
+        if head_user:
+            head_officer_name = head_user.full_name
+
     return MonitoringStationResponse(
         id=station.id,
         station_name=station.station_name,
@@ -196,6 +212,8 @@ def update_monitoring_station(
         district_name=district_name,
         state_name=state_name,
         officer_count=officer_count,
+        head_officer_id=station.head_officer_id,
+        head_officer_name=head_officer_name,
         created_at=station.created_at,
         updated_at=station.updated_at
     )

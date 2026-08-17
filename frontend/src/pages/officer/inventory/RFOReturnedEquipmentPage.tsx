@@ -24,7 +24,7 @@ export const RFOReturnedEquipmentPage: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const data = await inventoryService.getStationAssignments();
+      const data = await inventoryService.getStationAssignments(undefined, "RETURNED");
       const returnedList = (data || []).filter((a: any) => {
         const cat = (a.category || "").toUpperCase();
         const isConsumableCat = [

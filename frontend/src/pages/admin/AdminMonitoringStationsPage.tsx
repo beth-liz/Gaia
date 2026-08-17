@@ -269,12 +269,12 @@ export const AdminMonitoringStationsPage: React.FC = () => {
       sortable: true,
       cell: (st) => (
         <span
-          className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold ${
+          className={`px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold inline-block text-center whitespace-normal break-words max-w-[130px] leading-tight border ${
             st.status === "Active"
-              ? "bg-emerald-100 text-emerald-900"
+              ? "bg-emerald-100 text-emerald-900 border-emerald-200"
               : st.status === "No Head Officer Assigned"
-              ? "bg-red-100 text-red-800 border border-red-300 font-black"
-              : "bg-amber-100 text-amber-900"
+              ? "bg-red-100 text-red-800 border-red-200 font-black"
+              : "bg-amber-100 text-amber-900 border-amber-200"
           }`}
         >
           {st.status}

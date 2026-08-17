@@ -62,7 +62,7 @@ export const RFOVerifyReturnsPage: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const data = await inventoryService.getStationAssignments();
+      const data = await inventoryService.getStationAssignments(undefined, "PENDING");
       const reusablePending = (data || []).filter((a: any) => {
         const cat = (a.category || "").toUpperCase();
         const isConsumableCat = [
@@ -139,9 +139,8 @@ export const RFOVerifyReturnsPage: React.FC = () => {
   const hasGuardSubmittedReturn = (asgn: EquipmentAssignment) => {
     const statusUpper = (asgn.status || "").toUpperCase();
     return (
-      statusUpper === "PENDING_RETURN" ||
-      statusUpper === "RETURN_REQUESTED" ||
-      Boolean(asgn.actual_return || (asgn as any).returned_date)
+      ["PENDING_RETURN", "PENDING HEAD OFFICER VERIFICATION", "PENDING INSPECTION"].includes(statusUpper) ||
+      (statusUpper !== "RETURN_REQUESTED" && Boolean(asgn.actual_return || (asgn as any).returned_date))
     );
   };
 
@@ -171,18 +170,26 @@ export const RFOVerifyReturnsPage: React.FC = () => {
     setSubmitting(true);
     try {
       if (verificationOption === "GOOD") {
-        await inventoryService.returnEquipment(selectedAsgn.id, remarks || "Verified Good Condition");
+        await inventoryService.verifyReturnOptions(selectedAsgn.id, {
+          condition: "Good",
+          action: "ACCEPT",
+          remarks: remarks || "Verified Good Condition",
+        });
         showToast("Return verified successfully. Available stock updated.", "success");
       } else if (verificationOption === "MINOR_DAMAGE") {
-        await inventoryService.returnEquipment(selectedAsgn.id, `Needs Maintenance: ${remarks || "Minor Wear & Tear"}`);
-        showToast("Equipment returned and marked for maintenance.", "success");
-      } else if (verificationOption === "MAJOR_DAMAGE") {
-        await inventoryService.reportDamage(selectedAsgn.id, {
-          damage_type: "Major Damage",
-          damage_severity: "Major",
-          damage_description: remarks || "Beyond immediate field repair",
+        await inventoryService.verifyReturnOptions(selectedAsgn.id, {
+          condition: "Minor Damage",
+          action: "ACCEPT",
+          remarks: remarks || "Minor Wear & Tear",
         });
-        showToast("Equipment marked as damaged. Damaged stock quantity increased.", "success");
+        showToast("Equipment returned and marked as minor damage (available).", "success");
+      } else if (verificationOption === "MAJOR_DAMAGE") {
+        await inventoryService.verifyReturnOptions(selectedAsgn.id, {
+          condition: "Major Damage",
+          action: "REPAIR",
+          remarks: remarks || "Beyond immediate field repair",
+        });
+        showToast("Equipment marked as major damage (isolated).", "success");
       } else if (verificationOption === "LOST") {
         await inventoryService.verifyReturnOptions(selectedAsgn.id, {
           condition: "Lost",

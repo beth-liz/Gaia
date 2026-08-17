@@ -1,11 +1,19 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
+import re
 
 
 class DistrictBase(BaseModel):
     district_name: str
     state_id: int
+
+    @field_validator("district_name")
+    @classmethod
+    def validate_district_name(cls, value: str) -> str:
+        if not re.match(r"^[a-zA-Z\s]+$", value):
+            raise ValueError("District name can contain only letters and spaces.")
+        return value
 
 
 class DistrictCreate(DistrictBase):

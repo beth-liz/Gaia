@@ -334,6 +334,7 @@ class EquipmentReturnCreate(BaseModel):
     reason: str = Field("Normal Return", description="Normal Return, Damaged, Lost, Consumed")
     remarks: Optional[str] = None
     photos: Optional[str] = None
+    return_destination: Optional[str] = "STATION"
 
 
 class ReturnEquipmentRequest(BaseModel):
@@ -366,6 +367,7 @@ class EquipmentReturnResponse(BaseModel):
     reason: str
     remarks: Optional[str] = None
     photos: Optional[str] = None
+    return_destination: Optional[str] = None
     status: str
     submitted_date: datetime
     verified_by: Optional[int] = None
@@ -456,6 +458,9 @@ class EquipmentLossReportResponse(BaseModel):
     processed_at: Optional[datetime] = None
     processed_by: Optional[int] = None
     processor_name: Optional[str] = None
+    guard_name: Optional[str] = None
+    station_name: Optional[str] = None
+    category_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -566,6 +571,8 @@ class DamagedEquipmentResponse(BaseModel):
     remarks: Optional[str] = None
     reported_at: datetime
     repaired_at: Optional[datetime] = None
+    guard_name: Optional[str] = None
+    category_name: Optional[str] = None
 
     class Config:
         from_attributes = True
