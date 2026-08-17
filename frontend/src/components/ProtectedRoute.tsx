@@ -14,7 +14,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   allowedRoles,
   requireApproval = true,
 }) => {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, hasNetworkError, refreshUser } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -22,6 +22,28 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       <div className="min-h-screen bg-[#fdfbf7] flex flex-col items-center justify-center p-4">
         <Loader2 className="w-10 h-10 text-emerald-800 animate-spin mb-3" />
         <p className="text-emerald-950 font-medium tracking-wide">Securing Gaia Session...</p>
+      </div>
+    );
+  }
+
+  if (hasNetworkError) {
+    return (
+      <div className="min-h-screen bg-[#fdfbf7] flex flex-col items-center justify-center p-6 text-center">
+        <div className="p-8 max-w-md bg-white rounded-3xl border border-emerald-950/10 shadow-xl space-y-4">
+          <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto border border-amber-200">
+            <span className="text-amber-600 text-3xl font-black">!</span>
+          </div>
+          <h3 className="text-lg font-black text-emerald-950">Connection Interrupted</h3>
+          <p className="text-xs font-semibold text-gray-500 leading-relaxed">
+            Gaia could not reach the secure validation server. Your session is active, but a network or server error is preventing authentication checks.
+          </p>
+          <button
+            onClick={() => refreshUser()}
+            className="w-full py-3 bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer"
+          >
+            Retry Connection
+          </button>
+        </div>
       </div>
     );
   }
@@ -46,7 +68,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
   }
 
-  return <>{children}</>;
+  return (
+    <React.Fragment key={user ? `${user.id}-${user.role}` : "unauthenticated"}>
+      {children}
+    </React.Fragment>
+  );
 };
 
 // Route wrapper to prevent logged-in users from visiting Login / Register again

@@ -326,7 +326,7 @@ export const RFOIssueEquipmentPage: React.FC = () => {
           guard_id: selectedGuard.id,
           station_inventory_id: item.station_inventory_id,
           quantity: item.quantity,
-          assignment_type: missionName || "Field Patrol Operation",
+          assignment_type: "MISSION",
           purpose: item.purpose || missionName || "Field Patrol Operation",
           item_usage_type: item.usage_type === "Permanent" ? "CONSUMABLE" : "RETURNABLE",
           expected_return_date: item.usage_type === "Temporary" ? item.expected_return_date : undefined,
@@ -351,6 +351,7 @@ export const RFOIssueEquipmentPage: React.FC = () => {
       fetchData();
     } catch (err: any) {
       setError(err.message || "Failed to complete equipment issuance.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setSubmitting(false);
     }
@@ -1142,6 +1143,15 @@ export const RFOIssueEquipmentPage: React.FC = () => {
           </div>
 
           {/* FINAL SUBMIT BUTTON */}
+          {error && (
+            <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center justify-between shadow-xs">
+              <span className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                {error}
+              </span>
+              <button onClick={() => setError(null)} className="font-bold text-lg cursor-pointer">×</button>
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <button
               onClick={() => setCurrentStep(3)}

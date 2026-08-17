@@ -48,11 +48,13 @@ export const AdminStationInventoryOverviewPage: React.FC = () => {
   const [states, setStates] = useState<{ id: number; state_name: string }[]>([]);
   const [districts, setDistricts] = useState<{ id: number; district_name: string; state_id?: number }[]>([]);
   const [stations, setStations] = useState<{ id: number; station_name: string; district_id?: number }[]>([]);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
 
   // Selected Filters
   const [selectedStateId, setSelectedStateId] = useState<number>(0);
   const [selectedDistrictId, setSelectedDistrictId] = useState<number>(0);
   const [selectedStationId, setSelectedStationId] = useState<number>(0);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [viewMode, setViewMode] = useState<"cards" | "table">("table");
@@ -78,7 +80,8 @@ export const AdminStationInventoryOverviewPage: React.FC = () => {
         state_id: selectedStateId || undefined,
         district_id: selectedDistrictId || undefined,
         station_id: selectedStationId || undefined,
-        search: searchTerm || undefined,
+        category_id: selectedCategoryId || undefined,
+        search: searchTerm.trim() ? searchTerm : undefined,
         page: pageToFetch,
         page_size: 20,
       });
@@ -94,14 +97,16 @@ export const AdminStationInventoryOverviewPage: React.FC = () => {
   // Load Location Hierarchy Options
   const fetchHierarchy = async () => {
     try {
-      const [stList, distList, stationList] = await Promise.all([
+      const [stList, distList, stationList, catList] = await Promise.all([
         api.getStates().catch(() => []),
         api.getDistricts().catch(() => []),
         api.getMonitoringStations().catch(() => []),
+        inventoryService.getCategories().catch(() => []),
       ]);
       setStates(stList);
       setDistricts(distList);
       setStations(stationList.map((s: any) => ({ id: s.id, station_name: s.station_name, district_id: s.district_id })));
+      setCategories(catList);
     } catch {
       // Graceful fallback
     }
@@ -114,7 +119,7 @@ export const AdminStationInventoryOverviewPage: React.FC = () => {
 
   useEffect(() => {
     fetchPaginatedItems(1);
-  }, [selectedStateId, selectedDistrictId, selectedStationId, searchTerm]);
+  }, [selectedStateId, selectedDistrictId, selectedStationId, selectedCategoryId, searchTerm]);
 
   const handleRefreshAll = () => {
     setError(null);
@@ -498,6 +503,35 @@ export const AdminStationInventoryOverviewPage: React.FC = () => {
               </option>
             ))}
           </select>
+
+          {/* Category Dropdown */}
+          <select
+            value={selectedCategoryId}
+            onChange={(e) => setSelectedCategoryId(Number(e.target.value))}
+            className="px-3 py-2 text-xs font-extrabold rounded-xl border border-emerald-950/10 bg-emerald-950/5 text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-800"
+          >
+            <option value={0}>All Categories</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
+          {(selectedStateId !== 0 || selectedDistrictId !== 0 || selectedStationId !== 0 || selectedCategoryId !== 0 || searchTerm !== "") && (
+            <button
+              onClick={() => {
+                setSelectedStateId(0);
+                setSelectedDistrictId(0);
+                setSelectedStationId(0);
+                setSelectedCategoryId(0);
+                setSearchTerm("");
+              }}
+              className="px-3 py-2 text-xs font-extrabold rounded-xl border border-emerald-950/10 bg-white hover:bg-emerald-50 text-emerald-900 transition-all"
+            >
+              Reset Filters
+            </button>
+          )}
         </div>
 
         {/* View Mode Toggle & Refresh Button */}

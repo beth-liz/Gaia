@@ -19,31 +19,94 @@ const RegisterPage: React.FC = () => {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  interface StateObj {
+    id: number;
+    state_name: string;
+  }
+
+  interface DistrictObj {
+    id: number;
+    district_name: string;
+    state_id: number;
+  }
+
   const [villageId, setVillageId] = useState<number | "">("");
   const [showPassword, setShowPassword] = useState(false);
 
+  const [states, setStates] = useState<StateObj[]>([]);
+  const [districts, setDistricts] = useState<DistrictObj[]>([]);
   const [villages, setVillages] = useState<Village[]>([]);
-  const [isLoadingVillages, setIsLoadingVillages] = useState(true);
+
+  const [selectedStateId, setSelectedStateId] = useState<number | "">("");
+  const [selectedDistrictId, setSelectedDistrictId] = useState<number | "">("");
+
+  const [isLoadingStates, setIsLoadingStates] = useState(false);
+  const [isLoadingDistricts, setIsLoadingDistricts] = useState(false);
+  const [isLoadingVillages, setIsLoadingVillages] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchVillagesList = async () => {
+    const fetchStatesList = async () => {
+      setIsLoadingStates(true);
       try {
-        const data = await api.getVillages();
+        const data = await api.getStates();
+        setStates(data);
+      } catch (err) {
+        console.error("Failed to load states", err);
+      } finally {
+        setIsLoadingStates(false);
+      }
+    };
+    fetchStatesList();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedStateId) {
+      setDistricts([]);
+      setSelectedDistrictId("");
+      setVillages([]);
+      setVillageId("");
+      return;
+    }
+    const fetchDistrictsList = async () => {
+      setIsLoadingDistricts(true);
+      try {
+        const data = await api.getDistricts(selectedStateId);
+        setDistricts(data);
+        setSelectedDistrictId("");
+        setVillages([]);
+        setVillageId("");
+      } catch (err) {
+        console.error("Failed to load districts", err);
+      } finally {
+        setIsLoadingDistricts(false);
+      }
+    };
+    fetchDistrictsList();
+  }, [selectedStateId]);
+
+  useEffect(() => {
+    if (!selectedDistrictId) {
+      setVillages([]);
+      setVillageId("");
+      return;
+    }
+    const fetchVillagesList = async () => {
+      setIsLoadingVillages(true);
+      try {
+        const data = await api.getVillages(selectedDistrictId);
         setVillages(data);
-        if (data.length > 0) {
-          setVillageId(data[0].id);
-        }
-      } catch (err: any) {
+        setVillageId("");
+      } catch (err) {
         console.error("Failed to load villages", err);
       } finally {
         setIsLoadingVillages(false);
       }
     };
     fetchVillagesList();
-  }, []);
+  }, [selectedDistrictId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,8 +117,18 @@ const RegisterPage: React.FC = () => {
       return;
     }
 
+    if (!selectedStateId) {
+      setError("Please select your state.");
+      return;
+    }
+
+    if (!selectedDistrictId) {
+      setError("Please select your district.");
+      return;
+    }
+
     if (!villageId) {
-      setError("Please select your village from the dropdown.");
+      setError("Please select your village.");
       return;
     }
 
@@ -141,6 +214,7 @@ const RegisterPage: React.FC = () => {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="e.g. Ramesh Varma"
+                  autoComplete="new-name"
                   className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm placeholder:text-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all"
                 />
               </div>
@@ -159,6 +233,7 @@ const RegisterPage: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="ramesh@gmail.com"
+                    autoComplete="new-email"
                     className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm placeholder:text-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all"
                   />
                 </div>
@@ -176,35 +251,89 @@ const RegisterPage: React.FC = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="9876543210"
+                    autoComplete="new-phone"
                     className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm placeholder:text-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all"
                   />
                 </div>
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-emerald-950 uppercase tracking-wider mb-1.5">
-                Village (Loaded from Database)
-              </label>
-              <div className="relative">
-                <MapPin className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
-                <select
-                  required
-                  value={villageId}
-                  onChange={(e) => setVillageId(Number(e.target.value))}
-                  disabled={isLoadingVillages}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all appearance-none cursor-pointer"
-                >
-                  {isLoadingVillages ? (
-                    <option value="">Loading Villages from DB...</option>
-                  ) : (
-                    villages.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.village_name} ({v.district}, {v.state})
-                      </option>
-                    ))
-                  )}
-                </select>
+            {/* Location Selection: State, District, Village */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-emerald-950 uppercase tracking-wider mb-1.5">
+                  State
+                </label>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
+                  <select
+                    required
+                    value={selectedStateId}
+                    onChange={(e) => setSelectedStateId(e.target.value === "" ? "" : Number(e.target.value))}
+                    disabled={isLoadingStates}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="">Select State</option>
+                    {!isLoadingStates &&
+                      states.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.state_name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-emerald-950 uppercase tracking-wider mb-1.5">
+                  District
+                </label>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
+                  <select
+                    required
+                    value={selectedDistrictId}
+                    onChange={(e) => setSelectedDistrictId(e.target.value === "" ? "" : Number(e.target.value))}
+                    disabled={isLoadingDistricts || !selectedStateId}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all appearance-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {!selectedStateId ? "Select State first" : isLoadingDistricts ? "Loading Districts..." : districts.length === 0 ? "No districts available" : "Select District"}
+                    </option>
+                    {!isLoadingDistricts &&
+                      districts.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.district_name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-emerald-950 uppercase tracking-wider mb-1.5">
+                  Village
+                </label>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
+                  <select
+                    required
+                    value={villageId}
+                    onChange={(e) => setVillageId(e.target.value === "" ? "" : Number(e.target.value))}
+                    disabled={isLoadingVillages || !selectedDistrictId}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all appearance-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {!selectedDistrictId ? "Select District first" : isLoadingVillages ? "Loading Villages..." : villages.length === 0 ? "No villages available" : "Select Village"}
+                    </option>
+                    {!isLoadingVillages &&
+                      villages.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.village_name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -221,6 +350,7 @@ const RegisterPage: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
+                    autoComplete="new-password"
                     className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm placeholder:text-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all"
                   />
                 </div>
@@ -238,6 +368,7 @@ const RegisterPage: React.FC = () => {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
+                    autoComplete="new-password"
                     className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-emerald-50/50 border border-emerald-900/15 text-emerald-950 text-sm placeholder:text-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all"
                   />
                   <button

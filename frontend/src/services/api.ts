@@ -22,6 +22,11 @@ async function handleResponse<T>(response: Response): Promise<T> {
     } catch {
       errorMsg = `Server error (${response.status})`;
     }
+    if (response.status === 401) {
+      localStorage.removeItem("gaia_token");
+      localStorage.removeItem("gaia_user");
+      window.dispatchEvent(new CustomEvent("gaia_unauthorized"));
+    }
     throw new Error(errorMsg);
   }
   if (response.status === 204) {
@@ -87,9 +92,9 @@ export const api = {
     return handleResponse<any>(res);
   },
 
-  // --- VILLAGES & DESIGNATIONS ---
-  getVillages: async () => {
-    const res = await fetch(`${API_BASE}/api/villages`, {
+  getVillages: async (districtId?: number) => {
+    const query = districtId ? `?district_id=${districtId}` : "";
+    const res = await fetch(`${API_BASE}/api/villages${query}`, {
       headers: getHeaders(false),
     });
     return handleResponse<any[]>(res);

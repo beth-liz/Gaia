@@ -2743,6 +2743,7 @@ def get_admin_paginated_station_inventory(
     state_id: Optional[int] = None,
     district_id: Optional[int] = None,
     station_id: Optional[int] = None,
+    category_id: Optional[int] = None,
     search: Optional[str] = None,
     page: int = 1,
     page_size: int = 20
@@ -2755,6 +2756,9 @@ def get_admin_paginated_station_inventory(
         query = query.filter(MonitoringStation.district_id == district_id)
     elif state_id and state_id != 0:
         query = query.join(District, MonitoringStation.district_id == District.id).filter(District.state_id == state_id)
+
+    if category_id and category_id != 0:
+        query = query.filter(InventoryMaster.category_id == category_id)
 
     if search and search.strip():
         term = f"%{search.strip()}%"

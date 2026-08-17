@@ -214,6 +214,7 @@ def get_admin_paginated_station_inventory(
     state_id: Optional[int] = None,
     district_id: Optional[int] = None,
     station_id: Optional[int] = None,
+    category_id: Optional[int] = None,
     search: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
@@ -225,6 +226,7 @@ def get_admin_paginated_station_inventory(
         state_id=state_id,
         district_id=district_id,
         station_id=station_id,
+        category_id=category_id,
         search=search,
         page=page,
         page_size=page_size

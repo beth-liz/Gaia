@@ -31,6 +31,11 @@ async function handleResponse<T>(response: Response): Promise<T> {
     } catch {
       errorMsg = `Server error (${response.status})`;
     }
+    if (response.status === 401) {
+      localStorage.removeItem("gaia_token");
+      localStorage.removeItem("gaia_user");
+      window.dispatchEvent(new CustomEvent("gaia_unauthorized"));
+    }
     throw new Error(errorMsg);
   }
   return response.json();
@@ -160,6 +165,7 @@ export const inventoryService = {
     state_id?: number;
     district_id?: number;
     station_id?: number;
+    category_id?: number;
     search?: string;
     page?: number;
     page_size?: number;
@@ -168,6 +174,7 @@ export const inventoryService = {
     if (params?.state_id && params.state_id !== 0) query.append("state_id", params.state_id.toString());
     if (params?.district_id && params.district_id !== 0) query.append("district_id", params.district_id.toString());
     if (params?.station_id && params.station_id !== 0) query.append("station_id", params.station_id.toString());
+    if (params?.category_id && params.category_id !== 0) query.append("category_id", params.category_id.toString());
     if (params?.search) query.append("search", params.search.trim());
     if (params?.page) query.append("page", params.page.toString());
     if (params?.page_size) query.append("page_size", params.page_size.toString());

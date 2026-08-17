@@ -28,6 +28,7 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hasNetworkError: boolean;
   login: (token: string, userData: User) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -40,13 +41,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem("gaia_token"));
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [hasNetworkError, setHasNetworkError] = useState<boolean>(false);
 
   const fetchUser = async () => {
+    setHasNetworkError(false);
     try {
       const me = await api.getMe();
       setUser(me);
+      localStorage.setItem("gaia_user", JSON.stringify(me));
     } catch {
-      logout();
+      if (!localStorage.getItem("gaia_token")) {
+        logout();
+      } else {
+        setHasNetworkError(true);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -60,16 +68,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [token]);
 
+  // Synchronize logouts across multiple tabs and handle bfcache / unauthorized events
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "gaia_token" && !e.newValue) {
+        // Token was deleted by another tab logging out
+        setToken(null);
+        setUser(null);
+        setHasNetworkError(false);
+      }
+    };
+
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        // Page restored from browser back-forward cache: reload/bootstrap to verify auth
+        window.location.reload();
+      }
+    };
+
+    const handleUnauthorized = () => {
+      logout();
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("gaia_unauthorized", handleUnauthorized);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("gaia_unauthorized", handleUnauthorized);
+    };
+  }, []);
+
   const login = (newToken: string, userData: User) => {
     localStorage.setItem("gaia_token", newToken);
+    localStorage.setItem("gaia_user", JSON.stringify(userData));
     setToken(newToken);
     setUser(userData);
+    setHasNetworkError(false);
   };
 
   const logout = () => {
     localStorage.removeItem("gaia_token");
+    localStorage.removeItem("gaia_user");
     setToken(null);
     setUser(null);
+    setHasNetworkError(false);
   };
 
   const refreshUser = async () => {
@@ -79,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateUser = (userData: User) => {
+    localStorage.setItem("gaia_user", JSON.stringify(userData));
     setUser(userData);
   };
 
@@ -89,6 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         isAuthenticated: !!token,
         isLoading,
+        hasNetworkError,
         login,
         logout,
         refreshUser,

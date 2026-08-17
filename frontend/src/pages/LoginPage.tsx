@@ -116,7 +116,7 @@ const LoginPage: React.FC = () => {
                 <input
                   type="email"
                   required
-                  autoComplete="username"
+                  autoComplete="off"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="rfo@gaia.com or admin@gaia.com"
@@ -134,7 +134,7 @@ const LoginPage: React.FC = () => {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
