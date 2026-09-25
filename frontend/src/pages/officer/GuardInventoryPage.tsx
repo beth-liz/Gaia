@@ -1,3 +1,4 @@
+import { useLocation } from "react-router-dom";
 import React, { useEffect, useState } from "react";
 import { inventoryService } from "@/services/inventoryService";
 import type {
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 
 export const GuardInventoryPage: React.FC = () => {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<"assigned" | "requests">("assigned");
   const [, setLoading] = useState<boolean>(true);
   const [, setError] = useState<string | null>(null);
@@ -32,11 +34,17 @@ export const GuardInventoryPage: React.FC = () => {
   const [showDamageModal, setShowDamageModal] = useState<boolean>(false);
   const [selectedAssignment, setSelectedAssignment] = useState<EquipmentAssignment | null>(null);
 
+  // Extract optional incidentId from URL
+  const searchParams = new URLSearchParams(location.search);
+  const incidentIdParam = searchParams.get("incident_id");
+  const incidentId = incidentIdParam ? parseInt(incidentIdParam) : undefined;
+
   // Request Form
   const [requestForm, setRequestForm] = useState({
     station_inventory_id: 0,
     quantity: 1,
-    purpose: "",
+    purpose: incidentId ? `Mission INC-${incidentId}` : "",
+    incident_id: incidentId,
   });
 
   // Damage Form
@@ -77,7 +85,7 @@ export const GuardInventoryPage: React.FC = () => {
     try {
       await inventoryService.requestEquipment(requestForm);
       setShowRequestModal(false);
-      setRequestForm({ station_inventory_id: stationInventory[0]?.id || 0, quantity: 1, purpose: "" });
+      setRequestForm({ station_inventory_id: stationInventory[0]?.id || 0, quantity: 1, purpose: "", incident_id: undefined });
       fetchData();
     } catch (err: any) {
       alert(err.message || "Failed to submit equipment request");

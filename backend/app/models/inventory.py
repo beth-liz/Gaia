@@ -132,7 +132,8 @@ class EquipmentRequest(Base):
     guard_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     station_inventory_id = Column(Integer, ForeignKey("station_inventory.id", ondelete="CASCADE"), nullable=False, index=True)
     inventory_master_id = Column(Integer, ForeignKey("inventory_master.id", ondelete="CASCADE"), nullable=True)
-    request_type = Column(String(30), default="GUARD_REQUEST", nullable=False)  # GUARD_REQUEST, HQ_STOCK_REQUEST
+    incident_id = Column(Integer, ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True, index=True)
+    request_type = Column(String(30), default="GUARD_REQUEST", nullable=False)
     quantity = Column(Integer, nullable=False)
     purpose = Column(Text, nullable=False)
     priority = Column(String(20), default="MEDIUM", nullable=False)  # LOW, MEDIUM, HIGH

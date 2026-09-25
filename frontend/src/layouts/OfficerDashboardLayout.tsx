@@ -1,7 +1,6 @@
 import React from "react";
 import { BaseDashboardLayout } from "./BaseDashboardLayout";
 import type { NavItem } from "./BaseDashboardLayout";
-import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard,
   Radio,
@@ -18,10 +17,14 @@ import {
   RotateCcw,
   History,
   Clock,
+  Globe
 } from "lucide-react";
 
 const rfoNavItems: NavItem[] = [
   { label: "Dashboard", path: "/officer/dashboard", icon: LayoutDashboard },
+  { label: "GIS Intelligence", path: "/officer/gis", icon: Globe, sectionHeader: "Spatial Operations" },
+  { label: "Report Incident", path: "/officer/report-incident", icon: FileCheck },
+  { label: "My Reports", path: "/officer/my-reports", icon: FileCheck },
   { label: "Incidents", path: "/officer/incidents", icon: Radio, sectionHeader: "Field Operations" },
   { label: "Forest Guards", path: "/officer/guards", icon: Users },
   { label: "Station Overview", path: "/officer/station", icon: Building2 },
@@ -49,25 +52,12 @@ const rfoNavItems: NavItem[] = [
   { label: "Profile & Settings", path: "/officer/profile", icon: User },
 ];
 
-const guardNavItems: NavItem[] = [
-  { label: "Dashboard", path: "/guard/dashboard", icon: LayoutDashboard },
-  { label: "My Assignments", path: "/guard/assignments", icon: FileCheck, sectionHeader: "Field Operations" },
-  { label: "My Equipment & Kits", path: "/guard/inventory/my-equipment", icon: ShieldCheck, sectionHeader: "Equipment Management" },
-  { label: "Return Equipment", path: "/guard/inventory/return-equipment", icon: RotateCcw },
-  { label: "Completed Reports", path: "/guard/completed", icon: CheckCircle2, sectionHeader: "Reporting" },
-  { label: "Notifications", path: "/guard/notifications", icon: Bell, sectionHeader: "System" },
-  { label: "Profile & Settings", path: "/guard/profile", icon: User },
-];
-
 const OfficerDashboardLayout: React.FC = () => {
-  const { user } = useAuth();
-  const isGuard = user?.role === "Forest Guard";
-
   return (
     <BaseDashboardLayout
-      roleTitle={isGuard ? "Forest Guard Command" : "Range Officer Command Center"}
-      navItems={isGuard ? guardNavItems : rfoNavItems}
-      profilePath={isGuard ? "/guard/profile" : "/officer/profile"}
+      roleTitle="Range Officer Command Center"
+      navItems={rfoNavItems}
+      profilePath="/officer/profile"
     />
   );
 };

@@ -46,6 +46,15 @@ export const api = {
     return handleResponse<any>(res);
   },
 
+  googleSignIn: async (credential: string) => {
+    const res = await fetch(`${API_BASE}/auth/google`, {
+      method: "POST",
+      headers: getHeaders(false),
+      body: JSON.stringify({ credential }),
+    });
+    return handleResponse<any>(res);
+  },
+
   registerVillager: async (data: any) => {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: "POST",
@@ -397,6 +406,41 @@ export const api = {
     return handleResponse<any>(res);
   },
 
+  createPublicIncident: async (data: any) => {
+    const res = await fetch(`${API_BASE}/api/incidents/public`, {
+      method: "POST",
+      headers: getHeaders(false),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  createGuardIncident: async (data: any) => {
+    const res = await fetch(`${API_BASE}/api/incidents/guard`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  getRoutingPreview: async (params: {
+    lat?: number | null;
+    lng?: number | null;
+    village_name?: string;
+    district_name?: string;
+  }): Promise<{ station_id: number | null; station_name: string | null; station_phone: string | null; district_name: string | null; resolved: boolean }> => {
+    const q = new URLSearchParams();
+    if (params.lat != null) q.append("lat", String(params.lat));
+    if (params.lng != null) q.append("lng", String(params.lng));
+    if (params.village_name) q.append("village_name", params.village_name);
+    if (params.district_name) q.append("district_name", params.district_name);
+    const res = await fetch(`${API_BASE}/api/incidents/routing-preview?${q.toString()}`, {
+      headers: getHeaders(false), // No auth required
+    });
+    return handleResponse<any>(res);
+  },
+
   getIncidents: async (params?: {
     status?: string;
     station_id?: number;
@@ -425,7 +469,27 @@ export const api = {
     return handleResponse<any[]>(res);
   },
 
-  getIncidentById: async (id: number) => {
+  
+  declareNoInventory: async (incidentId: number) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/no-inventory`, {
+      method: "POST",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+  
+  advanceStep: async (incidentId: number, step: string) => {
+    let endpoint = "";
+    if (step === "Return Inventory") endpoint = "step-return-inventory";
+    
+    if (!endpoint) throw new Error("Invalid step");
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/${endpoint}`, {
+      method: "POST",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+getIncidentById: async (id: number) => {
     const res = await fetch(`${API_BASE}/api/incidents/${id}`, {
       headers: getHeaders(true),
     });
@@ -527,7 +591,7 @@ export const api = {
   },
 
   verifyCloseIncident: async (id: number, payload: { remarks?: string }) => {
-    const res = await fetch(`${API_BASE}/api/incidents/${id}/verify-close`, {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/close`, {
       method: "POST",
       headers: getHeaders(true),
       body: JSON.stringify(payload),
@@ -561,10 +625,17 @@ export const api = {
   },
 
   assignGuardIncident: async (id: number, payload: { assigned_to_id: number; notes?: string; priority?: string; estimated_response_time?: string; remarks?: string }) => {
-    const res = await fetch(`${API_BASE}/api/incidents/${id}/assign`, {
+    const multiPayload = {
+      officer_ids: [payload.assigned_to_id],
+      priority: payload.priority,
+      estimated_response_time: payload.estimated_response_time,
+      mission_notes: payload.notes || payload.remarks,
+      instructions: payload.remarks || payload.notes
+    };
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/assign-multi`, {
       method: "POST",
       headers: getHeaders(true),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(multiPayload),
     });
     return handleResponse<any>(res);
   },
@@ -593,6 +664,13 @@ export const api = {
       headers: getHeaders(true),
     });
     return handleResponse<any>(res);
+  },
+
+  getAllFieldOps: async (incidentId: number) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/all`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
   },
 
   acceptMission: async (incidentId: number, payload: { departure_time?: string; vehicle?: string; remarks?: string }) => {
@@ -649,11 +727,23 @@ export const api = {
     return handleResponse<any>(res);
   },
 
-  fieldStepEvidence: async (incidentId: number, payload: { gps?: string }) => {
+  fieldStepEvidence: async (incidentId: number, payload: { gps: string; photos: FileList | null }) => {
+    const formData = new FormData();
+    formData.append("gps", payload.gps);
+    if (payload.photos) {
+      for (let i = 0; i < payload.photos.length; i++) {
+        formData.append("photos", payload.photos[i]);
+      }
+    }
+    
+    // Copy headers and remove Content-Type so browser sets boundary
+    const headers = getHeaders(true);
+    delete headers["Content-Type"];
+
     const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/step-evidence`, {
       method: "POST",
-      headers: getHeaders(true),
-      body: JSON.stringify(payload),
+      headers,
+      body: formData,
     });
     return handleResponse<any>(res);
   },
@@ -701,6 +791,14 @@ export const api = {
     return handleResponse<any>(res);
   },
 
+  completeIncident: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/complete`, {
+      method: "POST",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
   closeIncident: async (id: number, payload: { remarks?: string }) => {
     const res = await fetch(`${API_BASE}/api/incidents/${id}/close`, {
       method: "POST",
@@ -732,11 +830,35 @@ export const api = {
     return handleResponse<any>(res);
   },
 
-  generateSubmitFinalReport: async (incidentId: number, payload: { signature?: string }) => {
-    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/generate-submit-report`, {
+  uploadManualReport: async (incidentId: number, reportFile: File) => {
+    const formData = new FormData();
+    formData.append("report_pdf", reportFile);
+    const headers = getHeaders(true);
+    delete headers["Content-Type"];
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/upload-report`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    return handleResponse<any>(res);
+  },
+  generateAutomatedFinalReport: async (incidentId: number, signatureFile: File) => {
+    const formData = new FormData();
+    formData.append("signature_image", signatureFile);
+    const headers = getHeaders(true);
+    delete headers["Content-Type"];
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/generate-report`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    return handleResponse<any>(res);
+  },
+
+  submitAutomatedFinalReport: async (incidentId: number) => {
+    const res = await fetch(`${API_BASE}/api/field-ops/${incidentId}/submit-report`, {
       method: "POST",
       headers: getHeaders(true),
-      body: JSON.stringify(payload),
     });
     return handleResponse<any>(res);
   },

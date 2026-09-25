@@ -21,7 +21,7 @@ from app.models.district import District
 from app.models.state import State
 from app.schemas.incident import IncidentCreate, IncidentOut, IncidentAssignMulti, AssignedOfficerOut
 from app.schemas.incident_activity import IncidentActivityOut
-from app.utils.deps import get_current_user, get_current_rfo, get_current_guard, get_current_officer_or_admin
+from app.utils.deps import get_current_user, get_current_user_optional, get_current_rfo, get_current_guard, get_current_officer_or_admin
 
 router = APIRouter(
     prefix="/api/incidents",
@@ -65,6 +65,29 @@ def format_incident_out(inc: Incident, db: Session, current_user: Optional[User]
     for a in all_assignments:
         if a.assigned_to and a.assigned_to_id not in seen_officer_ids:
             seen_officer_ids.add(a.assigned_to_id)
+
+            # Derive acceptance status from FieldOperation
+            guard_field_op = db.query(FieldOperation).filter(
+                FieldOperation.incident_id == inc.id,
+                FieldOperation.guard_id == a.assigned_to_id
+            ).first()
+
+            # Determine assignment_status directly from the assignment table, falling back to field op if needed
+            shared_op = db.query(FieldOperation).filter(FieldOperation.incident_id == inc.id).first()
+            if shared_op and shared_op.submitted_at:
+                asgn_status = "Completed"
+            elif a.status in ("Accepted", "Completed", "Dispatched", "In Progress", "Resolved", "Closed"):
+                asgn_status = a.status
+            elif shared_op and shared_op.current_step not in (None, "Pending Acceptance"):
+                asgn_status = "Accepted"
+            else:
+                asgn_status = "Assigned"  # Not yet accepted
+
+            # accepted_at: when the field_op moved past Pending Acceptance (use updated_at as proxy)
+            accepted_at_str = None
+            if guard_field_op and guard_field_op.current_step not in (None, "Pending Acceptance"):
+                accepted_at_str = guard_field_op.updated_at.strftime("%Y-%m-%d %H:%M") if guard_field_op.updated_at else None
+
             assigned_officers_list.append(AssignedOfficerOut(
                 assignment_id=a.id,
                 officer_id=a.assigned_to_id,
@@ -73,6 +96,9 @@ def format_incident_out(inc: Incident, db: Session, current_user: Optional[User]
                 work_status=a.assigned_to.work_status or "Available",
                 avatar_url=a.assigned_to.avatar_url or a.assigned_to.profile_image,
                 assigned_at=a.assigned_at.strftime("%Y-%m-%d %H:%M") if a.assigned_at else "",
+                assignment_status=asgn_status,
+                inventory_status=getattr(a, 'inventory_status', 'PENDING'),
+                accepted_at=accepted_at_str,
                 priority=a.priority or "High",
                 estimated_response_time=a.estimated_response_time or "30 Mins",
                 instructions=a.instructions or a.assignment_remarks or a.notes,
@@ -138,8 +164,8 @@ def format_incident_out(inc: Incident, db: Session, current_user: Optional[User]
         status=inc.status or "Pending Review",
         incident_status=inc.incident_status or inc.status or "Pending Review",
         reported_by=inc.reported_by or inc.reporter_id,
-        reporter_name=inc.reporter_rel.full_name if inc.reporter_rel else (inc.reporter.full_name if inc.reporter else "Field User"),
-        reporter_role=inc.reporter_role or (inc.reporter_rel.role if inc.reporter_rel else "Villager"),
+        reporter_name="Public Visitor" if inc.reporter_role == "PUBLIC" else (inc.reporter_rel.full_name if inc.reporter_rel else (inc.reporter.full_name if inc.reporter else "Field User")),
+        reporter_role="VISITOR" if inc.reporter_role == "PUBLIC" else (inc.reporter_role or (inc.reporter_rel.role if inc.reporter_rel else "Villager")),
         photo_url=inc.photo_url or (parsed_images[0] if parsed_images else None),
         images=parsed_images,
         contact_number=inc.contact_number,
@@ -260,7 +286,7 @@ def get_rfo_assignments(
 @router.post("/upload-images", response_model=List[str])
 async def upload_incident_images(
     files: List[UploadFile] = File(...),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     if len(files) > 5:
         raise HTTPException(status_code=400, detail="Maximum 5 image uploads allowed per incident.")
@@ -269,11 +295,12 @@ async def upload_incident_images(
     os.makedirs(upload_dir, exist_ok=True)
 
     saved_urls = []
+    user_prefix = current_user.id if current_user else "public"
     for file in files:
         if not file.content_type.startswith("image/"):
             continue
         ext = os.path.splitext(file.filename)[1] or ".jpg"
-        filename = f"inc_{current_user.id}_{uuid.uuid4().hex[:8]}{ext}"
+        filename = f"inc_{user_prefix}_{uuid.uuid4().hex[:8]}{ext}"
         file_path = os.path.join(upload_dir, filename)
 
         with open(file_path, "wb") as f:
@@ -285,14 +312,102 @@ async def upload_incident_images(
     return saved_urls
 
 
+@router.post("/guard", response_model=IncidentOut, status_code=status.HTTP_201_CREATED)
+def create_guard_incident(
+    data: IncidentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != "Forest Guard":
+        raise HTTPException(status_code=403, detail="Only Forest Guards can use this endpoint.")
+
+    species_obj = None
+    if data.animal_species_id:
+        species_obj = db.query(AnimalSpecies).filter(AnimalSpecies.id == data.animal_species_id).first()
+
+    animal_name = species_obj.animal_name if species_obj else data.animal_type
+
+    v_id = data.village_id
+    v_obj = db.query(Village).filter(Village.id == v_id).first() if v_id else None
+    
+    st_id = current_user.station_id
+    dist_id = data.district_id
+    if not dist_id and st_id:
+        st_obj = db.query(MonitoringStation).filter(MonitoringStation.id == st_id).first()
+        if st_obj:
+            dist_id = st_obj.district_id
+
+    state_id = data.state_id
+    if not state_id and dist_id:
+        d_obj = db.query(District).filter(District.id == dist_id).first()
+        if d_obj:
+            state_id = d_obj.state_id
+
+    ref_id = generate_reference_id(db)
+    title = data.incident_title or f"{animal_name} Sighting"
+    images_json = json.dumps(data.images) if data.images else None
+
+    inc = Incident(
+        reference_id=ref_id,
+        incident_title=title,
+        incident_category=data.incident_category or "Wildlife Sighting",
+        animal_species_id=species_obj.id if species_obj else None,
+        animal_type=animal_name,
+        animal=animal_name,
+        severity=data.severity or "Medium",
+        description=data.description,
+        latitude=data.latitude,
+        longitude=data.longitude,
+        location=data.location or data.address or "Patrol Area",
+        address=data.address,
+        village_id=v_id,
+        station_id=st_id,
+        district_id=dist_id,
+        state_id=state_id,
+        weather=data.weather or "Sunny",
+        people_injured=data.people_injured or False,
+        livestock_damage=data.livestock_damage or False,
+        property_damage=data.property_damage or False,
+        crop_damage=data.crop_damage or False,
+        status="Reported",
+        incident_status="Reported",
+        reported_by=current_user.id,
+        reporter_id=current_user.id,
+        reporter_role=current_user.role,
+        photo_url=data.images[0] if data.images else None,
+        images=images_json,
+        contact_number=data.contact_number or current_user.phone,
+        date_reported=data.date_reported or datetime.utcnow().strftime("%Y-%m-%d"),
+        time_reported=data.time_reported or datetime.utcnow().strftime("%H:%M")
+    )
+    db.add(inc)
+    db.commit()
+    db.refresh(inc)
+
+    log_activity(db, inc.id, current_user.id, "Reported", f"Forest Guard logged incident report [{ref_id}].")
+
+    rfos = db.query(User).filter(
+        User.station_id == st_id,
+        User.role.in_(["Range Forest Officer", "Officer", "Admin"])
+    ).all()
+    for rfo in rfos:
+        db.add(Notification(
+            user_id=rfo.id,
+            title=f"New Field Incident [{ref_id}]",
+            message=f"{data.incident_category} ({animal_name}) reported by Guard {current_user.full_name}. Requires Review."
+        ))
+    db.commit()
+
+    return format_incident_out(inc, db, current_user)
+
 @router.post("", response_model=IncidentOut, status_code=status.HTTP_201_CREATED)
 def create_incident(
     data: IncidentCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == "Forest Guard":
-        raise HTTPException(status_code=403, detail="Forest Guards cannot create new incidents. Only Approved Villagers and RFOs can create incident reports.")
+    # Forest Guards are now allowed to create incidents.
+
 
     species_obj = None
     if data.animal_species_id:
@@ -379,6 +494,171 @@ def create_incident(
     db.commit()
 
     return format_incident_out(inc, db, current_user)
+
+
+@router.post("/public", response_model=IncidentOut)
+def create_public_incident(
+    data: IncidentCreate,
+    db: Session = Depends(get_db)
+):
+    species_obj = None
+    if data.animal_species_id:
+        species_obj = db.query(AnimalSpecies).filter(AnimalSpecies.id == data.animal_species_id).first()
+
+    animal_name = species_obj.animal_name if species_obj else data.animal_type
+
+    v_id = data.village_id
+    v_obj = db.query(Village).filter(Village.id == v_id).first() if v_id else None
+    
+    st_id = data.station_id
+    if not st_id and v_obj and v_obj.district_id:
+        st_obj = db.query(MonitoringStation).filter(MonitoringStation.district_id == v_obj.district_id).first()
+        if st_obj:
+            st_id = st_obj.id
+
+    dist_id = data.district_id
+    if not dist_id and st_id:
+        st_obj = db.query(MonitoringStation).filter(MonitoringStation.id == st_id).first()
+        if st_obj:
+            dist_id = st_obj.district_id
+    if not dist_id and v_obj:
+        dist_id = v_obj.district_id
+
+    state_id = data.state_id
+    if not state_id and dist_id:
+        d_obj = db.query(District).filter(District.id == dist_id).first()
+        if d_obj:
+            state_id = d_obj.state_id
+
+    ref_id = generate_reference_id(db)
+    title = data.incident_title or f"{animal_name} Sighting"
+    images_json = json.dumps(data.images) if data.images else None
+    
+    if data.reporter_name:
+        desc = f"[Public Reporter: {data.reporter_name}]\n[Phone: {data.contact_number or 'N/A'}]\n\n{data.description or ''}"
+    else:
+        desc = data.description
+
+    inc = Incident(
+        reference_id=ref_id,
+        incident_title=title,
+        incident_category=data.incident_category or "Wildlife Sighting",
+        animal_species_id=species_obj.id if species_obj else None,
+        animal_type=animal_name,
+        animal=animal_name,
+        severity=data.severity or "Medium",
+        description=desc,
+        latitude=data.latitude,
+        longitude=data.longitude,
+        location=data.location or data.address or "Sector Range",
+        address=data.address,
+        village_id=v_id,
+        station_id=st_id,
+        district_id=dist_id,
+        state_id=state_id,
+        weather=data.weather or "Sunny",
+        people_injured=data.people_injured or False,
+        livestock_damage=data.livestock_damage or False,
+        property_damage=data.property_damage or False,
+        crop_damage=data.crop_damage or False,
+        status="Reported",
+        incident_status="Reported",
+        reported_by=None,
+        reporter_id=None,
+        reporter_role="PUBLIC",
+        photo_url=data.images[0] if data.images else None,
+        images=images_json,
+        contact_number=data.contact_number,
+        date_reported=data.date_reported or datetime.utcnow().strftime("%Y-%m-%d"),
+        time_reported=data.time_reported or datetime.utcnow().strftime("%H:%M")
+    )
+    db.add(inc)
+    db.commit()
+    db.refresh(inc)
+
+    log_activity(db, inc.id, None, "Reported", f"Public Visitor logged incident report [{ref_id}].")
+
+    if st_id:
+        rfos = db.query(User).filter(
+            User.station_id == st_id,
+            User.role.in_(["Range Forest Officer", "Officer", "Admin"])
+        ).all()
+        for rfo in rfos:
+            db.add(Notification(
+                user_id=rfo.id,
+                title=f"New Public Incident [{ref_id}]",
+                message=f"{data.incident_category} ({animal_name}) reported by Visitor at {inc.location}. Requires Review."
+            ))
+        db.commit()
+
+    return format_incident_out(inc, db, None)
+
+
+
+
+@router.get("/routing-preview")
+def get_routing_preview(
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    village_name: Optional[str] = None,
+    district_name: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Returns which monitoring station a new incident will be routed to,
+    based on the provided location (village_name / district_name / lat / lng).
+    Uses the exact same routing logic as incident creation.
+    No authentication required — used by public report form too.
+    """
+    station = None
+
+    # Strategy 1: Match by village name → district → station
+    if village_name:
+        v_obj = db.query(Village).filter(
+            Village.village_name.ilike(f"%{village_name}%")
+        ).first()
+        if v_obj and v_obj.district_id:
+            station = db.query(MonitoringStation).filter(
+                MonitoringStation.district_id == v_obj.district_id
+            ).first()
+
+    # Strategy 2: Match by district name → station
+    if not station and district_name:
+        d_obj = db.query(District).filter(
+            District.district_name.ilike(f"%{district_name}%")
+        ).first()
+        if d_obj:
+            station = db.query(MonitoringStation).filter(
+                MonitoringStation.district_id == d_obj.id
+            ).first()
+
+    # Strategy 3: Match by closest station using lat/lng (Euclidean approximation)
+    if not station and lat is not None and lng is not None:
+        all_stations = db.query(MonitoringStation).filter(
+            MonitoringStation.latitude.isnot(None),
+            MonitoringStation.longitude.isnot(None)
+        ).all()
+        if all_stations:
+            def dist(st):
+                return ((st.latitude - lat) ** 2 + (st.longitude - lng) ** 2) ** 0.5
+            station = min(all_stations, key=dist)
+
+    if station:
+        return {
+            "station_id": station.id,
+            "station_name": station.station_name,
+            "station_phone": station.phone,
+            "district_name": station.district.district_name if station.district else None,
+            "resolved": True
+        }
+
+    return {
+        "station_id": None,
+        "station_name": None,
+        "station_phone": None,
+        "district_name": None,
+        "resolved": False
+    }
 
 
 @router.get("", response_model=List[IncidentOut])
@@ -506,12 +786,15 @@ def approve_incident(
         raise HTTPException(status_code=404, detail="Incident not found")
 
     verify_head_officer_permission(inc, current_user, db)
+    
+    if inc.status not in ("Pending Review", "Reported"):
+        raise HTTPException(status_code=400, detail="Only incidents in 'Pending Review' or 'Reported' state can be accepted.")
 
-    inc.status = "RFO Review"
-    inc.incident_status = "RFO Review"
+    inc.status = "Ready For Guard Assignment"
+    inc.incident_status = "Ready For Guard Assignment"
     db.commit()
 
-    log_activity(db, inc.id, current_user.id, "Head Officer Approved", f"Incident verified and approved by Head Officer {current_user.full_name}.")
+    log_activity(db, inc.id, current_user.id, "Head Officer Accepted", f"Incident accepted by Head Officer {current_user.full_name}. Ready for Guard Assignment.")
     return format_incident_out(inc, db, current_user)
 
 
@@ -528,6 +811,9 @@ def assign_multiple_officers(
 
     verify_head_officer_permission(inc, current_user, db)
 
+    if inc.status != "Ready For Guard Assignment":
+        raise HTTPException(status_code=400, detail="Only incidents in 'Ready For Guard Assignment' can be assigned to guards.")
+
     if not data.officer_ids:
         raise HTTPException(status_code=400, detail="At least one officer must be selected for assignment.")
 
@@ -536,15 +822,20 @@ def assign_multiple_officers(
         raise HTTPException(status_code=404, detail="One or more selected officers could not be found.")
 
     for off in selected_officers:
+        if off.role != "Forest Guard":
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{off.full_name}' (role: {off.role}) is not a Forest Guard. Only Forest Guards can be assigned to field incidents."
+            )
         if off.station_id != inc.station_id:
             raise HTTPException(
                 status_code=400,
-                detail=f"Officer {off.full_name} belongs to station #{off.station_id}, not incident station #{inc.station_id}."
+                detail=f"Guard {off.full_name} belongs to station #{off.station_id}, not incident station #{inc.station_id}."
             )
         if not off.is_active:
-            raise HTTPException(status_code=400, detail=f"Officer {off.full_name} is inactive/suspended.")
+            raise HTTPException(status_code=400, detail=f"Guard {off.full_name} is inactive/suspended.")
         if off.work_status != "Available":
-            raise HTTPException(status_code=400, detail=f"Officer {off.full_name} is currently {off.work_status} and cannot be assigned.")
+            raise HTTPException(status_code=400, detail=f"Guard {off.full_name} is currently {off.work_status} and cannot be assigned.")
 
     for off in selected_officers:
         assign = IncidentAssignment(
@@ -569,8 +860,8 @@ def assign_multiple_officers(
 
         log_activity(db, inc.id, current_user.id, f"Officer Assigned: {off.full_name}", f"Assigned by Head Officer {current_user.full_name}. Priority: {data.priority}.")
 
-    inc.status = "Officer Assignment"
-    inc.incident_status = "Officer Assignment"
+    inc.status = "Assigned"
+    inc.incident_status = "Assigned"
     db.commit()
 
     return format_incident_out(inc, db, current_user)
@@ -667,11 +958,14 @@ def return_field_report(
 
     verify_head_officer_permission(inc, current_user, db)
 
-    inc.status = "Returned for Revision"
-    inc.incident_status = "Returned for Revision"
+    if inc.status != "Awaiting Verification":
+        raise HTTPException(status_code=400, detail="Only incidents in 'Awaiting Verification' can be returned.")
+
+    inc.status = "Returned For Follow-up"
+    inc.incident_status = "Returned For Follow-up"
     db.commit()
 
-    log_activity(db, inc.id, current_user.id, "Report Returned", f"Field report returned for revision by Head Officer {current_user.full_name}. Notes: {remarks}")
+    log_activity(db, inc.id, current_user.id, "Report Returned", f"Field report returned for follow-up by Head Officer {current_user.full_name}. Notes: {remarks}")
 
     # Notify Guard
     op = db.query(FieldOperation).filter(FieldOperation.incident_id == inc.id).first()
@@ -703,8 +997,8 @@ def verify_incident(
 
     verify_head_officer_permission(inc, current_user, db)
 
-    if inc.status not in ["Report Approved", "Verified", "Closed"]:
-        raise HTTPException(status_code=400, detail="Cannot verify incident before report approval.")
+    if inc.status != "Awaiting Verification":
+        raise HTTPException(status_code=400, detail="Cannot verify incident before report is submitted (Awaiting Verification).")
 
     now = datetime.utcnow()
     inc.status = "Verified"
@@ -717,6 +1011,30 @@ def verify_incident(
     log_activity(db, inc.id, current_user.id, "Verified", f"Incident verified by Head Officer {current_user.full_name}. Notes: {notes}")
     return format_incident_out(inc, db, current_user)
 
+
+
+@router.post("/{incident_id}/complete", response_model=IncidentOut)
+def complete_incident(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    inc = db.query(Incident).filter(Incident.id == incident_id).first()
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    verify_head_officer_permission(inc, current_user, db)
+
+    if inc.status != "Verified":
+        raise HTTPException(status_code=400, detail="Only verified incidents may be marked as completed.")
+
+    now = datetime.utcnow()
+    inc.status = "Completed"
+    inc.incident_status = "Completed"
+    db.commit()
+
+    log_activity(db, inc.id, current_user.id, "Completed", f"Incident officially marked as Completed by Head Officer {current_user.full_name}.")
+    return format_incident_out(inc, db, current_user)
 
 @router.post("/{incident_id}/close", response_model=IncidentOut)
 def close_incident(
@@ -733,8 +1051,8 @@ def close_incident(
 
     verify_head_officer_permission(inc, current_user, db)
 
-    if inc.status not in ["Verified", "Closed"]:
-        raise HTTPException(status_code=400, detail="Only verified incidents may be closed.")
+    if inc.status not in ["Verified", "Completed"]:
+        raise HTTPException(status_code=400, detail="Only completed or verified incidents may be closed.")
 
     now = datetime.utcnow()
     inc.status = "Closed"
@@ -779,6 +1097,9 @@ def reject_incident(
         raise HTTPException(status_code=404, detail="Incident not found")
 
     verify_head_officer_permission(inc, current_user, db)
+
+    if inc.status not in ("Pending Review", "Reported"):
+        raise HTTPException(status_code=400, detail="Only incidents in 'Pending Review' or 'Reported' state can be rejected.")
 
     inc.status = "Rejected"
     inc.incident_status = "Rejected"
@@ -829,3 +1150,4 @@ def delete_incident(
     db.delete(inc)
     db.commit()
     return None
+

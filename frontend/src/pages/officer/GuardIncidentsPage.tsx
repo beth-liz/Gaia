@@ -60,16 +60,18 @@ export const GuardIncidentsPage: React.FC = () => {
                   </div>
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
-                      inc.status === "Dispatched" || inc.status === "Assigned"
-                        ? "bg-amber-400 text-emerald-950 border border-amber-500 shadow-xs"
-                        : inc.status === "In Progress" || inc.status === "Action In Progress"
-                        ? "bg-purple-100 text-purple-950 border border-purple-300"
-                        : inc.status === "Resolved"
-                        ? "bg-emerald-100 text-emerald-950 border border-emerald-300"
+                      inc.status === "Assigned" || inc.status === "Returned For Follow-up"
+                        ? "bg-amber-100 text-amber-800 border-amber-200 shadow-xs"
+                        : inc.status === "In Progress"
+                        ? "bg-orange-200 text-orange-900 border border-orange-300"
+                        : inc.status === "Awaiting Verification"
+                        ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                        : inc.status === "Verified" || inc.status === "Completed" || inc.status === "Closed"
+                        ? "bg-green-100 text-green-900 border border-green-300"
                         : "bg-gray-100 text-gray-900"
                     }`}
                   >
-                    {inc.status === "Dispatched" ? "Pending Acceptance" : inc.status}
+                    {inc.status === "Assigned" || inc.status === "Returned For Follow-up" ? "Pending Acceptance" : inc.status}
                   </span>
                 </div>
 
@@ -106,12 +108,21 @@ export const GuardIncidentsPage: React.FC = () => {
               </div>
 
               <div className="pt-3 border-t border-emerald-950/10 flex items-center justify-end gap-2">
-                <Link
-                  to={`/guard/mission/${inc.id}`}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-amber-300 font-black text-xs shadow-md flex items-center gap-1.5 transition-all active:scale-95"
-                >
-                  <Radio className="w-3.5 h-3.5 text-amber-300" /> Execute Field Mission <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+                {["Awaiting Verification", "Verified", "Completed", "Closed"].includes(inc.status || "") ? (
+                  <Link
+                    to={`/guard/mission/${inc.id}`}
+                    className="px-5 py-2.5 rounded-xl bg-blue-100 hover:bg-blue-200 text-blue-900 font-black text-xs shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> View Mission / Report <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                ) : (
+                  <Link
+                    to={`/guard/mission/${inc.id}`}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-amber-300 font-black text-xs shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                  >
+                    <Radio className="w-3.5 h-3.5 text-amber-300" /> Execute Field Mission <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                )}
               </div>
             </div>
           ))}

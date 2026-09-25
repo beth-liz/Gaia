@@ -13,7 +13,8 @@ class IncidentAssignment(Base):
     assigned_to_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)  # Assigned Officer / Guard
     dispatched_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
-    status = Column(String(50), default="Assigned")  # Assigned, Ready For Dispatch, Dispatched, In Progress, Resolved, Closed
+    status = Column(String(50), default="Assigned")
+    inventory_status = Column(String(50), default="PENDING")  # PENDING, REQUESTED, READY, NOT_REQUIRED
     notes = Column(Text, nullable=True)
     report_url = Column(String(255), nullable=True)
 

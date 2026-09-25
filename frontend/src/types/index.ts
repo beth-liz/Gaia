@@ -19,6 +19,7 @@ export interface User {
   village_name?: string;
   designation_name?: string;
   created_at: string;
+  user?: { full_name: string; role: string; };
 }
 
 export interface AuthResponse {
@@ -72,6 +73,9 @@ export interface AssignedOfficer {
   work_status?: string;
   avatar_url?: string;
   assigned_at: string;
+  assignment_status?: string;
+  inventory_status?: string;
+  accepted_at?: string;
   priority?: string;
   estimated_response_time?: string;
   instructions?: string;
@@ -130,6 +134,7 @@ export interface Incident {
   closed_by_name?: string;
   final_closure_remarks?: string;
   created_at: string;
+  user?: { full_name: string; role: string; };
 }
 
 export interface FieldOperation {
@@ -197,4 +202,5 @@ export interface IncidentActivity {
   action: string;
   remarks?: string;
   created_at: string;
+  user?: { full_name: string; role: string; };
 }

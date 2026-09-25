@@ -1,5 +1,14 @@
+
+import os
+import uuid
 import json
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import UploadFile, File, Form
+from fastapi.responses import FileResponse
+from app.utils.pdf_generator import generate_incident_pdf
+import json
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+import os, uuid
+from fpdf import FPDF
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -32,8 +41,7 @@ def log_activity(db: Session, incident_id: int, user_id: int, action: str, remar
 
 def get_or_create_field_op(db: Session, incident_id: int, guard_id: int) -> FieldOperation:
     field_op = db.query(FieldOperation).filter(
-        FieldOperation.incident_id == incident_id,
-        FieldOperation.guard_id == guard_id
+        FieldOperation.incident_id == incident_id
     ).first()
 
     if not field_op:
@@ -107,16 +115,40 @@ def format_field_op_out(op: FieldOperation):
     }
 
 
+@router.get("/{incident_id}/all")
+def get_all_incident_field_ops(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get ALL field operations for an incident — one per assigned guard.
+    Used by the Head Officer progress view to see each guard's individual progress.
+    """
+    ops = db.query(FieldOperation).filter(
+        FieldOperation.incident_id == incident_id
+    ).order_by(FieldOperation.id.asc()).all()
+    return [format_field_op_out(op) for op in ops]
+
+
 @router.get("/{incident_id}")
 def get_incident_field_op(
     incident_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get active field operation state for an incident."""
-    op = db.query(FieldOperation).filter(FieldOperation.incident_id == incident_id).first()
+    """Get the calling user's own field operation for this incident (guard view)."""
+    # If caller is a guard, show the field op
+    op = db.query(FieldOperation).filter(
+        FieldOperation.incident_id == incident_id
+    ).first()
     if not op:
-        # Create for caller if guard
+        # Fallback: first op in the incident (RFO/Admin viewing, or guard not yet assigned)
+        op = db.query(FieldOperation).filter(
+            FieldOperation.incident_id == incident_id
+        ).first()
+    if not op:
+        # Create for guard caller
         op = get_or_create_field_op(db, incident_id, current_user.id)
 
     return format_field_op_out(op)
@@ -130,22 +162,69 @@ def accept_mission(
     db: Session = Depends(get_db),
     guard: User = Depends(get_current_user)
 ):
+    if guard.role != "Forest Guard":
+        raise HTTPException(status_code=403, detail="Only assigned Forest Guards can update field operation progress.")
+
     dep_time = payload.get("departure_time", datetime.utcnow().strftime("%H:%M")).strip()
     vehicle = payload.get("vehicle", "Forest Patrol Jeep").strip()
     remarks = payload.get("remarks", "").strip()
 
     op = get_or_create_field_op(db, incident_id, guard.id)
 
+    # Update this specific Guard's IncidentAssignment status
+    assignment = db.query(IncidentAssignment).filter(
+        IncidentAssignment.incident_id == incident_id,
+        IncidentAssignment.assigned_to_id == guard.id
+    ).first()
+    if assignment:
+        assignment.status = "Accepted"
+        
+    db.commit()
+
+    # Check all active assigned guards for this incident
+    all_assignments = db.query(IncidentAssignment).filter(
+        IncidentAssignment.incident_id == incident_id
+    ).all()
+    
+    # We only care about latest assignment per guard in case of re-assignments
+    latest_assignments = {}
+    for a in all_assignments:
+        if a.assigned_to_id not in latest_assignments or a.assigned_at > latest_assignments[a.assigned_to_id].assigned_at:
+            latest_assignments[a.assigned_to_id] = a
+            
+    active_assignments = [a for a in latest_assignments.values() if a.status != "Removed"]
+    
+    all_accepted = True
+    all_inventory_ready = True
+    for a in active_assignments:
+        if a.status != "Accepted" and a.status != "Completed":
+            all_accepted = False
+        if getattr(a, 'inventory_status', 'PENDING') not in ("READY", "NOT_REQUIRED"):
+            all_inventory_ready = False
+
+    # If this is the last guard to accept, OR if it's just a single guard, we can advance the mission
     op.departure_time = dep_time
     op.vehicle = vehicle
     op.acceptance_remarks = remarks
-    op.current_step = "Travelling"
+    
+    if all_accepted:
+        if all_inventory_ready:
+            op.current_step = "Travelling"
+        else:
+            op.current_step = "Inventory Request"
+    else:
+        # Force it back to Pending Acceptance if not all accepted.
+        if op.current_step in (None, "Pending Acceptance", "Inventory Request", "Travelling"):
+            op.current_step = "Pending Acceptance"
+
     db.commit()
 
     inc = db.query(Incident).filter(Incident.id == incident_id).first()
     if inc:
-        inc.status = "Travelling"
-        inc.incident_status = "Travelling"
+        if inc.status not in ["Assigned", "Returned For Follow-up", "In Progress"]:
+            raise HTTPException(status_code=400, detail="Cannot accept mission. Incident is not in Assigned or Returned state.")
+        inc.status = "In Progress"
+        inc.incident_status = "In Progress"
         db.commit()
 
     guard.work_status = "Busy"
@@ -156,6 +235,51 @@ def accept_mission(
 
 
 # STEP 2: TRAVELLING
+@router.post("/{incident_id}/no-inventory")
+def declare_no_inventory(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    guard: User = Depends(get_current_user)
+):
+    if guard.role != "Forest Guard":
+        raise HTTPException(status_code=403, detail="Only assigned Forest Guards can update field operation progress.")
+        
+    assignment = db.query(IncidentAssignment).filter(
+        IncidentAssignment.incident_id == incident_id,
+        IncidentAssignment.assigned_to_id == guard.id,
+        IncidentAssignment.status != 'Removed'
+    ).first()
+    
+    if not assignment:
+        raise HTTPException(status_code=400, detail="Assignment not found.")
+        
+    assignment.inventory_status = "NOT_REQUIRED"
+    db.commit()
+    
+    # Check if we can transition to travelling
+    all_assignments = db.query(IncidentAssignment).filter(IncidentAssignment.incident_id == incident_id).all()
+    latest_assignments = {}
+    for a in all_assignments:
+        if a.assigned_to_id not in latest_assignments or a.assigned_at > latest_assignments[a.assigned_to_id].assigned_at:
+            latest_assignments[a.assigned_to_id] = a
+            
+    active_assignments = [a for a in latest_assignments.values() if a.status != "Removed"]
+    
+    all_accepted = True
+    all_inventory_ready = True
+    for a in active_assignments:
+        if a.status not in ("Accepted", "Completed"):
+            all_accepted = False
+        if getattr(a, 'inventory_status', 'PENDING') not in ("READY", "NOT_REQUIRED"):
+            all_inventory_ready = False
+            
+    op = get_or_create_field_op(db, incident_id, guard.id)
+    if all_accepted and all_inventory_ready:
+        op.current_step = "Travelling"
+        db.commit()
+        
+    return format_field_op_out(op)
+
 @router.post("/{incident_id}/step-travelling")
 def step_travelling(
     incident_id: int,
@@ -163,6 +287,45 @@ def step_travelling(
     db: Session = Depends(get_db),
     guard: User = Depends(get_current_user)
 ):
+    if guard.role != "Forest Guard":
+        raise HTTPException(status_code=403, detail="Only assigned Forest Guards can update field operation progress.")
+        
+    # Get latest active assignments for this incident
+    all_assignments = db.query(IncidentAssignment).filter(IncidentAssignment.incident_id == incident_id).all()
+    latest_assignments = {}
+    for a in all_assignments:
+        if a.assigned_to_id not in latest_assignments or a.assigned_at > latest_assignments[a.assigned_to_id].assigned_at:
+            latest_assignments[a.assigned_to_id] = a
+            
+    active_assignments = [a for a in latest_assignments.values() if a.status != "Removed"]
+    
+    pending_guards = []
+    pending_inventory_guards = []
+    
+    for a in active_assignments:
+        if a.status != "Accepted" and a.status != "Completed":
+            # get name
+            guard_user = db.query(User).filter(User.id == a.assigned_to_id).first()
+            if guard_user:
+                pending_guards.append(guard_user.full_name)
+        elif getattr(a, 'inventory_status', 'PENDING') not in ("READY", "NOT_REQUIRED"):
+            guard_user = db.query(User).filter(User.id == a.assigned_to_id).first()
+            if guard_user:
+                pending_inventory_guards.append(guard_user.full_name)
+                
+    if pending_guards:
+        if len(pending_guards) == 1:
+            msg = f"Waiting for {pending_guards[0]} to accept the mission before field operations can begin."
+        elif len(pending_guards) == 2:
+            msg = f"Waiting for {pending_guards[0]} and {pending_guards[1]} to accept the mission before field operations can begin."
+        else:
+            msg = f"Waiting for {', '.join(pending_guards[:-1])} and {pending_guards[-1]} to accept the mission before field operations can begin."
+        raise HTTPException(status_code=400, detail=msg)
+        
+    if pending_inventory_guards:
+        msg = f"Waiting for {', '.join(pending_inventory_guards)}'s inventory to be dispatched before travelling."
+        raise HTTPException(status_code=400, detail=msg)
+
     op = get_or_create_field_op(db, incident_id, guard.id)
     op.travelling_start_time = payload.get("start_time", datetime.utcnow().strftime("%H:%M"))
     op.travelling_gps = payload.get("gps", "11.6667 N, 76.3667 E")
@@ -172,8 +335,8 @@ def step_travelling(
 
     inc = db.query(Incident).filter(Incident.id == incident_id).first()
     if inc:
-        inc.status = "Travelling"
-        inc.incident_status = "Travelling"
+        
+        
         db.commit()
 
     log_activity(db, incident_id, guard.id, "Travelling", f"Guard en-route to field site. GPS: {op.travelling_gps}.")
@@ -198,8 +361,8 @@ def step_reached_site(
 
     inc = db.query(Incident).filter(Incident.id == incident_id).first()
     if inc:
-        inc.status = "Reached Site"
-        inc.incident_status = "Reached Site"
+        
+        
         db.commit()
 
     log_activity(db, incident_id, guard.id, "Reached Site", f"Guard arrived at field site @ {op.arrival_time}. Weather: {op.arrival_weather}.")
@@ -228,8 +391,8 @@ def step_initial_assessment(
 
     inc = db.query(Incident).filter(Incident.id == incident_id).first()
     if inc:
-        inc.status = "Initial Assessment"
-        inc.incident_status = "Initial Assessment"
+        
+        
         db.commit()
 
     log_activity(db, incident_id, guard.id, "Initial Assessment", f"Assessment Completed: {op.animal_count} {op.animal_behaviour} animal(s). Threat: {op.threat_level}.")
@@ -258,8 +421,8 @@ def step_action_taken(
 
     inc = db.query(Incident).filter(Incident.id == incident_id).first()
     if inc:
-        inc.status = "Action In Progress"
-        inc.incident_status = "Action In Progress"
+        
+        
         db.commit()
 
     actions_str = ", ".join(actions) if isinstance(actions, list) else str(actions)
@@ -286,8 +449,8 @@ def step_situation_controlled(
 
     inc = db.query(Incident).filter(Incident.id == incident_id).first()
     if inc:
-        inc.status = "Situation Controlled"
-        inc.incident_status = "Situation Controlled"
+        
+        
         db.commit()
 
     log_activity(db, incident_id, guard.id, "Situation Controlled", f"Outcome: {op.outcome}. Direction: {op.animal_direction}. Risk: {op.remaining_risk}.")
@@ -296,18 +459,37 @@ def step_situation_controlled(
 
 # STEP 7: EVIDENCE UPLOAD
 @router.post("/{incident_id}/step-evidence")
-def step_evidence_upload(
+async def step_evidence_upload(
     incident_id: int,
-    payload: dict,
+    gps: str = Form("11.6667 N, 76.3667 E"),
+    photos: list[UploadFile] | None = File(None),
     db: Session = Depends(get_db),
     guard: User = Depends(get_current_user)
 ):
+    if guard.role != "Forest Guard":
+        raise HTTPException(status_code=403, detail="Only assigned Forest Guards can update field operation progress.")
     op = get_or_create_field_op(db, incident_id, guard.id)
-    op.evidence_gps = payload.get("gps", "11.6667 N, 76.3667 E")
-    op.current_step = "Final Report Submitted"
+    op.evidence_gps = gps
+    op.current_step = "Final Report"
+    
+    upload_dir = os.path.join("app", "static", "uploads", "evidence")
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    saved_photos = []
+    if photos:
+        for photo in photos:
+            ext = os.path.splitext(photo.filename)[1] or ".jpg"
+            filename = f"ev_{incident_id}_{uuid.uuid4().hex[:8]}{ext}"
+            file_path = os.path.join(upload_dir, filename)
+            with open(file_path, "wb") as f:
+                f.write(await photo.read())
+            saved_photos.append(f"/static/uploads/evidence/{filename}")
+    
+    import json
+    op.evidence_photos = json.dumps(saved_photos)
     db.commit()
 
-    log_activity(db, incident_id, guard.id, "Evidence Uploaded", f"Field Evidence Captured. GPS: {op.evidence_gps}.")
+    log_activity(db, incident_id, guard.id, "Evidence Uploaded", f"Field Evidence Captured. Uploaded {len(photos)} photos.")
     return format_field_op_out(op)
 
 
@@ -383,99 +565,143 @@ def approve_reinforcement(
     return format_field_op_out(op)
 
 
-# AUTOMATED FINAL REPORT GENERATION & SUBMISSION
-@router.post("/{incident_id}/generate-submit-report")
-def generate_and_submit_final_report(
+
+import os
+import uuid
+from fastapi import UploadFile, File, Form
+
+
+# AUTOMATED FINAL REPORT GENERATION
+
+@router.post("/{incident_id}/generate-report")
+async def generate_final_report(
     incident_id: int,
-    payload: dict,
+    signature_image: UploadFile = File(...),
     db: Session = Depends(get_db),
     guard: User = Depends(get_current_user)
 ):
-    signature = payload.get("signature", guard.full_name).strip()
+    if guard.role != "Forest Guard":
+        raise HTTPException(status_code=403, detail="Only assigned Forest Guards can update field operation progress.")
 
     op = get_or_create_field_op(db, incident_id, guard.id)
     inc = db.query(Incident).filter(Incident.id == incident_id).first()
 
+    # Save Signature
+    upload_dir = os.path.join("app", "static", "uploads", "signatures")
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    ext = os.path.splitext(signature_image.filename)[1] or ".jpg"
+    filename = f"sig_{incident_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path_sig = os.path.join(upload_dir, filename)
+
+    with open(file_path_sig, "wb") as f:
+        contents = await signature_image.read()
+        f.write(contents)
+        
+    op.officer_signature = f"/static/uploads/signatures/{filename}"
+    db.commit()
+
+    # Generate PDF
+    report_dir = os.path.join("app", "static", "reports")
+    os.makedirs(report_dir, exist_ok=True)
+    pdf_filename = f"Gaia_Incident_INC-{inc.reference_id or incident_id}_Final_Report.pdf"
+    pdf_path = os.path.join(report_dir, pdf_filename)
+    
+    activities = db.query(IncidentActivity).filter(IncidentActivity.incident_id == incident_id).order_by(IncidentActivity.created_at.asc()).all()
+
+    generate_incident_pdf(inc, op, activities, guard, pdf_path)
+    
+    op.report_generated_content = f"/static/reports/{pdf_filename}"
+    db.commit()
+
+    return {"pdf_url": op.report_generated_content, "message": "Report generated successfully"}
+
+
+
+@router.post("/{incident_id}/upload-report")
+async def upload_manual_report(
+    incident_id: int,
+    report_pdf: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    guard: User = Depends(get_current_user)
+):
+    if guard.role != "Forest Guard":
+        raise HTTPException(status_code=403, detail="Only assigned Forest Guards can upload reports.")
+
+    if not report_pdf.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed for manual report upload.")
+
+    op = get_or_create_field_op(db, incident_id, guard.id)
+    inc = db.query(Incident).filter(Incident.id == incident_id).first()
+
+    report_dir = os.path.join("app", "static", "reports")
+    os.makedirs(report_dir, exist_ok=True)
+    
+    pdf_filename = f"Gaia_Incident_INC-{inc.reference_id or incident_id}_Manual_Report_{uuid.uuid4().hex[:8]}.pdf"
+    pdf_path = os.path.join(report_dir, pdf_filename)
+
+    with open(pdf_path, "wb") as f:
+        contents = await report_pdf.read()
+        f.write(contents)
+        
+    op.report_generated_content = f"/static/reports/{pdf_filename}"
+    db.commit()
+
+    return op
+
+
+@router.post("/{incident_id}/step-return-inventory")
+def step_return_inventory(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    guard: User = Depends(get_current_user)
+):
+    if guard.role != "Forest Guard":
+        raise HTTPException(status_code=403, detail="Only assigned Forest Guards can update field operation progress.")
+        
+    op = get_or_create_field_op(db, incident_id, guard.id)
+    op.current_step = "Return Inventory"
+    db.commit()
+    
+    return format_field_op_out(op)
+
+@router.post("/{incident_id}/submit-report")
+
+def submit_final_report(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    guard: User = Depends(get_current_user)
+):
+    if guard.role != "Forest Guard":
+        raise HTTPException(status_code=403, detail="Only assigned Forest Guards can update field operation progress.")
+
+    op = get_or_create_field_op(db, incident_id, guard.id)
+    inc = db.query(Incident).filter(Incident.id == incident_id).first()
+
+    if not op.report_generated_content:
+        raise HTTPException(status_code=400, detail="Final report PDF has not been generated yet.")
+
     now = datetime.utcnow()
     op.submitted_at = now
-    op.officer_signature = signature
     op.current_step = "Final Report Submitted"
-
-    # Compile Automated Report Markdown Content
-    actions_list = []
-    if op.actions_checklist:
-        try:
-            actions_list = json.loads(op.actions_checklist)
-        except Exception:
-            actions_list = [op.actions_checklist]
-
-    guard_desig = (guard.designation.designation_name if guard and guard.designation else None) or guard.role or "Forest Guard"
-
-    report_markdown = f"""
-# OFFICIAL FIELD OPERATION MISSION REPORT
-**Reference ID:** {inc.reference_id if inc else incident_id}
-**Station Range:** {inc.station_name if inc else 'Muthanga HQ'}
-**Dispatched Guard:** {guard.full_name} ({guard_desig})
-**Submission Time:** {now.strftime('%Y-%m-%d %H:%M:%S UTC')}
-
----
-
-### 1. TIMELINE & DEPLOYMENT
-- **Departure Time:** {op.departure_time or 'N/A'} (Vehicle: {op.vehicle or 'Forest Patrol'})
-- **Site Arrival:** {op.arrival_time or 'N/A'} @ GPS Coordinates: {op.arrival_gps or 'Captured'}
-- **Weather Conditions:** {op.arrival_weather or 'Clear'}
-
----
-
-### 2. INITIAL FIELD ASSESSMENT
-- **Animal Observed:** {'Yes' if op.animal_present else 'No'} ({op.animal_count} count, Behaviour: {op.animal_behaviour})
-- **Threat Level:** {op.threat_level}
-- **Damage Summary:** Human Injury: {'YES' if op.human_injury else 'NO'}, Livestock: {'YES' if op.livestock_damage else 'NO'}, Property: {'YES' if op.property_damage else 'NO'}
-- **Assessment Notes:** {op.assessment_remarks or 'Verified at site.'}
-
----
-
-### 3. ACTIONS TAKEN & OPERATIONS
-- **Action Checklist:** {', '.join(actions_list) if actions_list else 'Patrol & Monitoring'}
-- **Field Remarks:** {op.action_remarks or 'Field operation executed cleanly.'}
-
----
-
-### 4. SITUATION CONTROLLED & OUTCOME
-- **Final Outcome:** {op.outcome or 'Animal Chased into Core Forest'}
-- **Animal Direction:** {op.animal_direction or 'Core Sanctuary'}
-- **Distance Covered:** {op.distance_covered or '1.2 km'}
-- **Remaining Risk Level:** {op.remaining_risk or 'Low'}
-
----
-
-### 5. OFFICER SIGNATURE & VALIDATION
-**Verified & Signed By:** {signature}
-**Designation:** {guard_desig}
-**Timestamp:** {now.strftime('%Y-%m-%d %H:%M')}
-"""
-
-    op.report_generated_content = report_markdown
     db.commit()
 
     if inc:
-        inc.status = "Awaiting Officer Approval"
-        inc.incident_status = "Awaiting Officer Approval"
+        inc.status = "Awaiting Verification"
+        inc.incident_status = "Awaiting Verification"
         db.commit()
 
     log_activity(db, incident_id, guard.id, "Final Report Submitted", f"Automated Field Report submitted by Guard {guard.full_name}.")
 
-    # Notify Station RFO
     rfos = db.query(User).filter(
         User.station_id == (inc.station_id if inc else guard.station_id),
         User.role.in_(["Range Forest Officer", "Officer", "Admin"])
     ).all()
-
     for rfo in rfos:
         db.add(Notification(
             user_id=rfo.id,
-            title=f"Field Report Submitted [{inc.reference_id if inc else incident_id}]",
-            message=f"Guard {guard.full_name} submitted automated field report for RFO review."
+            title=f"Final Report Ready [INC-{inc.reference_id or incident_id}]",
+            message=f"Guard {guard.full_name} submitted the final field report."
         ))
     db.commit()
 

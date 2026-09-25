@@ -18,7 +18,9 @@ from app.database.seed import run_seed
 run_seed()
 
 from app.routers import (
+    gis,
     auth,
+    google_auth,
     designations,
     villages,
     users,
@@ -52,6 +54,7 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Include Routers
 app.include_router(auth.router)
+app.include_router(google_auth.router)
 app.include_router(designations.router)
 app.include_router(villages.router)
 app.include_router(users.router)
@@ -65,6 +68,7 @@ app.include_router(states.router)
 app.include_router(districts.router)
 app.include_router(monitoring_stations.router)
 app.include_router(inventory.router)
+app.include_router(gis.router)
 
 
 @app.get("/")

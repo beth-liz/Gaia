@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import L from "leaflet"
+import "leaflet.heat"
 
 export interface GISFeature {
   id: string
@@ -16,143 +17,36 @@ export interface GISFeature {
   battery?: number
   assignedUnit?: string
   details?: string
+  severity?: string
 }
 
 interface GISMapComponentProps {
   onSelectFeature?: (feature: GISFeature) => void
   selectedFeatureId?: string | null
   height?: string
+  features?: GISFeature[]
+  showHeatmap?: boolean
+  onRefresh?: () => Promise<void> | void
 }
 
-// Initial mock dataset representing telemetry coordinates around Muthanga / Bandipur Sanctuary
-export const INITIAL_GIS_FEATURES: GISFeature[] = [
-  {
-    id: "INC-9941",
-    type: "incident",
-    name: "Wild Elephant Herd Intrusion",
-    lat: 11.6154,
-    lng: 76.2831,
-    status: "critical",
-    species: "Asian Elephant (Elephas maximus)",
-    confidence: 96.4,
-    timestamp: "12 mins ago",
-    image: "/images/elephant1.jpg",
-    sector: "Sector 4 - Muthanga North",
-    assignedUnit: "Patrol Unit Bravo-2",
-    details: "Herd of 6 elephants moving south-east towards Chundale settlement perimeter. Early warning siren activated."
-  },
-  {
-    id: "INC-9938",
-    type: "incident",
-    name: "Bengal Tiger Sighting",
-    lat: 11.5912,
-    lng: 76.2514,
-    status: "warning",
-    species: "Bengal Tiger (Panthera tigris)",
-    confidence: 91.8,
-    timestamp: "38 mins ago",
-    image: "/images/tiger1.jpg",
-    sector: "Sector 2 - Pulpally West",
-    assignedUnit: "Ranger Team Alpha",
-    details: "Adult male tiger recorded crossing primary arterial road. Traffic warning advisory deployed."
-  },
-  {
-    id: "CAM-NORTH-04",
-    type: "camera",
-    name: "Thermal Node CAM-N04",
-    lat: 11.6288,
-    lng: 76.2910,
-    status: "active",
-    species: "Spotted Deer (Axis axis)",
-    confidence: 98.1,
-    timestamp: "3 mins ago",
-    image: "/images/deer.jpg",
-    sector: "Sector 4 - Muthanga North",
-    battery: 94,
-    details: "Dual-spectrum thermal vision active. High herd activity logged."
-  },
-  {
-    id: "CAM-SOUTH-09",
-    type: "camera",
-    name: "Thermal Node CAM-S09",
-    lat: 11.5780,
-    lng: 76.2405,
-    status: "active",
-    battery: 88,
-    image: "/images/wildboar1.jpg",
-    sector: "Sector 1 - Sulthan Bathery",
-    species: "Wild Boar (Sus scrofa)",
-    confidence: 89.2,
-    timestamp: "1 hour ago",
-    details: "Infrared motion sensor triggered near agricultural border."
-  },
-  {
-    id: "ACS-NODE-12",
-    type: "acoustic",
-    name: "Acoustic Bio-Node ACS-12",
-    lat: 11.6020,
-    lng: 76.2650,
-    status: "active",
-    battery: 92,
-    sector: "Sector 3 - Kurichiad",
-    details: "Low-frequency trumpet resonance audio spectrum recorded. Spectrogram pattern matches matriarch elephant."
-  },
-  {
-    id: "RNG-BRAVO-1",
-    type: "ranger",
-    name: "Patrol Unit Bravo-1",
-    lat: 11.6100,
-    lng: 76.2750,
-    status: "active",
-    sector: "Sector 4 - Muthanga North",
-    assignedUnit: "Lead Officer M. Jose",
-    details: "Tactical vehicle unit equipped with acoustic determent sirens and thermal scopes."
-  },
-  {
-    id: "RNG-ALPHA-3",
-    type: "ranger",
-    name: "Ranger Unit Alpha-3",
-    lat: 11.5850,
-    lng: 76.2480,
-    status: "active",
-    sector: "Sector 2 - Pulpally West",
-    assignedUnit: "Ranger S. Raman",
-    details: "Foot patrol unit conducting perimeter fence integrity inspection."
-  },
-  {
-    id: "VLG-CHUNDALE",
-    type: "village",
-    name: "Chundale Settlement",
-    lat: 11.6220,
-    lng: 76.3050,
-    status: "warning",
-    sector: "Sector 4 Buffer Zone",
-    details: "Pop: 420. Solar fence 100% operational. High-decibel warning sirens active."
-  },
-  {
-    id: "VLG-PULPALLY",
-    type: "village",
-    name: "Pulpally Border Village",
-    lat: 11.5720,
-    lng: 76.2300,
-    status: "active",
-    sector: "Sector 1 Buffer Zone",
-    details: "Pop: 850. Buffer clearance 250m. Bio-fence active."
-  }
-]
+// Removed INITIAL_GIS_FEATURES as fake data is prohibited
 
-export default function GISMapComponent({
-  onSelectFeature,
+export default function GISMapComponent({ 
+  onSelectFeature, 
   selectedFeatureId,
-  height = "h-[650px]"
+  height = "h-[650px]",
+  features: propFeatures,
+  showHeatmap = false,
+  onRefresh
 }: GISMapComponentProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<L.Map | null>(null)
+  const heatLayerRef = useRef<any>(null)
   const markersRef = useRef<{ [key: string]: L.Marker }>({})
   const circlesRef = useRef<L.Circle[]>([])
   const polylinesRef = useRef<L.Polyline[]>([])
 
-  const [tileProvider, setTileProvider] = useState<"carto" | "osm" | "satellite">("carto")
+  const [tileProvider, setTileProvider] = useState<"carto" | "osm" | "satellite">("osm")
   const [layers, setLayers] = useState({
     incidents: true,
     cameras: true,
@@ -163,13 +57,17 @@ export default function GISMapComponent({
     buffers: true
   })
 
-  const [features, setFeatures] = useState<GISFeature[]>(INITIAL_GIS_FEATURES)
+  const [features, setFeatures] = useState<GISFeature[]>(propFeatures || [])
+
+  useEffect(() => {
+    if (propFeatures) setFeatures(propFeatures)
+  }, [propFeatures])
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toLocaleTimeString())
 
   // Tile Provider Layer Definitions
   const tileUrls = {
-    carto: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    carto: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
     osm: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
   }
@@ -180,28 +78,23 @@ export default function GISMapComponent({
     satellite: '&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP'
   }
 
+  const getTileOptions = (provider: string) => ({
+    attribution: tileAttributions[provider as keyof typeof tileAttributions],
+    maxZoom: provider === "satellite" ? 17 : 19
+  })
+
   // Simulated API call to refresh map telemetry data
   const handleFetchLiveTelemetry = async () => {
-    setIsRefreshing(true)
-    try {
-      await new Promise(res => setTimeout(res, 800))
-      
-      setFeatures(prev => prev.map(feat => {
-        if (feat.type === "ranger") {
-          return {
-            ...feat,
-            lat: feat.lat + (Math.random() * 0.002 - 0.001),
-            lng: feat.lng + (Math.random() * 0.002 - 0.001),
-            timestamp: "Just now"
-          }
-        }
-        return feat
-      }))
-      setLastUpdated(new Date().toLocaleTimeString())
-    } catch (e) {
-      console.error("Telemetry fetch error", e)
-    } finally {
-      setIsRefreshing(false)
+    if (onRefresh) {
+      setIsRefreshing(true)
+      try {
+        await onRefresh()
+        setLastUpdated(new Date().toLocaleTimeString())
+      } catch (e) {
+        console.error("Telemetry fetch error", e)
+      } finally {
+        setIsRefreshing(false)
+      }
     }
   }
 
@@ -218,10 +111,7 @@ export default function GISMapComponent({
 
       L.control.zoom({ position: "bottomright" }).addTo(map)
 
-      L.tileLayer(tileUrls[tileProvider], {
-        attribution: tileAttributions[tileProvider],
-        maxZoom: 19
-      }).addTo(map)
+      L.tileLayer(tileUrls[tileProvider], getTileOptions(tileProvider)).addTo(map)
 
       mapInstanceRef.current = map
     }
@@ -245,10 +135,7 @@ export default function GISMapComponent({
       }
     })
 
-    L.tileLayer(tileUrls[tileProvider], {
-      attribution: tileAttributions[tileProvider],
-      maxZoom: 19
-    }).addTo(map)
+    L.tileLayer(tileUrls[tileProvider], getTileOptions(tileProvider)).addTo(map)
   }, [tileProvider])
 
   // Render Features & Custom SVG Markers
@@ -263,30 +150,21 @@ export default function GISMapComponent({
     circlesRef.current = []
     polylinesRef.current.forEach(p => map.removeLayer(p))
     polylinesRef.current = []
+    if (heatLayerRef.current) {
+      map.removeLayer(heatLayerRef.current)
+      heatLayerRef.current = null
+    }
 
     // 1. Draw Wildlife Migration Corridor (Polyline overlay)
+    // No real backend data for corridors yet.
     if (layers.corridors) {
-      const corridorPath: [number, number][] = [
-        [11.6450, 76.3100],
-        [11.6300, 76.2950],
-        [11.6154, 76.2831],
-        [11.5950, 76.2600],
-        [11.5750, 76.2350]
-      ]
-      const poly = L.polyline(corridorPath, {
-        color: "#2d5a3f",
-        weight: 4,
-        dashArray: "8, 6",
-        opacity: 0.85
-      }).addTo(map)
-      poly.bindTooltip("Elephant Migration Corridor Alpha-1", { sticky: true })
-      polylinesRef.current.push(poly)
+      // Future implementation: Fetch corridors from API
     }
 
     // 2. Draw Features (Incidents, Cameras, Acoustics, Rangers, Villages)
     features.forEach(feat => {
       let isVisible = false
-      if (feat.type === "incident" && layers.incidents) isVisible = true
+      if (feat.type === "incident" && layers.incidents && !showHeatmap) isVisible = true
       if (feat.type === "camera" && layers.cameras) isVisible = true
       if (feat.type === "acoustic" && layers.acoustics) isVisible = true
       if (feat.type === "ranger" && layers.rangers) isVisible = true
@@ -399,6 +277,34 @@ export default function GISMapComponent({
     }
   }, [selectedFeatureId])
 
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    
+    // Draw Heatmap if enabled
+    if (showHeatmap && typeof (L as any).heatLayer === "function") {
+      const heatPoints = features
+        .filter(f => f.type === "incident")
+        .map(f => [f.lat, f.lng, f.severity === "Critical" ? 1.0 : f.severity === "High" ? 0.8 : f.severity === "Medium" ? 0.5 : 0.3])
+      if (heatPoints.length > 0) {
+        heatLayerRef.current = (L as any).heatLayer(heatPoints, {
+          radius: 25,
+          blur: 15,
+          maxZoom: 17,
+          gradient: { 0.4: 'blue', 0.6: 'cyan', 0.7: 'lime', 0.8: 'yellow', 1.0: 'red' }
+        }).addTo(map)
+      }
+    }
+    
+    return () => {
+        if (heatLayerRef.current) {
+            map.removeLayer(heatLayerRef.current);
+            heatLayerRef.current = null;
+        }
+    }
+  }, [features, showHeatmap]);
+
+
   return (
     <div className="relative w-full border border-[#dcd8cd] rounded bg-white overflow-hidden shadow-xs">
       
@@ -466,15 +372,20 @@ export default function GISMapComponent({
 
         {/* Tile Provider Select & Telemetry Refresh */}
         <div className="flex items-center gap-2">
-          <select
-            value={tileProvider}
-            onChange={(e: any) => setTileProvider(e.target.value)}
-            className="bg-white border border-[#dcd8cd] rounded text-[11px] font-semibold px-2 py-1 text-gray-800 focus:outline-none focus:border-[#1b4332]"
-          >
-            <option value="carto">Map: CARTO Voyager</option>
-            <option value="osm">Map: OpenStreetMap Standard</option>
-            <option value="satellite">Map: Esri Satellite</option>
-          </select>
+          <div className="relative">
+            <select
+              value={tileProvider}
+              onChange={(e: any) => setTileProvider(e.target.value)}
+              className="appearance-none bg-white border border-emerald-200 rounded-md text-[11px] font-bold px-3 py-1.5 pr-8 text-emerald-950 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all shadow-sm cursor-pointer"
+            >
+              <option value="osm">🗺️ OpenStreetMap (Default)</option>
+              <option value="carto">🗺️ Carto Light (Clean)</option>
+              <option value="satellite">🛰️ Esri Satellite (Terrain)</option>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-emerald-700">
+              <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+            </div>
+          </div>
 
           <button
             onClick={handleFetchLiveTelemetry}

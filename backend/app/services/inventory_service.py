@@ -1,3 +1,5 @@
+from app.models.incident_assignment import IncidentAssignment
+from app.models.field_operation import FieldOperation
 import math
 import csv
 import io
@@ -1865,12 +1867,24 @@ def create_equipment_request(data: EquipmentRequestCreate, current_guard: User, 
         guard_id=current_guard.id,
         station_inventory_id=st_inv_id,
         inventory_master_id=data.inventory_master_id,
+        incident_id=getattr(data, 'incident_id', None),
         quantity=qty,
         purpose=data.purpose or data.reason or "Field Duty",
         priority=data.priority,
         status="PENDING",
         requested_at=datetime.utcnow(),
     )
+    
+    # Mission integration: update IncidentAssignment if incident_id is provided
+    if getattr(data, 'incident_id', None):
+        incident_assignment = db.query(IncidentAssignment).filter(
+            IncidentAssignment.incident_id == data.incident_id,
+            IncidentAssignment.assigned_to_id == current_guard.id,
+            IncidentAssignment.status != "Removed"
+        ).first()
+        if incident_assignment:
+            incident_assignment.inventory_status = "REQUESTED"
+    
     db.add(req)
 
     log_audit(
@@ -1963,7 +1977,47 @@ def approve_or_reject_equipment_request(
                 ref_table="equipment_requests",
                 ref_id=req.id,
                 remarks=f"Processed request #{req.id} ({req.status}) and issued {req.quantity} units.",
-            )
+            )            
+            # --- MISSION AUTO-ADVANCE LOGIC ---
+            if getattr(req, 'incident_id', None):
+                # Is there any other PENDING/REQUESTED request for this guard?
+                
+                pending = db.query(EquipmentRequest).filter(
+                    EquipmentRequest.incident_id == req.incident_id,
+                    EquipmentRequest.guard_id == req.guard_id,
+                    EquipmentRequest.status.in_(["Pending", "REQUESTED"])
+                ).count()
+                
+                if pending == 0:
+                    # All requests for this guard are either APPROVED/ISSUED/REJECTED
+                    incident_assignment = db.query(IncidentAssignment).filter(
+                        IncidentAssignment.incident_id == req.incident_id,
+                        IncidentAssignment.assigned_to_id == req.guard_id,
+                        IncidentAssignment.status != "Removed"
+                    ).first()
+                    
+                    if incident_assignment:
+                        incident_assignment.inventory_status = "READY"
+                        
+                    # Check if ALL guards on this mission are READY or NOT_REQUIRED
+                    all_assignments = db.query(IncidentAssignment).filter(
+                        IncidentAssignment.incident_id == req.incident_id,
+                        IncidentAssignment.status != "Removed"
+                    ).all()
+                    
+                    all_accepted = True
+                    all_inventory_ready = True
+                    for a in all_assignments:
+                        if a.status not in ("Accepted", "Completed"):
+                            all_accepted = False
+                        if getattr(a, 'inventory_status', 'PENDING') not in ("READY", "NOT_REQUIRED"):
+                            all_inventory_ready = False
+                            
+                    if all_accepted and all_inventory_ready:
+                        op = db.query(FieldOperation).filter(FieldOperation.incident_id == req.incident_id).first()
+                        if op and op.current_step == "Inventory Request":
+                            op.current_step = "Travelling"
+            # ----------------------------------
 
     log_audit(
         db=db,
@@ -2827,8 +2881,8 @@ def get_admin_inventory_overview(db: Session) -> dict:
     # 4. Damaged Equipment Card
     total_damaged_quantity = sum(inv.damaged_quantity for inv in all_inventories)
     damaged_records = db.query(DamagedEquipment).all()
-    under_repair_count = sum(1 for d in damaged_records if d.status in ["REPORTED", "UNDER_REPAIR", "SENT_FOR_REPAIR"])
-    awaiting_disposal_count = sum(1 for d in damaged_records if d.status in ["UNREPAIRABLE", "PENDING_DISPOSAL"])
+    under_repair_count = sum(1 for d in damaged_records if d.repair_status in ["Waiting", "Repairing"])
+    awaiting_disposal_count = sum(1 for d in damaged_records if d.repair_status in ["Scrapped"] or not d.repairable)
 
     # 5. Station Summaries (Inventory Balance by Station)
     stations = db.query(MonitoringStation).all()

@@ -252,6 +252,7 @@ class InventoryTransactionResponse(BaseModel):
 class EquipmentRequestCreate(BaseModel):
     station_inventory_id: Optional[int] = None
     inventory_master_id: Optional[int] = None
+    incident_id: Optional[int] = None
     requested_quantity: Optional[int] = Field(None, gt=0)
     quantity: Optional[int] = Field(None, gt=0)
     reason: Optional[str] = None

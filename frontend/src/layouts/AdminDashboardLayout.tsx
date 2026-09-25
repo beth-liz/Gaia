@@ -18,6 +18,7 @@ import {
 
 const adminNavItems: NavItem[] = [
   { label: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
+  { label: "GIS Intelligence", path: "/admin/gis", icon: Globe, sectionHeader: "Spatial Operations" },
   
   // Master Data & Administrative Hierarchy section
   { label: "States", path: "/admin/states", icon: Globe, sectionHeader: "Master Data & Hierarchy" },

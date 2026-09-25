@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { ProtectedRoute, PublicOnlyRoute } from "@/components/ProtectedRoute";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 
 // Public Pages
 import LandingPage from "@/pages/LandingPage";
@@ -16,6 +17,7 @@ import VillagerDashboardLayout from "@/layouts/VillagerDashboardLayout";
 
 // Admin Pages
 import AdminDashboardHome from "@/pages/admin/AdminDashboardHome";
+import GISPage from "@/pages/GISPage";
 import AdminStatesPage from "@/pages/admin/AdminStatesPage";
 import AdminDistrictsPage from "@/pages/admin/AdminDistrictsPage";
 import AdminMonitoringStationsPage from "@/pages/admin/AdminMonitoringStationsPage";
@@ -30,6 +32,7 @@ import { AdminHQRequestsPage } from "@/pages/admin/inventory/AdminHQRequestsPage
 
 // Officer & Guard Pages
 import OfficerDashboardHome from "@/pages/officer/OfficerDashboardHome";
+import OfficerMyReportsPage from "@/pages/officer/OfficerMyReportsPage";
 import OfficerCreateIncidentPage from "@/pages/officer/OfficerCreateIncidentPage";
 import RFOIncidentsPage from "@/pages/officer/RFOIncidentsPage";
 import RFOForestGuardsPage from "@/pages/officer/RFOForestGuardsPage";
@@ -51,19 +54,28 @@ import GuardMissionExecutionPage from "@/pages/officer/GuardMissionExecutionPage
 import { GuardInventoryPage } from "@/pages/officer/GuardInventoryPage";
 import { GuardMyEquipmentPage } from "@/pages/guard/inventory/GuardMyEquipmentPage";
 import { GuardReturnEquipmentPage } from "@/pages/guard/inventory/GuardReturnEquipmentPage";
+import GuardReportIncident from "@/pages/guard/GuardReportIncident";
+import GuardMyReportsPage from "@/pages/guard/GuardMyReportsPage";
 
 // Villager Pages
 import VillagerDashboardHome from "@/pages/villager/VillagerDashboardHome";
 import VillagerReportIncident from "@/pages/villager/VillagerReportIncident";
 import MyReportsPage from "@/pages/villager/MyReportsPage";
 
+// Public Pages
+import PublicReportIncident from "@/pages/public/PublicReportIncident";
+
 // Shared Pages
 import IncidentReviewPage from "@/pages/shared/IncidentReviewPage";
+import { RFOIncidentWorkflowPage } from "@/pages/officer/RFOIncidentWorkflowPage";
 import NotificationsPage from "@/pages/shared/NotificationsPage";
 import ProfilePage from "@/pages/shared/ProfilePage";
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID_HERE";
+
 function App() {
   return (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
     <AuthProvider>
       <Router>
         <Routes>
@@ -88,6 +100,11 @@ function App() {
             }
           />
 
+          <Route
+            path="/public/report-incident"
+            element={<PublicReportIncident />}
+          />
+
           {/* Villager Pending Approval Screen */}
           <Route
             path="/pending-approval"
@@ -109,6 +126,7 @@ function App() {
           >
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboardHome />} />
+            <Route path="gis" element={<GISPage />} />
             <Route path="states" element={<AdminStatesPage />} />
             <Route path="districts" element={<AdminDistrictsPage />} />
             <Route path="monitoring-stations" element={<AdminMonitoringStationsPage />} />
@@ -131,15 +149,17 @@ function App() {
           <Route
             path="/officer"
             element={
-              <ProtectedRoute allowedRoles={["Range Forest Officer", "Forest Guard", "Admin"]}>
+              <ProtectedRoute allowedRoles={["Range Forest Officer", "Admin"]}>
                 <OfficerDashboardLayout />
               </ProtectedRoute>
             }
           >
             <Route index element={<Navigate to="/officer/dashboard" replace />} />
             <Route path="dashboard" element={<OfficerDashboardHome />} />
+            <Route path="gis" element={<GISPage />} />
             <Route path="incidents" element={<RFOIncidentsPage />} />
-            <Route path="incidents/:id" element={<IncidentReviewPage />} />
+            <Route path="incidents/:id" element={<RFOIncidentWorkflowPage />} />
+            <Route path="incidents/:id/progress" element={<RFOIncidentWorkflowPage />} />
             <Route path="mission/:id" element={<GuardMissionExecutionPage />} />
             <Route path="guards" element={<RFOForestGuardsPage />} />
             <Route path="station" element={<RFOStationOverviewPage />} />
@@ -160,6 +180,8 @@ function App() {
             <Route path="inventory/audit" element={<RFOAuditHistoryPage />} />
             <Route path="inventory/history" element={<RFOAuditHistoryPage />} />
             <Route path="create-incident" element={<OfficerCreateIncidentPage />} />
+            <Route path="report-incident" element={<OfficerCreateIncidentPage />} />
+            <Route path="my-reports" element={<OfficerMyReportsPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
@@ -175,6 +197,7 @@ function App() {
           >
             <Route index element={<Navigate to="/guard/dashboard" replace />} />
             <Route path="dashboard" element={<GuardDashboardHome />} />
+            <Route path="gis" element={<GISPage />} />
             <Route path="assignments" element={<GuardIncidentsPage />} />
             <Route path="incidents" element={<GuardIncidentsPage />} />
             <Route path="inventory" element={<GuardInventoryPage />} />
@@ -184,6 +207,8 @@ function App() {
             <Route path="incidents/:id" element={<GuardMissionExecutionPage />} />
             <Route path="completed" element={<GuardCompletedReportsPage />} />
             <Route path="reports" element={<GuardCompletedReportsPage />} />
+            <Route path="report-incident" element={<GuardReportIncident />} />
+            <Route path="my-reports" element={<GuardMyReportsPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
@@ -231,7 +256,10 @@ function App() {
         </Routes>
       </Router>
     </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }
 
 export default App;
+
+

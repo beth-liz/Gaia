@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
-import { ShieldCheck, CheckCircle2, AlertTriangle, ArrowRight, Loader2 } from "lucide-react";
+import { ShieldCheck, CheckCircle2, AlertTriangle, ArrowRight, Loader2, User } from "lucide-react";
 
 const GuardDashboardHome: React.FC = () => {
   const { user } = useAuth();
@@ -54,6 +54,60 @@ const GuardDashboardHome: React.FC = () => {
               <ShieldCheck className="w-4 h-4 text-emerald-950" />
               View Assigned Missions ({stats?.guard_assigned || 0})
             </Link>
+            <Link
+              to="/guard/report-incident"
+              className="px-5 py-2.5 rounded-2xl bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 border border-emerald-600"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Report Incident
+            </Link>
+          </div>
+        </div>
+      </div>
+
+            {/* Officer Duty Credentials Card */}
+      <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-emerald-950/10 shadow-xs space-y-3">
+        <div className="flex items-center justify-between border-b border-emerald-950/10 pb-3">
+          <div className="flex items-center gap-2">
+             <User className="w-5 h-5 text-emerald-900" />
+            <h3 className="text-sm font-black text-emerald-950">Duty Credentials & Station Assignment</h3>
+          </div>
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-900">
+            PostgreSQL Database Verified
+          </span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+          <div className="w-16 h-16 rounded-full bg-emerald-900 text-amber-300 font-black text-xl flex items-center justify-center border-2 border-white shadow-sm overflow-hidden shrink-0">
+            {user?.profile_image || user?.avatar_url ? (
+              <img src={String(user.profile_image || user.avatar_url).startsWith('/static') ? `http://127.0.0.1:8000${user.profile_image || user.avatar_url}` : String(user.profile_image || user.avatar_url)} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              user?.full_name ? user.full_name.charAt(0).toUpperCase() : "G"
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1 text-xs w-full">
+            <div className="p-3 rounded-xl bg-emerald-50/50">
+              <span className="text-[10px] font-bold text-emerald-800/70 uppercase block">Name & Role</span>
+              <span className="font-bold text-emerald-950 block">{user?.full_name || "N/A"}</span>
+              <span className="text-[11px] text-emerald-800/70">{user?.designation_name || user?.role}</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-emerald-50/50">
+              <span className="text-[10px] font-bold text-emerald-800/70 uppercase block">Monitoring Station</span>
+              <span className="font-bold text-emerald-950">{user?.station_name || user?.station || "Muthanga Range Office"}</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-emerald-50/50">
+              <span className="text-[10px] font-bold text-emerald-800/70 uppercase block">District & State</span>
+              <span className="font-bold text-emerald-950">{user?.district_name || "Wayanad"}, {user?.state_name || "Kerala"}</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-emerald-50/50">
+              <span className="text-[10px] font-bold text-emerald-800/70 uppercase block">Contact Info</span>
+              <span className="font-semibold text-emerald-950 block">{user?.phone || "N/A"}</span>
+              <span className="text-[11px] text-emerald-800/70 block">{user?.email}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -119,3 +173,4 @@ const GuardDashboardHome: React.FC = () => {
 };
 
 export default GuardDashboardHome;
+

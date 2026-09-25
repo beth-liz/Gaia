@@ -109,6 +109,7 @@ export interface InventoryTransaction {
 export interface EquipmentRequest {
   id: number;
   guard_id: number;
+  incident_id?: number;
   guard_name?: string;
   badge_id?: string;
   station_inventory_id: number;
@@ -144,6 +145,7 @@ export interface EquipmentAssignment {
   category?: string;
   unit?: string;
   guard_id: number;
+  incident_id?: number;
   guard_name?: string;
   guard_badge?: string;
   quantity: number;

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/services/api";
+import { useAuth } from "@/context/AuthContext";
 import type { AnimalSpecies, Incident } from "@/types";
 import { LocationPickerMap } from "./LocationPickerMap";
 import {
   Upload,
+  Shield,
   X,
   CheckCircle2,
   Calendar,
@@ -24,10 +26,15 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
   onSuccessRedirectPath,
 }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [speciesList, setSpeciesList] = useState<AnimalSpecies[]>([]);
   const [loadingSpecies, setLoadingSpecies] = useState(true);
+
+  // Section 0: Public Reporter Info (Only for unauthenticated)
+  const [reporterName, setReporterName] = useState("");
+  const [reporterPhone, setReporterPhone] = useState("");
 
   // Section 1: Incident Info
   const [incidentTitle, setIncidentTitle] = useState("");
@@ -67,6 +74,18 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
   // Success Screen State
   const [submittedIncident, setSubmittedIncident] = useState<Incident | null>(null);
 
+  // Station Routing Preview
+  const [routingStation, setRoutingStation] = useState<{
+    station_id: number | null;
+    station_name: string | null;
+    station_phone: string | null;
+    district_name: string | null;
+    resolved: boolean;
+  } | null>(null);
+  const [routingLoading, setRoutingLoading] = useState(false);
+
+
+
   useEffect(() => {
     const fetchSpecies = async () => {
       try {
@@ -84,6 +103,40 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
     };
     fetchSpecies();
   }, []);
+
+
+  // Fetch routing preview whenever location changes
+  useEffect(() => {
+    const hasLocation = latitude !== null || villageName || districtName;
+    if (!hasLocation) {
+      setRoutingStation(null);
+      return;
+    }
+    let cancelled = false;
+    const fetch_preview = async () => {
+      try {
+        setRoutingLoading(true);
+        setRoutingStation(null);
+        const result = await api.getRoutingPreview({
+          lat: latitude,
+          lng: longitude,
+          village_name: villageName || undefined,
+          district_name: districtName || undefined,
+        });
+        if (!cancelled) {
+          setRoutingStation(result);
+        }
+      } catch {
+        if (!cancelled) {
+          setRoutingStation({ station_id: null, station_name: null, station_phone: null, district_name: null, resolved: false });
+        }
+      } finally {
+        if (!cancelled) setRoutingLoading(false);
+      }
+    };
+    const timer = setTimeout(fetch_preview, 400); // debounce 400ms
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [latitude, longitude, villageName, districtName]);
 
   const handleLocationSelect = (
     lat: number,
@@ -175,9 +228,20 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
         date_reported: dateReported,
         time_reported: timeReported,
         images: uploadedUrls,
+        reporter_name: reporterName.trim() || undefined,
+        contact_number: reporterPhone.trim() || undefined,
+        // Include resolved station_id so backend routes correctly
+        station_id: routingStation?.station_id ?? undefined,
       };
 
-      const result = await api.createIncident(payload);
+      let result;
+      if (!user) {
+        result = await api.createPublicIncident(payload);
+      } else if (user?.role === "Forest Guard") {
+        result = await api.createGuardIncident(payload);
+      } else {
+        result = await api.createIncident(payload);
+      }
       setSubmittedIncident(result);
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to submit incident report.");
@@ -228,6 +292,7 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
 
         <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
           <button
+            type="button"
             onClick={() => {
               setSubmittedIncident(null);
               setDescription("");
@@ -238,12 +303,23 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
           >
             Report Another Incident
           </button>
-          <button
-            onClick={() => navigate(onSuccessRedirectPath)}
-            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2"
-          >
-            View My Reports <ArrowRight className="w-4 h-4 text-amber-300" />
-          </button>
+          {user ? (
+            <button
+              type="button"
+              onClick={() => navigate(onSuccessRedirectPath)}
+              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2"
+            >
+              View My Reports <ArrowRight className="w-4 h-4 text-amber-300" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2"
+            >
+              Back to Home <ArrowRight className="w-4 h-4 text-amber-300" />
+            </button>
+          )}
         </div>
       </div>
     );
@@ -258,6 +334,46 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
             <span>{errorMessage}</span>
           </div>
           <button onClick={() => setErrorMessage(null)} className="text-red-500 text-xl font-bold">×</button>
+        </div>
+      )}
+
+      {/* SECTION 0: Reporter Information (Only if not logged in) */}
+      {!user && (
+        <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-6 shadow-xs">
+          <div className="flex items-center gap-3 border-b border-emerald-950/10 pb-4">
+            <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center font-black text-sm shrink-0">
+              0
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold text-emerald-950">Reporter Information</h3>
+              <p className="text-xs text-emerald-800/70 font-medium">Please provide your contact details</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Full Name *</label>
+              <input
+                type="text"
+                required
+                placeholder="Enter your full name"
+                className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-emerald-950/10 focus:bg-white focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-sm font-semibold text-emerald-950"
+                value={reporterName}
+                onChange={(e) => setReporterName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Phone Number *</label>
+              <input
+                type="tel"
+                required
+                placeholder="E.g., +91 9876543210"
+                className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-emerald-950/10 focus:bg-white focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-sm font-semibold text-emerald-950"
+                value={reporterPhone}
+                onChange={(e) => setReporterPhone(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
       )}
 
@@ -409,6 +525,60 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
             {villageName && <span className="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-900">Village: {villageName}</span>}
             {districtName && <span className="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-900">District: {districtName}</span>}
             {stateName && <span className="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-900">State: {stateName}</span>}
+          </div>
+        )}
+
+        {/* Station Routing Preview */}
+        {(routingLoading || routingStation !== null) && (
+          <div className={`p-4 rounded-2xl border transition-all ${
+            routingLoading
+              ? "bg-gray-50 border-gray-200"
+              : routingStation?.resolved
+              ? "bg-emerald-950 border-emerald-900"
+              : "bg-amber-50 border-amber-200"
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                routingLoading ? "bg-gray-200" :
+                routingStation?.resolved ? "bg-emerald-800" : "bg-amber-100"
+              }`}>
+                {routingLoading ? (
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Shield className={`w-4 h-4 ${routingStation?.resolved ? "text-emerald-300" : "text-amber-600"}`} />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                  routingLoading ? "text-gray-500" :
+                  routingStation?.resolved ? "text-emerald-400" : "text-amber-700"
+                }`}>
+                  Incident Routing
+                </p>
+                {routingLoading ? (
+                  <p className="text-xs font-semibold text-gray-600">Determining responsible station...</p>
+                ) : routingStation?.resolved ? (
+                  <>
+                    <p className="text-sm font-black text-white truncate">{routingStation.station_name}</p>
+                    {routingStation.district_name && (
+                      <p className="text-[11px] font-semibold text-emerald-300 mt-0.5">
+                        {routingStation.district_name} Forest Division
+                      </p>
+                    )}
+                    {routingStation.station_phone && (
+                      <p className="text-[11px] text-emerald-400 mt-0.5">📞 {routingStation.station_phone}</p>
+                    )}
+                    <p className="text-[10px] text-emerald-500 mt-1 font-semibold">
+                      ✓ This incident will be sent to the above station
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs font-semibold text-amber-800">
+                    Unable to determine the responsible station. Verify the selected location or try selecting a point closer to a known village.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -605,31 +775,41 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
       </div>
 
       {/* SECTION 5: Submit Actions */}
-      <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
-        <button
-          type="button"
-          onClick={() => navigate(onSuccessRedirectPath)}
-          className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs border border-gray-200 transition-all"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting || isUploadingImages}
-          className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white font-extrabold text-xs shadow-lg shadow-emerald-950/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70"
-        >
-          {isSubmitting || isUploadingImages ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
-              Submitting Incident...
-            </>
-          ) : (
-            <>
-              <FileText className="w-4 h-4 text-amber-300" />
-              Submit Incident Report
-            </>
-          )}
-        </button>
+      <div className="space-y-4">
+        {errorMessage && (
+          <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          </div>
+        )}
+        <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => navigate(onSuccessRedirectPath)}
+            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs border border-gray-200 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting || isUploadingImages}
+            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white font-extrabold text-xs shadow-lg shadow-emerald-950/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70"
+          >
+            {isSubmitting || isUploadingImages ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                Submitting Incident...
+              </>
+            ) : (
+              <>
+                <FileText className="w-4 h-4 text-amber-300" />
+                Submit Incident Report
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </form>
   );

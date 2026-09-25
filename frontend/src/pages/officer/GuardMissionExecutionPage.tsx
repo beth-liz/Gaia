@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/services/api";
+import { inventoryService } from "@/services/inventoryService";
 import { PageHeader } from "@/components/common/PageHeader";
 import { IncidentActivityTimeline } from "@/components/incidents/IncidentActivityTimeline";
 import type { Incident, IncidentActivity, FieldOperation } from "@/types";
@@ -23,13 +24,16 @@ import {
 
 const STEP_ORDER = [
   "Pending Acceptance",
+  "Inventory Request",
   "Travelling",
   "Reached Site",
   "Initial Assessment",
   "Action In Progress",
   "Situation Controlled",
   "Evidence Uploaded",
+  "Final Report",
   "Final Report Submitted",
+  "Return Inventory",
 ];
 
 const ACTION_CHECKLIST_ITEMS = [
@@ -59,6 +63,14 @@ export const GuardMissionExecutionPage: React.FC = () => {
   const [departureTime, setDepartureTime] = useState("");
   const [vehicle, setVehicle] = useState("Forest Patrol Jeep");
   const [acceptRemarks, setAcceptRemarks] = useState("");
+  
+  // Inventory State
+  // @ts-ignore
+  const [stationInventory, setStationInventory] = useState<any[]>([]);
+  const [inventoryQuantities, setInventoryQuantities] = useState<Record<number, number>>({});
+  // @ts-ignore
+  const [showNoInventoryModal, setShowNoInventoryModal] = useState(false);
+
 
   const [travellingTime, setTravellingTime] = useState("");
   const [travellingGps, setTravellingGps] = useState("");
@@ -88,6 +100,7 @@ export const GuardMissionExecutionPage: React.FC = () => {
   const [situationRemarks, setSituationRemarks] = useState("");
 
   const [evidenceGps, setEvidenceGps] = useState("");
+  const [evidencePhotos, setEvidencePhotos] = useState<FileList | null>(null);
 
   // Reinforcement Request Inputs
   const [showReinforcementModal, setShowReinforcementModal] = useState(false);
@@ -97,20 +110,42 @@ export const GuardMissionExecutionPage: React.FC = () => {
   const [reinfRemarks, setReinfRemarks] = useState("");
 
   // Final Report Signature Input
-  const [signature, setSignature] = useState("");
+  // @ts-ignore
+  const [signature, setSignature] = useState<string>("");
+  const [reportReviewed, setReportReviewed] = useState(false);
+  const [signatureFile, setSignatureFile] = useState<File | null>(null);
+
+  const handleDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Failed to download file:", error);
+    }
+  };
 
   const loadMissionData = async () => {
     if (!incidentId) return;
     try {
       setLoading(true);
-      const [incData, opData, actData] = await Promise.all([
+      const [incData, opData, actData, stStock] = await Promise.all([
         api.getIncidentById(incidentId),
         api.getFieldOp(incidentId),
         api.getIncidentActivities(incidentId),
+        inventoryService.getMyStationInventory()
       ]);
       setIncident(incData);
       setFieldOp(opData);
       setActivities(actData);
+      setStationInventory(stStock);
 
       // Pre-fill defaults
       const nowTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -153,6 +188,26 @@ export const GuardMissionExecutionPage: React.FC = () => {
 
   const currentStep = fieldOp.current_step || "Pending Acceptance";
   const currentStepIdx = STEP_ORDER.indexOf(currentStep);
+
+  const currentUserStr = localStorage.getItem("gaia_user");
+  let currentUserId: number | null = null;
+  if (currentUserStr) {
+    try {
+      const u = JSON.parse(currentUserStr);
+      currentUserId = u.id;
+    } catch(e) {}
+  }
+  const myAssignment = incident?.assigned_officers?.find(a => a.officer_id === currentUserId);
+  const iHaveAccepted = myAssignment?.assignment_status === "Accepted" || myAssignment?.assignment_status === "Completed";
+  const allAssigned = incident?.assigned_officers?.filter(a => a.assignment_status !== "Removed") || [];
+  const pendingGuards = allAssigned.filter(a => a.assignment_status !== "Accepted" && a.assignment_status !== "Completed");
+  const allAccepted = pendingGuards.length === 0;
+  
+  const pendingInventoryGuards = allAssigned.filter(a => a.inventory_status !== "READY" && a.inventory_status !== "NOT_REQUIRED");
+  const allInventoryReady = pendingInventoryGuards.length === 0;
+  
+  const myInventoryStatus = myAssignment?.inventory_status || "PENDING";
+
 
   const toggleActionItem = (item: string) => {
     setSelectedActions((prev) =>
@@ -287,7 +342,7 @@ export const GuardMissionExecutionPage: React.FC = () => {
   const handleStepEvidence = async () => {
     try {
       setSubmitting(true);
-      const updated = await api.fieldStepEvidence(incidentId, { gps: evidenceGps });
+      const updated = await api.fieldStepEvidence(incidentId, { gps: evidenceGps, photos: evidencePhotos });
       setFieldOp(updated);
       setSuccessMsg("Field evidence logged! Review automated final report.");
       await loadMissionData();
@@ -321,14 +376,36 @@ export const GuardMissionExecutionPage: React.FC = () => {
     }
   };
 
-  const handleGenerateSubmitReport = async () => {
+  const handleGenerateReport = async () => {
+    if (!signatureFile) { alert("Signature required."); return; }
     try {
       setSubmitting(true);
-      await api.generateSubmitFinalReport(incidentId, { signature });
-      setSuccessMsg("Automated Final Field Report submitted to Head Officer for approval!");
+      const updated = await api.generateAutomatedFinalReport(incidentId, signatureFile);
+      setFieldOp(updated);
+      setSuccessMsg("Final report generated. Please review and submit.");
+      await loadMissionData();
+    } catch(err: any) {
+      alert(err.message || "Failed to generate report.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleGenerateSubmitReport = async () => {
+    if (!reportReviewed) {
+      alert("Please review the report before submitting.");
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const updated = await api.submitAutomatedFinalReport(incidentId);
+      setFieldOp(updated);
+      setSuccessMsg("Automated Final Report Submitted to Head Officer for Verification");
       await loadMissionData();
     } catch (err: any) {
-      alert(err.message || "Failed to submit final report.");
+      let msg = err.message;
+      if (typeof msg === 'object') msg = JSON.stringify(msg);
+      alert(msg || "Unable to submit the report. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -456,61 +533,260 @@ export const GuardMissionExecutionPage: React.FC = () => {
           {/* STEP 0: PENDING ACCEPTANCE */}
           {currentStep === "Pending Acceptance" && (
             <div className="space-y-4 text-xs">
-              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 space-y-1">
-                <span className="font-black text-sm flex items-center gap-1.5">
-                  <Truck className="w-4 h-4 text-amber-700" /> Mission Dispatch Pending Acceptance
-                </span>
-                <p className="text-[11px] font-medium opacity-90">
-                  Head Officer has assigned you to this field mission. You must accept the mission to unlock step-by-step field operations.
-                </p>
+              {/* ASSIGNED GUARDS STATUS PANEL */}
+              <div className="p-4 rounded-2xl bg-white border border-emerald-100 space-y-3 shadow-sm">
+                <h4 className="font-black text-emerald-950 text-xs uppercase border-b border-emerald-50 pb-2">Assigned Officers</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {allAssigned.map(a => (
+                    <div key={a.officer_id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
+                      <span className="font-bold text-gray-800 text-[11px]">{a.full_name}</span>
+                      {(a.assignment_status === "Accepted" || a.assignment_status === "Completed") ? (
+                        <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> Accepted</span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1">⏳ Pending</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {!allAccepted && (
+                  <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">
+                    <p className="font-black text-[11px] mb-1 flex items-center gap-1.5">
+                      <span className="w-4 h-4 rounded-full bg-amber-500 text-white flex items-center justify-center text-[9px]">!</span>
+                      WAITING FOR ALL GUARDS TO ACCEPT
+                    </p>
+                    <p className="font-medium text-[10px] opacity-80">
+                      Field operations cannot begin until all assigned Guards accept this mission.
+                      Waiting for: {pendingGuards.map(g => g.full_name).join(', ')}
+                    </p>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-extrabold text-emerald-950 text-[10px] uppercase block">Departure Time *</label>
-                  <input
-                    type="text"
-                    value={departureTime}
-                    onChange={(e) => setDepartureTime(e.target.value)}
-                    placeholder="e.g. 14:30"
-                    className="w-full p-2.5 rounded-xl border border-emerald-950/20 bg-white font-bold text-emerald-950"
-                  />
-                </div>
+              {!iHaveAccepted ? (
+                <>
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 space-y-1 mt-4">
+                    <span className="font-black text-sm flex items-center gap-1.5">
+                      <Truck className="w-4 h-4 text-amber-700" /> Mission Dispatch Pending Acceptance
+                    </span>
+                    <p className="text-[11px] font-medium opacity-90">
+                      Head Officer has assigned you to this field mission. You must accept the mission to unlock step-by-step field operations.
+                    </p>
+                  </div>
 
-                <div className="space-y-1">
-                  <label className="font-extrabold text-emerald-950 text-[10px] uppercase block">Patrol Vehicle *</label>
-                  <select
-                    value={vehicle}
-                    onChange={(e) => setVehicle(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-emerald-950/20 bg-white font-bold text-emerald-950"
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="font-extrabold text-emerald-950 text-[10px] uppercase block">Departure Time *</label>
+                      <input
+                        type="text"
+                        value={departureTime}
+                        onChange={(e) => setDepartureTime(e.target.value)}
+                        placeholder="e.g. 14:30"
+                        className="w-full p-2.5 rounded-xl border border-emerald-950/20 bg-white font-bold text-emerald-950"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-extrabold text-emerald-950 text-[10px] uppercase block">Patrol Vehicle *</label>
+                      <select
+                        value={vehicle}
+                        onChange={(e) => setVehicle(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-emerald-950/20 bg-white font-bold text-emerald-950"
+                      >
+                        <option value="Forest Patrol Jeep">Forest Patrol Jeep</option>
+                        <option value="Patrol Motorbike">Patrol Motorbike</option>
+                        <option value="Foot Patrol Team">Foot Patrol Team</option>
+                        <option value="Wildlife Rescue Van">Wildlife Rescue Van</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-extrabold text-emerald-950 text-[10px] uppercase block">Acceptance Remarks (Optional)</label>
+                    <textarea
+                      value={acceptRemarks}
+                      onChange={(e) => setAcceptRemarks(e.target.value)}
+                      placeholder="Enter any preliminary notes or team details before departing..."
+                      className="w-full p-2.5 rounded-xl border border-emerald-950/20 bg-white font-bold text-emerald-950 min-h-[60px]"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleAcceptMission}
+                    disabled={submitting}
+                    className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs shadow-md shadow-amber-500/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50 mt-4"
                   >
-                    <option value="Forest Patrol Jeep">Forest Patrol Jeep</option>
-                    <option value="Patrol Motorbike">Patrol Motorbike</option>
-                    <option value="Foot Patrol Team">Foot Patrol Team</option>
-                    <option value="Wildlife Rescue Van">Wildlife Rescue Van</option>
-                  </select>
+                    {submitting ? "Accepting..." : "Accept Mission"}
+                  </button>
+                </>
+              ) : (
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 mt-4 text-center">
+                  <span className="font-black text-sm flex items-center justify-center gap-2 mb-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" /> You Have Accepted The Mission
+                  </span>
+                  <p className="font-medium text-xs">
+                    Please wait for the remaining assigned Guards to accept before starting field operations.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* STEP 0.5: INVENTORY REQUEST */}
+          {currentStep === "Inventory Request" && (
+            <div className="space-y-4 text-xs">
+              <div className="p-4 rounded-2xl bg-white border border-emerald-100 space-y-3 shadow-sm">
+                <h4 className="font-black text-emerald-950 text-xs uppercase border-b border-emerald-50 pb-2">Inventory Readiness</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {allAssigned.map(a => (
+                    <div key={a.officer_id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
+                      <span className="font-bold text-gray-800 text-[11px]">{a.full_name}</span>
+                      {(a.inventory_status === "READY" || a.inventory_status === "NOT_REQUIRED") ? (
+                        <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> Dispatched</span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1">⏳ Pending</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {!allInventoryReady && (
+                  <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">
+                    <p className="font-black text-[11px] mb-1 flex items-center gap-1.5">
+                      <span className="w-4 h-4 rounded-full bg-amber-500 text-white flex items-center justify-center text-[9px]">!</span>
+                      WAITING FOR INVENTORY DISPATCH
+                    </p>
+                    <p className="font-medium text-[10px] opacity-80">
+                      Travelling is locked until all required inventory is dispatched.
+                      Waiting for: {pendingInventoryGuards.map(g => g.full_name).join(', ')}
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              {myInventoryStatus === "PENDING" && (
+    <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-950 space-y-4 mt-4">
+      <div className="flex items-center justify-between border-b border-blue-200/50 pb-3">
+        <span className="font-black text-sm flex items-center gap-1.5">
+          <Shield className="w-5 h-5 text-blue-700" /> INVENTORY REQUIRED FOR THIS MISSION
+        </span>
+      </div>
+      
+      <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+        {stationInventory.length === 0 ? (
+          <div className="p-4 text-center text-blue-800/60 font-medium">
+            No available inventory at this station.
+          </div>
+        ) : (
+          stationInventory.map(item => {
+            const qty = inventoryQuantities[item.id] || 0;
+            return (
+              <div key={item.id} className="p-3 bg-white rounded-xl border border-blue-100 flex items-center justify-between">
+                <div>
+                  <h5 className="font-black text-blue-950 text-[11px]">{item.item_name}</h5>
+                  <p className="text-[10px] font-medium text-blue-800/70 mt-0.5">Available: {item.available_quantity}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setInventoryQuantities(prev => ({...prev, [item.id]: Math.max(0, qty - 1)}))}
+                    className="w-7 h-7 rounded-lg bg-blue-50 hover:bg-blue-100 flex items-center justify-center text-blue-700 font-black"
+                  >
+                    -
+                  </button>
+                  <span className="font-black text-blue-950 w-4 text-center">{qty}</span>
+                  <button
+                    onClick={() => setInventoryQuantities(prev => ({...prev, [item.id]: Math.min(item.available_quantity, qty + 1)}))}
+                    className="w-7 h-7 rounded-lg bg-blue-50 hover:bg-blue-100 flex items-center justify-center text-blue-700 font-black"
+                  >
+                    +
+                  </button>
                 </div>
               </div>
+            );
+          })
+        )}
+      </div>
 
-              <div className="space-y-1">
-                <label className="font-extrabold text-emerald-950 text-[10px] uppercase block">Acceptance Remarks</label>
-                <textarea
-                  rows={2}
-                  value={acceptRemarks}
-                  onChange={(e) => setAcceptRemarks(e.target.value)}
-                  placeholder="e.g. Armed patrol team equipped with sirens & firecrackers departing range HQ..."
-                  className="w-full p-2.5 rounded-xl border border-emerald-950/20 bg-white font-medium text-emerald-950"
-                />
+      {Object.keys(inventoryQuantities).some(k => inventoryQuantities[parseInt(k)] > 0) && (
+        <div className="p-3 bg-blue-900 text-white rounded-xl space-y-2 mt-4">
+          <h5 className="font-black text-[10px] uppercase text-blue-300">Selected Items</h5>
+          {Object.entries(inventoryQuantities).filter(([_, q]) => q > 0).map(([id, q]) => {
+            const itemName = stationInventory.find(i => i.id === parseInt(id))?.item_name;
+            return (
+              <div key={id} className="flex justify-between text-[11px] font-medium border-b border-blue-800/50 pb-1 last:border-0 last:pb-0">
+                <span>{itemName}</span>
+                <span className="font-black">× {q}</span>
               </div>
+            );
+          })}
+        </div>
+      )}
 
-              <button
-                onClick={handleAcceptMission}
-                disabled={submitting}
-                className="w-full py-3.5 rounded-2xl bg-emerald-900 hover:bg-emerald-950 text-amber-300 font-black text-xs shadow-md transition-all flex items-center justify-center gap-2"
-              >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileCheck className="w-4 h-4 text-amber-300" />}
-                Accept Field Mission & Start Operation
-              </button>
+      <div className="flex flex-col gap-2 pt-2">
+          <button
+            onClick={async () => {
+              try {
+                const requests = Object.entries(inventoryQuantities).filter(([_, q]) => q > 0);
+                if (requests.length === 0) {
+                  alert("Please select at least one item or choose 'I DON\'T NEED ANY INVENTORY'.");
+                  return;
+                }
+                setSubmitting(true);
+                
+                await Promise.all(
+                  requests.map(([id, qty]) =>
+                    inventoryService.createEquipmentRequest({
+                      station_inventory_id: parseInt(id),
+                      quantity: qty,
+                      purpose: `Mission INC-${incidentId}`,
+                      incident_id: incidentId
+                    })
+                  )
+                );
+                
+                setSuccessMsg("Inventory requests submitted successfully.");
+                await loadMissionData();
+              } catch(e: any) {
+                alert(e.message || "Failed to submit requests.");
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+            disabled={submitting || !Object.keys(inventoryQuantities).some(k => inventoryQuantities[parseInt(k)] > 0)}
+            className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black text-xs shadow-md transition-all text-center"
+          >
+            SEND INVENTORY REQUEST
+          </button>
+          
+          <button
+            onClick={() => setShowNoInventoryModal(true)}
+            disabled={submitting}
+            className="w-full py-3 rounded-xl bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 font-bold text-xs shadow-sm transition-all text-center"
+          >
+            I DON'T NEED ANY INVENTORY
+          </button>
+      </div>
+    </div>
+)}
+                
+                {myInventoryStatus === "REQUESTED" && (
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 mt-4 text-center">
+                    <span className="font-black text-sm flex items-center justify-center gap-2 mb-2">
+                      ⏳ Inventory Requested
+                    </span>
+                    <p className="font-medium text-xs">
+                      Your inventory request is awaiting Head Officer approval.
+                    </p>
+                  </div>
+              )}
+              {(myInventoryStatus === "READY" || myInventoryStatus === "NOT_REQUIRED") && (
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 mt-4 text-center">
+                    <span className="font-black text-sm flex items-center justify-center gap-2 mb-2">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Inventory Ready
+                    </span>
+                    <p className="font-medium text-xs">
+                      Your equipment is ready. Please wait for the remaining assigned Guards if applicable.
+                    </p>
+                  </div>
+              )}
             </div>
           )}
 
@@ -883,6 +1159,17 @@ export const GuardMissionExecutionPage: React.FC = () => {
                 />
               </div>
 
+              <div className="space-y-1">
+                <label className="font-extrabold text-emerald-950 text-[10px] uppercase block">Evidence Photos</label>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={(e) => setEvidencePhotos(e.target.files)}
+                  className="w-full p-2.5 rounded-xl border border-emerald-950/20 bg-white font-bold text-emerald-950"
+                />
+              </div>
+
               <button
                 onClick={handleStepEvidence}
                 disabled={submitting}
@@ -895,41 +1182,102 @@ export const GuardMissionExecutionPage: React.FC = () => {
           )}
 
           {/* STEP 7: AUTOMATED FINAL REPORT */}
-          {currentStep === "Final Report Submitted" && (
-            <div className="space-y-4 text-xs">
-              <div className="p-4 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-950 font-bold flex items-center justify-between">
-                <span>Automated Final Report Generated & Submitted to Head Officer for RFO Approval</span>
-                <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+            {["Final Report", "Final Report Submitted"].includes(currentStep) && (
+              <div className="space-y-4 text-xs">
+                
+                {currentStep === "Final Report Submitted" || ["Awaiting Verification", "Verified", "Closed"].includes(incident?.status || "") ? (
+                   <div className="p-4 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-950 font-bold flex items-center justify-between mb-4">
+                     <div>
+                       <span className="block text-sm">✓ Automated Final Report Submitted</span>
+                       <span className="block text-[11px] font-medium opacity-90 mt-1">The automated final report has been submitted to the Head Officer for verification.</span>
+                     </div>
+                     <CheckCircle2 className="w-6 h-6 text-emerald-700 shrink-0" />
+                   </div>
+                ) : (
+                  <>
+                    {!fieldOp?.report_generated_content && (
+                      <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-950 space-y-1 mb-4">
+                        <span className="font-black text-sm flex items-center gap-1.5">
+                          <FileText className="w-4 h-4 text-blue-700" /> Automated Final Report
+                        </span>
+                        <p className="text-[11px] font-medium opacity-90">
+                          Gaia will automatically generate the final incident report using the information collected during the incident investigation.
+                        </p>
+                      </div>
+                    )}
+                    
+                    {fieldOp?.report_generated_content && (
+                      <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-1 mb-4">
+                        <span className="font-black text-sm flex items-center gap-1.5">
+                          ✓ Report Generated
+                        </span>
+                        <p className="text-[11px] font-medium opacity-90">
+                          Gaia has successfully generated the automated final incident report.
+                        </p>
+                        <p className="text-[11px] font-bold mt-2">
+                          File: Gaia_Incident_INC-{incident?.reference_id || incident?.id}_Final_Report.pdf
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {fieldOp?.report_generated_content && (
+                  <div className="flex gap-2 mb-4">
+                    <a href={`http://localhost:8000${fieldOp.report_generated_content}`} target="_blank" rel="noreferrer" className="flex-1 py-2.5 rounded-xl bg-blue-100 hover:bg-blue-200 text-blue-900 font-black text-xs text-center shadow-xs">
+                      View Report
+                    </a>
+                    <button onClick={() => handleDownload(`http://localhost:8000${fieldOp.report_generated_content}`, `Gaia_Incident_INC-${incident?.reference_id || incident?.id}_Final_Report.pdf`)} className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs text-center shadow-xs">
+                      Download PDF
+                    </button>
+                  </div>
+                )}
+
+                {currentStep !== "Final Report Submitted" && !["Awaiting Verification", "Verified", "Closed"].includes(incident?.status || "") && (
+                  <>
+                    {!fieldOp?.report_generated_content ? (
+                      <>
+                        <div className="space-y-1">
+                          <label className="font-extrabold text-emerald-950 text-[10px] uppercase block">Officer Signature (Upload Image) *</label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setSignatureFile(e.target.files?.[0] || null)}
+                            className="w-full p-2.5 rounded-xl border border-emerald-950/20 bg-white font-bold text-emerald-950"
+                          />
+                        </div>
+                        <button
+                          onClick={handleGenerateReport}
+                          disabled={submitting || !signatureFile}
+                          className="w-full py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-black text-xs transition-all shadow-xs disabled:opacity-50 mt-4 flex justify-center items-center gap-2"
+                        >
+                          {submitting ? "Generating automated report..." : "Generate & View Report"}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+                          <p className="text-amber-900 font-bold mb-2">Please review the generated report before submitting it to the Head Officer.</p>
+                          <div className="flex items-center gap-2">
+                            <input type="checkbox" id="reviewed" checked={reportReviewed} onChange={(e) => setReportReviewed(e.target.checked)} className="w-4 h-4" />
+                            <label htmlFor="reviewed" className="text-[11px] font-bold text-amber-950 cursor-pointer">I have reviewed the generated final report PDF.</label>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={handleGenerateSubmitReport}
+                          disabled={submitting || !reportReviewed}
+                          className="w-full py-3.5 rounded-2xl bg-emerald-900 hover:bg-emerald-950 text-amber-300 font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {submitting ? "Submitting report to Head Officer..." : "Submit Automated Final Report to Head Officer"}
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
-
-              {fieldOp.report_generated_content && (
-                <div className="p-4 rounded-2xl bg-emerald-950/5 border border-emerald-950/10 font-mono text-[11px] whitespace-pre-wrap leading-relaxed text-emerald-950 max-h-64 overflow-y-auto">
-                  {fieldOp.report_generated_content}
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <label className="font-extrabold text-emerald-950 text-[10px] uppercase block">Officer Signature</label>
-                <input
-                  type="text"
-                  value={signature}
-                  onChange={(e) => setSignature(e.target.value)}
-                  placeholder="Enter your digital signature..."
-                  className="w-full p-2.5 rounded-xl border border-emerald-950/20 bg-white font-bold text-emerald-950"
-                />
-              </div>
-
-              <button
-                onClick={handleGenerateSubmitReport}
-                disabled={submitting}
-                className="w-full py-3.5 rounded-2xl bg-emerald-900 hover:bg-emerald-950 text-amber-300 font-black text-xs shadow-md transition-all flex items-center justify-center gap-2"
-              >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4 text-amber-300" />}
-                Submit Automated Final Report to Head RFO
-              </button>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
         {/* RIGHT COLUMN: Mission Summary & Reinforcement Panel (3 cols) */}
         <div className="lg:col-span-3 space-y-4 text-xs">
@@ -963,7 +1311,8 @@ export const GuardMissionExecutionPage: React.FC = () => {
           </div>
 
           {/* REQUEST REINFORCEMENT PANEL */}
-          <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-emerald-950 rounded-3xl p-5 space-y-3 shadow-md border border-amber-600">
+          {currentStepIdx >= 2 && currentStepIdx <= 7 && (
+            <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-emerald-950 rounded-3xl p-5 space-y-3 shadow-md border border-amber-600">
             <div className="flex items-center gap-2">
               <PlusCircle className="w-5 h-5 text-emerald-950" />
               <div>
@@ -986,6 +1335,7 @@ export const GuardMissionExecutionPage: React.FC = () => {
               </button>
             )}
           </div>
+          )}
         </div>
       </div>
 

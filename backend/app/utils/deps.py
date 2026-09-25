@@ -56,6 +56,26 @@ def get_current_user(
     return user
 
 
+def get_current_user_optional(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> User | None:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header.split(" ")[1]
+    payload = verify_token(token)
+    if not payload:
+        return None
+    email: str = payload.get("sub") or payload.get("email")
+    if not email:
+        return None
+    user = db.query(User).filter(User.email == email).first()
+    if not user or not user.is_active:
+        return None
+    return user
+
+
 class RoleChecker:
     def __init__(self, allowed_roles: list[str]):
         self.allowed_roles = allowed_roles

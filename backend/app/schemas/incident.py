@@ -24,6 +24,7 @@ class IncidentCreate(BaseModel):
     property_damage: Optional[bool] = False
     crop_damage: Optional[bool] = False
     contact_number: Optional[str] = None
+    reporter_name: Optional[str] = None
     date_reported: Optional[str] = None
     time_reported: Optional[str] = None
     images: Optional[List[str]] = []
@@ -47,6 +48,9 @@ class AssignedOfficerOut(BaseModel):
     work_status: Optional[str] = "Available"
     avatar_url: Optional[str] = None
     assigned_at: str
+    assignment_status: Optional[str] = "Assigned"
+    inventory_status: Optional[str] = "PENDING"
+    accepted_at: Optional[str] = None
     priority: Optional[str] = "High"
     estimated_response_time: Optional[str] = "30 Mins"
     instructions: Optional[str] = None
