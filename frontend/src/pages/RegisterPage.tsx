@@ -49,6 +49,7 @@ const RegisterPage: React.FC = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const fetchStatesList = async () => {
@@ -111,37 +112,112 @@ const RegisterPage: React.FC = () => {
     fetchVillagesList();
   }, [selectedDistrictId]);
 
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+
+    // Full name validation
+    const trimmedName = fullName.trim().replace(/\s+/g, " ");
+    if (!trimmedName) {
+      errors.fullName = "Full name is required.";
+    } else if (trimmedName.length < 2) {
+      errors.fullName = "Full name must be at least 2 characters.";
+    } else if (trimmedName.length > 100) {
+      errors.fullName = "Full name cannot exceed 100 characters.";
+    } else {
+      // Allow alphabetic characters (including accented and international Unicode letters) and spaces only
+      const nameRegex = /^[\p{L}\s]+$/u;
+      if (!nameRegex.test(trimmedName)) {
+        errors.fullName = "Full name must contain letters and spaces only. Digits and special characters are not allowed.";
+      }
+    }
+
+    // Phone validation
+    const trimmedPhone = phone.trim();
+    if (!trimmedPhone) {
+      errors.phone = "Phone number is required.";
+    } else {
+      const phoneDigits = trimmedPhone.replace(/\D/g, "");
+      if (trimmedPhone.startsWith("+")) {
+        if (!/^\+\d{10,15}$/.test(trimmedPhone)) {
+          errors.phone = "Invalid international phone format. (e.g. +919876543210)";
+        }
+      } else if (!/^\d{10,15}$/.test(trimmedPhone)) {
+        errors.phone = "Phone number must contain digits only.";
+      }
+
+      if (!errors.phone) {
+        if (phoneDigits.length === 10) {
+          if (!["6", "7", "8", "9"].includes(phoneDigits[0])) {
+            errors.phone = "10-digit mobile number must start with 6, 7, 8, or 9.";
+          }
+        } else if (phoneDigits.length === 12 && phoneDigits.startsWith("91")) {
+          if (!["6", "7", "8", "9"].includes(phoneDigits[2])) {
+            errors.phone = "Indian mobile number must start with 6, 7, 8, or 9.";
+          }
+        } else {
+          errors.phone = "Please enter a valid 10-digit mobile number (e.g. 9876543210).";
+        }
+      }
+    }
+
+    // Email validation
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      errors.email = "Email address is required.";
+    } else {
+      const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        errors.email = "Please enter a valid email address (e.g. name@example.com).";
+      }
+    }
+
+    // Password validation
+    if (!password) {
+      errors.password = "Password is required.";
+    } else if (password.length < 6) {
+      errors.password = "Password must be at least 6 characters long.";
+    }
+
+    if (!confirmPassword) {
+      errors.confirmPassword = "Confirm password is required.";
+    } else if (password !== confirmPassword) {
+      errors.confirmPassword = "Passwords do not match.";
+    }
+
+    // Location selection
+    if (!selectedStateId) {
+      errors.state = "Please select your state.";
+    }
+    if (!selectedDistrictId) {
+      errors.district = "Please select your district.";
+    }
+    if (!villageId) {
+      errors.village = "Please select your village.";
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    if (!selectedStateId) {
-      setError("Please select your state.");
-      return;
-    }
-
-    if (!selectedDistrictId) {
-      setError("Please select your district.");
-      return;
-    }
-
-    if (!villageId) {
-      setError("Please select your village.");
+    if (!validateForm()) {
       return;
     }
 
     setIsSubmitting(true);
 
     try {
+      const trimmedName = fullName.trim().replace(/\s+/g, " ");
+      const normalizedPhone = phone.trim().replace(/\D/g, "");
+      const finalPhone = normalizedPhone.length === 12 && normalizedPhone.startsWith("91") ? normalizedPhone.slice(2) : normalizedPhone;
+
       await api.registerVillager({
-        full_name: fullName,
-        email,
-        phone,
+        full_name: trimmedName,
+        email: email.trim().toLowerCase(),
+        phone: finalPhone,
         password,
         village_id: Number(villageId),
       });
@@ -230,71 +306,105 @@ const RegisterPage: React.FC = () => {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
+              {/* Fake hidden input traps to discourage browser password manager autofill */}
+              <input type="text" name="fake_username_register" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" autoComplete="off" />
+              <input type="password" name="fake_password_register" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" autoComplete="off" />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 {/* Full Name */}
                 <div className="group">
                   <label htmlFor="fullName" className="block text-[14px] font-medium text-[#E0E5E2] mb-1.5 drop-shadow-sm">
-                    Full Name
+                    Full Name *
                   </label>
                   <div className="relative flex items-center">
                     <input
                       id="fullName"
+                      name="gaia_reg_fullname"
                       type="text"
                       required
+                      autoComplete="off"
                       value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
+                      onChange={(e) => {
+                        setFullName(e.target.value);
+                        if (fieldErrors.fullName) setFieldErrors(prev => ({ ...prev, fullName: "" }));
+                      }}
                       placeholder="Enter your name"
                       data-testid="register-full-name"
-                      className="w-full pl-4 pr-10 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border border-[#A8ADA8]/40 text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all placeholder:text-[#65726B] shadow-sm"
+                      className={`w-full pl-4 pr-10 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border ${
+                        fieldErrors.fullName ? 'border-red-500 ring-1 ring-red-500/50' : 'border-[#A8ADA8]/40'
+                      } text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all placeholder:text-[#65726B] shadow-sm`}
                     />
                     <UserIcon className="w-[18px] h-[18px] text-[#65726B] group-focus-within:text-[#3FBF7F] absolute right-4 shrink-0 transition-colors pointer-events-none" />
                   </div>
+                  {fieldErrors.fullName && (
+                    <p className="mt-1.5 text-xs text-red-400 font-medium">{fieldErrors.fullName}</p>
+                  )}
                 </div>
 
                 {/* Phone Number */}
                 <div className="group">
                   <label htmlFor="phone" className="block text-[14px] font-medium text-[#E0E5E2] mb-1.5 drop-shadow-sm">
-                    Phone Number
+                    Phone Number *
                   </label>
                   <div className="relative flex items-center">
                     <input
                       id="phone"
+                      name="gaia_reg_phone"
                       type="tel"
                       required
+                      autoComplete="off"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="Your mobile number"
+                      onChange={(e) => {
+                        setPhone(e.target.value);
+                        if (fieldErrors.phone) setFieldErrors(prev => ({ ...prev, phone: "" }));
+                      }}
+                      placeholder="10-digit mobile number"
                       data-testid="register-phone"
-                      className="w-full pl-4 pr-10 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border border-[#A8ADA8]/40 text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all placeholder:text-[#65726B] shadow-sm"
+                      className={`w-full pl-4 pr-10 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border ${
+                        fieldErrors.phone ? 'border-red-500 ring-1 ring-red-500/50' : 'border-[#A8ADA8]/40'
+                      } text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all placeholder:text-[#65726B] shadow-sm`}
                     />
                     <Phone className="w-[18px] h-[18px] text-[#65726B] group-focus-within:text-[#3FBF7F] absolute right-4 shrink-0 transition-colors pointer-events-none" />
                   </div>
+                  {fieldErrors.phone && (
+                    <p className="mt-1.5 text-xs text-red-400 font-medium">{fieldErrors.phone}</p>
+                  )}
                 </div>
               </div>
 
               {/* Email Address */}
               <div className="group">
                 <label htmlFor="email" className="block text-[14px] font-medium text-[#E0E5E2] mb-1.5 drop-shadow-sm">
-                  Email Address
+                  Email Address *
                 </label>
                 <div className="relative flex items-center">
                   <input
                     id="email"
+                    name="gaia_reg_email"
                     type="email"
                     required
+                    autoComplete="off"
                     value={email}
                     readOnly={!!prefill.email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: "" }));
+                    }}
                     placeholder="email@example.com"
                     data-testid="register-email"
-                    className={`w-full pl-4 pr-10 h-[52px] rounded-lg border text-[15px] focus:outline-none transition-all placeholder:text-[#65726B] shadow-sm ${prefill.email
-                      ? 'bg-[#E3EBE7] border-[#A8ADA8]/20 text-[#65726B] cursor-not-allowed'
-                      : 'bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border-[#A8ADA8]/40 text-[#151A18] focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30'
-                      }`}
+                    className={`w-full pl-4 pr-10 h-[52px] rounded-lg border text-[15px] focus:outline-none transition-all placeholder:text-[#65726B] shadow-sm ${
+                      fieldErrors.email
+                        ? 'border-red-500 ring-1 ring-red-500/50 bg-[#FAFCFB] text-[#151A18]'
+                        : prefill.email
+                        ? 'bg-[#E3EBE7] border-[#A8ADA8]/20 text-[#65726B] cursor-not-allowed'
+                        : 'bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border-[#A8ADA8]/40 text-[#151A18] focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30'
+                    }`}
                   />
                   <Mail className="w-[18px] h-[18px] text-[#65726B] group-focus-within:text-[#3FBF7F] absolute right-4 shrink-0 transition-colors pointer-events-none" />
                 </div>
+                {fieldErrors.email && (
+                  <p className="mt-1.5 text-xs text-red-400 font-medium">{fieldErrors.email}</p>
+                )}
               </div>
 
               {/* Location Grid */}
@@ -302,16 +412,22 @@ const RegisterPage: React.FC = () => {
                 {/* State */}
                 <div className="group">
                   <label htmlFor="state" className="block text-[14px] font-medium text-[#E0E5E2] mb-1.5 drop-shadow-sm">
-                    State
+                    State *
                   </label>
                   <div className="relative flex items-center">
                     <select
                       id="state"
+                      name="gaia_reg_state"
                       required
                       value={selectedStateId}
-                      onChange={(e) => setSelectedStateId(e.target.value === "" ? "" : Number(e.target.value))}
+                      onChange={(e) => {
+                        setSelectedStateId(e.target.value === "" ? "" : Number(e.target.value));
+                        if (fieldErrors.state) setFieldErrors(prev => ({ ...prev, state: "" }));
+                      }}
                       disabled={isLoadingStates}
-                      className="w-full pl-4 pr-10 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border border-[#A8ADA8]/40 text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all appearance-none cursor-pointer shadow-sm [&>option]:bg-white"
+                      className={`w-full pl-4 pr-10 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border ${
+                        fieldErrors.state ? 'border-red-500 ring-1 ring-red-500/50' : 'border-[#A8ADA8]/40'
+                      } text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all appearance-none cursor-pointer shadow-sm [&>option]:bg-white`}
                     >
                       <option value="">Select</option>
                       {!isLoadingStates && states.map((s) => (
@@ -320,21 +436,30 @@ const RegisterPage: React.FC = () => {
                     </select>
                     <MapPin className="w-[18px] h-[18px] text-[#65726B] group-focus-within:text-[#3FBF7F] absolute right-4 shrink-0 pointer-events-none transition-colors" />
                   </div>
+                  {fieldErrors.state && (
+                    <p className="mt-1.5 text-xs text-red-400 font-medium">{fieldErrors.state}</p>
+                  )}
                 </div>
 
                 {/* District */}
                 <div className="group">
                   <label htmlFor="district" className="block text-[14px] font-medium text-[#E0E5E2] mb-1.5 drop-shadow-sm">
-                    District
+                    District *
                   </label>
                   <div className="relative flex items-center">
                     <select
                       id="district"
+                      name="gaia_reg_district"
                       required
                       value={selectedDistrictId}
-                      onChange={(e) => setSelectedDistrictId(e.target.value === "" ? "" : Number(e.target.value))}
+                      onChange={(e) => {
+                        setSelectedDistrictId(e.target.value === "" ? "" : Number(e.target.value));
+                        if (fieldErrors.district) setFieldErrors(prev => ({ ...prev, district: "" }));
+                      }}
                       disabled={isLoadingDistricts || !selectedStateId}
-                      className="w-full pl-4 pr-10 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border border-[#A8ADA8]/40 text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all appearance-none shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed [&>option]:bg-white"
+                      className={`w-full pl-4 pr-10 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border ${
+                        fieldErrors.district ? 'border-red-500 ring-1 ring-red-500/50' : 'border-[#A8ADA8]/40'
+                      } text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all appearance-none shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed [&>option]:bg-white`}
                     >
                       <option value="">Select</option>
                       {!isLoadingDistricts && districts.map((d) => (
@@ -343,21 +468,30 @@ const RegisterPage: React.FC = () => {
                     </select>
                     <MapPin className="w-[18px] h-[18px] text-[#65726B] group-focus-within:text-[#3FBF7F] absolute right-4 shrink-0 pointer-events-none transition-colors" />
                   </div>
+                  {fieldErrors.district && (
+                    <p className="mt-1.5 text-xs text-red-400 font-medium">{fieldErrors.district}</p>
+                  )}
                 </div>
 
                 {/* Village */}
                 <div className="group">
                   <label htmlFor="village" className="block text-[14px] font-medium text-[#E0E5E2] mb-1.5 drop-shadow-sm">
-                    Village
+                    Village *
                   </label>
                   <div className="relative flex items-center">
                     <select
                       id="village"
+                      name="gaia_reg_village"
                       required
                       value={villageId}
-                      onChange={(e) => setVillageId(e.target.value === "" ? "" : Number(e.target.value))}
+                      onChange={(e) => {
+                        setVillageId(e.target.value === "" ? "" : Number(e.target.value));
+                        if (fieldErrors.village) setFieldErrors(prev => ({ ...prev, village: "" }));
+                      }}
                       disabled={isLoadingVillages || !selectedDistrictId}
-                      className="w-full pl-4 pr-10 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border border-[#A8ADA8]/40 text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all appearance-none shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed [&>option]:bg-white"
+                      className={`w-full pl-4 pr-10 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border ${
+                        fieldErrors.village ? 'border-red-500 ring-1 ring-red-500/50' : 'border-[#A8ADA8]/40'
+                      } text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all appearance-none shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed [&>option]:bg-white`}
                     >
                       <option value="">Select</option>
                       {!isLoadingVillages && villages.map((v) => (
@@ -366,6 +500,9 @@ const RegisterPage: React.FC = () => {
                     </select>
                     <MapPin className="w-[18px] h-[18px] text-[#65726B] group-focus-within:text-[#3FBF7F] absolute right-4 shrink-0 pointer-events-none transition-colors" />
                   </div>
+                  {fieldErrors.village && (
+                    <p className="mt-1.5 text-xs text-red-400 font-medium">{fieldErrors.village}</p>
+                  )}
                 </div>
               </div>
 
@@ -373,19 +510,25 @@ const RegisterPage: React.FC = () => {
                 {/* Password */}
                 <div className="group">
                   <label htmlFor="password" className="block text-[14px] font-medium text-[#E0E5E2] mb-1.5 drop-shadow-sm">
-                    Password
+                    Password *
                   </label>
                   <div className="relative flex items-center">
                     <input
                       id="password"
+                      name="gaia_reg_password"
                       type={showPassword ? "text" : "password"}
                       required
                       autoComplete="new-password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (fieldErrors.password) setFieldErrors(prev => ({ ...prev, password: "" }));
+                      }}
                       placeholder="••••••••"
                       data-testid="register-password"
-                      className="w-full pl-4 pr-12 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border border-[#A8ADA8]/40 text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all placeholder:text-[#65726B] shadow-sm"
+                      className={`w-full pl-4 pr-12 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border ${
+                        fieldErrors.password ? 'border-red-500 ring-1 ring-red-500/50' : 'border-[#A8ADA8]/40'
+                      } text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all placeholder:text-[#65726B] shadow-sm`}
                     />
                     <button
                       type="button"
@@ -396,24 +539,33 @@ const RegisterPage: React.FC = () => {
                       {showPassword ? <EyeOff className="w-[18px] h-[18px]" /> : <Lock className="w-[18px] h-[18px]" />}
                     </button>
                   </div>
+                  {fieldErrors.password && (
+                    <p className="mt-1.5 text-xs text-red-400 font-medium">{fieldErrors.password}</p>
+                  )}
                 </div>
 
                 {/* Confirm Password */}
                 <div className="group">
                   <label htmlFor="confirmPassword" className="block text-[14px] font-medium text-[#E0E5E2] mb-1.5 drop-shadow-sm">
-                    Confirm Password
+                    Confirm Password *
                   </label>
                   <div className="relative flex items-center">
                     <input
                       id="confirmPassword"
+                      name="gaia_reg_confirm_password"
                       type={showPassword ? "text" : "password"}
                       required
                       autoComplete="new-password"
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        if (fieldErrors.confirmPassword) setFieldErrors(prev => ({ ...prev, confirmPassword: "" }));
+                      }}
                       placeholder="••••••••"
                       data-testid="register-confirm-password"
-                      className="w-full pl-4 pr-12 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border border-[#A8ADA8]/40 text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all placeholder:text-[#65726B] shadow-sm"
+                      className={`w-full pl-4 pr-12 h-[52px] rounded-lg bg-gradient-to-br from-[#FAFCFB] to-[#F0F6F3] border ${
+                        fieldErrors.confirmPassword ? 'border-red-500 ring-1 ring-red-500/50' : 'border-[#A8ADA8]/40'
+                      } text-[#151A18] text-[15px] focus:outline-none focus:border-[#3FBF7F] focus:ring-[2px] focus:ring-[#3FBF7F]/30 transition-all placeholder:text-[#65726B] shadow-sm`}
                     />
                     <button
                       type="button"
@@ -424,6 +576,9 @@ const RegisterPage: React.FC = () => {
                       {showPassword ? <EyeOff className="w-[18px] h-[18px]" /> : <Lock className="w-[18px] h-[18px]" />}
                     </button>
                   </div>
+                  {fieldErrors.confirmPassword && (
+                    <p className="mt-1.5 text-xs text-red-400 font-medium">{fieldErrors.confirmPassword}</p>
+                  )}
                 </div>
               </div>
 

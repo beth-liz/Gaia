@@ -7,6 +7,7 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import PendingApprovalPage from "@/pages/PendingApprovalPage";
 
 // Dashboard Layouts
@@ -70,6 +71,9 @@ import IncidentReviewPage from "@/pages/shared/IncidentReviewPage";
 import { RFOIncidentWorkflowPage } from "@/pages/officer/RFOIncidentWorkflowPage";
 import NotificationsPage from "@/pages/shared/NotificationsPage";
 import ProfilePage from "@/pages/shared/ProfilePage";
+import CamerasPage from "@/pages/shared/CamerasPage";
+import CameraDetectionsPage from "@/pages/shared/CameraDetectionsPage";
+import CameraIncidentsPage from "@/pages/shared/CameraIncidentsPage";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID_HERE";
 
@@ -96,6 +100,14 @@ function App() {
             element={
               <PublicOnlyRoute>
                 <RegisterPage />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <PublicOnlyRoute>
+                <ForgotPasswordPage />
               </PublicOnlyRoute>
             }
           />
@@ -131,6 +143,9 @@ function App() {
             <Route path="districts" element={<AdminDistrictsPage />} />
             <Route path="monitoring-stations" element={<AdminMonitoringStationsPage />} />
             <Route path="animal-species" element={<AdminAnimalSpeciesPage />} />
+            <Route path="cameras" element={<CamerasPage />} />
+            <Route path="camera-detections" element={<CameraDetectionsPage />} />
+            <Route path="camera-incidents" element={<CameraIncidentsPage />} />
             <Route path="inventory" element={<Navigate to="/admin/inventory/master" replace />} />
             <Route path="inventory/master" element={<AdminInventoryMasterPage />} />
             <Route path="inventory/stations" element={<AdminStationInventoryOverviewPage />} />
@@ -157,6 +172,9 @@ function App() {
             <Route index element={<Navigate to="/officer/dashboard" replace />} />
             <Route path="dashboard" element={<OfficerDashboardHome />} />
             <Route path="gis" element={<GISPage />} />
+            <Route path="cameras" element={<CamerasPage />} />
+            <Route path="camera-detections" element={<CameraDetectionsPage />} />
+            <Route path="camera-incidents" element={<CameraIncidentsPage />} />
             <Route path="incidents" element={<RFOIncidentsPage />} />
             <Route path="incidents/:id" element={<RFOIncidentWorkflowPage />} />
             <Route path="incidents/:id/progress" element={<RFOIncidentWorkflowPage />} />

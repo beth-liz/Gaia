@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { api } from "@/services/api";
 import { inventoryService } from "@/services/inventoryService";
 import { IncidentActivityTimeline } from "@/components/incidents/IncidentActivityTimeline";
+import { AIAssessmentCard } from "@/components/incidents/AIAssessmentCard";
 import type { Incident, IncidentActivity, User, FieldOperation } from "@/types";
 import type { EquipmentRequest } from "@/types/inventory";
 import {
@@ -492,7 +493,6 @@ export const RFOIncidentWorkflowPage: React.FC = () => {
 
   const s = incident.status;
   const isReadOnly = s === "Closed" || s === "Rejected";
-  const images: string[] = incident.images || [];
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -611,18 +611,8 @@ export const RFOIncidentWorkflowPage: React.FC = () => {
             )}
           </SectionCard>
 
-          {/* ── EVIDENCE / IMAGES ── */}
-          {images.length > 0 && (
-            <SectionCard title={`Evidence & Images (${images.length})`}>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {images.map((img, i) => (
-                  <a key={i} href={imgSrc(img)} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden aspect-video bg-gray-100 hover:opacity-90 transition-opacity">
-                    <img src={imgSrc(img)} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
-                  </a>
-                ))}
-              </div>
-            </SectionCard>
-          )}
+          {/* ── EVIDENCE & AI ANALYSIS ── */}
+          <AIAssessmentCard incident={incident} onUpdate={fetchAll} />
 
           {/* ── STAGE-SPECIFIC ACTION PANEL ── */}
 

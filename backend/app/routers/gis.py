@@ -41,8 +41,16 @@ def get_gis_data(
         query = query.filter(Incident.created_at >= cutoff)
     
     if species:
-        # Match case-insensitive
-        query = query.filter(Incident.animal_type.ilike(f"%{species}%"))
+        from app.models.animal_detection import AnimalDetection
+        from sqlalchemy import or_
+        query = query.outerjoin(AnimalDetection, Incident.id == AnimalDetection.incident_id)
+        # Match case-insensitive for both fields
+        query = query.filter(
+            or_(
+                Incident.animal_type.ilike(f"%{species}%"),
+                AnimalDetection.normalized_species.ilike(f"%{species}%")
+            )
+        )
         
     if status:
         query = query.filter(Incident.status == status)
@@ -59,6 +67,9 @@ def get_gis_data(
 
     stations = stations_query.all()
 
+    # Get latest AI detection for each incident
+    from app.models.animal_detection import AnimalDetection
+    
     # Map incidents to GISFeature format
     features = []
     
@@ -77,6 +88,15 @@ def get_gis_data(
         else:
             node_status = "active"
 
+        # Check for AI detection
+        detection = db.query(AnimalDetection).filter(AnimalDetection.incident_id == inc.id).order_by(AnimalDetection.detected_at.desc()).first()
+        
+        species = inc.animal_type or inc.animal or "Unknown"
+        confidence = None
+        if detection and detection.confidence > 0:
+            species = detection.normalized_species or detection.animal_name
+            confidence = detection.confidence
+
         features.append({
             "id": f"INC-{inc.reference_id or inc.id}",
             "db_id": inc.id,
@@ -85,7 +105,8 @@ def get_gis_data(
             "lat": inc.latitude,
             "lng": inc.longitude,
             "status": node_status,
-            "species": inc.animal_type or inc.animal or "Unknown",
+            "species": species,
+            "confidence": confidence,
             "timestamp": inc.created_at.isoformat() if inc.created_at else None,
             "details": f"Status: {inc.status} | Severity: {inc.severity} | Location: {inc.village.village_name if inc.village else 'Unknown'}",
             "severity": inc.severity

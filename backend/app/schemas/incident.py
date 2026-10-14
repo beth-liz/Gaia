@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, validator, Field
+from typing import Optional, List, Any
 from datetime import datetime
 
 
@@ -7,11 +7,11 @@ class IncidentCreate(BaseModel):
     incident_title: Optional[str] = None
     incident_category: Optional[str] = "Wildlife Sighting"
     animal_species_id: Optional[int] = None
-    animal_type: str
+    animal_type: str = Field(..., min_length=1)
     severity: Optional[str] = "Medium"
     description: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    latitude: float = Field(..., description="Latitude coordinate between -90 and 90")
+    longitude: float = Field(..., description="Longitude coordinate between -180 and 180")
     location: Optional[str] = None
     address: Optional[str] = None
     village_id: Optional[int] = None
@@ -27,7 +27,36 @@ class IncidentCreate(BaseModel):
     reporter_name: Optional[str] = None
     date_reported: Optional[str] = None
     time_reported: Optional[str] = None
-    images: Optional[List[str]] = []
+    images: List[str] = Field(..., description="At least one valid uploaded image is required")
+
+    @validator("latitude")
+    def validate_latitude(cls, v):
+        if v is None or v < -90.0 or v > 90.0:
+            raise ValueError("Latitude must be a valid number between -90.0 and 90.0 degrees")
+        return v
+
+    @validator("longitude")
+    def validate_longitude(cls, v):
+        if v is None or v < -180.0 or v > 180.0:
+            raise ValueError("Longitude must be a valid number between -180.0 and 180.0 degrees")
+        return v
+
+    @validator("location", always=True)
+    def validate_location(cls, v, values):
+        address = values.get("address")
+        loc_val = (v or "").strip() or (address or "").strip()
+        if not loc_val:
+            raise ValueError("A confirmed, non-empty incident location or address is required")
+        return loc_val
+
+    @validator("images")
+    def validate_images(cls, v):
+        if not v or not isinstance(v, list) or len(v) == 0:
+            raise ValueError("At least one incident photograph must be uploaded before submitting")
+        cleaned = [img.strip() for img in v if isinstance(img, str) and img.strip()]
+        if not cleaned:
+            raise ValueError("At least one valid non-empty incident photograph URL must be provided")
+        return cleaned
 
 
 class IncidentAssignMulti(BaseModel):
@@ -115,6 +144,18 @@ class IncidentOut(BaseModel):
     closed_at: Optional[str] = None
     closed_by_name: Optional[str] = None
     final_closure_remarks: Optional[str] = None
+
+    # AI Detection Fields
+    ai_status: Optional[str] = "Pending"
+    ai_species: Optional[str] = None
+    ai_confidence: Optional[float] = None
+    ai_count: Optional[int] = None
+    ai_bounding_boxes: Optional[Any] = None
+    ai_model_info: Optional[str] = None
+    ai_results: List[Any] = []
+
+    # Camera Provenance Fields
+    camera_detection_event_id: Optional[int] = None
 
     created_at: datetime
 

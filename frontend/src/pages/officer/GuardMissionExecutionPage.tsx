@@ -4,6 +4,7 @@ import { api } from "@/services/api";
 import { inventoryService } from "@/services/inventoryService";
 import { PageHeader } from "@/components/common/PageHeader";
 import { IncidentActivityTimeline } from "@/components/incidents/IncidentActivityTimeline";
+import { AIAssessmentCard } from "@/components/incidents/AIAssessmentCard";
 import type { Incident, IncidentActivity, FieldOperation } from "@/types";
 import {
   CheckCircle2,
@@ -1339,31 +1340,9 @@ export const GuardMissionExecutionPage: React.FC = () => {
         </div>
       </div>
 
-      {/* BOTTOM SECTION 1: FIELD EVIDENCE GALLERY */}
-      <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 space-y-3 shadow-xs text-xs">
-        <h3 className="text-xs font-black uppercase tracking-wider text-emerald-950 flex items-center gap-2 border-b border-emerald-950/10 pb-3">
-          <Camera className="w-4 h-4 text-emerald-700" />
-          Field Evidence & Media Gallery
-        </h3>
+      {/* BOTTOM SECTION 1: FIELD EVIDENCE GALLERY & AI */}
+      <AIAssessmentCard incident={incident} onUpdate={loadMissionData} />
 
-        {incident.images && incident.images.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {incident.images.map((img, i) => (
-              <div key={i} className="h-28 rounded-2xl overflow-hidden bg-gray-100 border border-emerald-950/10 shadow-2xs">
-                <img
-                  src={img.startsWith("/static") ? `http://127.0.0.1:8000${img}` : img}
-                  alt={`Evidence ${i + 1}`}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-6 text-center text-emerald-800/60 font-medium bg-emerald-50/40 rounded-2xl border border-emerald-950/10">
-            No media uploads captured for this field operation yet.
-          </div>
-        )}
-      </div>
 
       {/* BOTTOM SECTION 2: COMPLETE AUDIT TIMELINE */}
       <IncidentActivityTimeline activities={activities} />

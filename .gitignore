@@ -103,3 +103,31 @@ ai/speciesnet_test/predictions.json
 # =========================================================
 
 ai/evaluation/elephant/
+
+# =========================================================
+# LOCAL SCRATCH, TEST DUMPS & SCREENSHOTS
+# =========================================================
+
+*.db
+*.sqlite3
+*.png
+*.jpg
+*.jpeg
+*.JPG
+*.pdf
+backend/detailed_tables.json
+backend/model_dump.json
+backend/relationships_dump.json
+backend/schema_dump.json
+backend/app/static/uploads/
+backend/app/static/reports/
+test_*.py
+backend/test_*.py
+backend/check_cameras.py
+inspect_db_schema.py
+modal_data.py
+parse_log.py
+update_ai_bg.py
+check_1024.py
+!backend/test_auth_validation_and_reset.py
+!backend/test_camera_and_incident_validation.py

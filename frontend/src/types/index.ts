@@ -133,6 +133,19 @@ export interface Incident {
   closed_at?: string;
   closed_by_name?: string;
   final_closure_remarks?: string;
+
+  // AI Fields
+  ai_status?: string;
+  ai_species?: string;
+  ai_confidence?: number;
+  ai_count?: number;
+  ai_bounding_boxes?: any;
+  ai_model_info?: string;
+  ai_results?: any[];
+
+  // Camera Provenance
+  camera_detection_event_id?: number;
+
   created_at: string;
   user?: { full_name: string; role: string; };
 }

@@ -129,6 +129,59 @@ def create_monitoring_station(
         updated_at=station.updated_at
     )
 
+@router.get("/{station_id}", response_model=MonitoringStationResponse)
+def get_station_by_id(
+    station_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    from app.models.district import District
+    from app.models.state import State
+    
+    station = db.query(MonitoringStation).filter(MonitoringStation.id == station_id).first()
+    if not station:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitoring station not found")
+        
+    district_name = "Unknown"
+    state_name = "Unknown"
+    if station.district_id:
+        district = db.query(District).filter(District.id == station.district_id).first()
+        if district:
+            district_name = district.district_name
+            state_obj = db.query(State).filter(State.id == district.state_id).first()
+            if state_obj:
+                state_name = state_obj.state_name
+                
+    officer_count = db.query(User).filter(
+        User.station_id == station.id, 
+        User.role.in_(["Range Forest Officer", "Forest Guard", "Officer"])
+    ).count()
+    
+    head_officer_name = None
+    if station.head_officer_id:
+        head_officer = db.query(User).filter(User.id == station.head_officer_id).first()
+        if head_officer:
+            head_officer_name = head_officer.full_name
+
+    return MonitoringStationResponse(
+        id=station.id,
+        station_name=station.station_name,
+        district_id=station.district_id,
+        address=station.address,
+        phone=station.phone,
+        email=station.email,
+        latitude=station.latitude,
+        longitude=station.longitude,
+        status=station.status,
+        description=station.description,
+        district_name=district_name,
+        state_name=state_name,
+        officer_count=officer_count,
+        head_officer_id=station.head_officer_id,
+        head_officer_name=head_officer_name,
+        created_at=station.created_at,
+        updated_at=station.updated_at
+    )
 
 @router.put("/{station_id}", response_model=MonitoringStationResponse)
 def update_monitoring_station(

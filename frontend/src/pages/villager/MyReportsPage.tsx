@@ -6,6 +6,7 @@ import { DataTable } from "@/components/common/DataTable";
 import type { Column } from "@/components/common/DataTable";
 import type { Incident } from "@/types";
 import { FileText, Eye, MapPin } from "lucide-react";
+import { AIAssessmentCard } from "@/components/incidents/AIAssessmentCard";
 
 export const MyReportsPage: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -245,11 +246,7 @@ export const MyReportsPage: React.FC = () => {
             </div>
 
             {(selectedIncident.images && selectedIncident.images.length > 0) || selectedIncident.photo_url ? (
-              <div className="grid grid-cols-2 gap-2">
-                {(selectedIncident.images && selectedIncident.images.length > 0 ? selectedIncident.images : [selectedIncident.photo_url]).map((img, i) => (
-                  img && <img key={i} src={img.startsWith("/static") ? `http://127.0.0.1:8000${img}` : img} alt="Incident Evidence" className="w-full h-32 object-cover rounded-xl border border-emerald-950/10" />
-                ))}
-              </div>
+              <AIAssessmentCard incident={selectedIncident} onUpdate={fetchMyReports} />
             ) : null}
 
             <div className="space-y-2 text-xs">

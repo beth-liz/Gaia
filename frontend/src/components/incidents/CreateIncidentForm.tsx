@@ -53,9 +53,6 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
   const [stateName, setStateName] = useState("");
 
   // Section 3: Additional Details
-  const now = new Date();
-  const [dateReported, setDateReported] = useState(now.toISOString().split("T")[0]);
-  const [timeReported, setTimeReported] = useState(now.toTimeString().slice(0, 5));
   const [weather, setWeather] = useState("Sunny");
   const [peopleInjured, setPeopleInjured] = useState(false);
   const [livestockDamage, setLivestockDamage] = useState(false);
@@ -176,23 +173,33 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description.trim()) {
-      setErrorMessage("Please enter a detailed description of the incident.");
+    setErrorMessage(null);
+
+    // Client-side validations
+    if (latitude === null || longitude === null || isNaN(latitude) || isNaN(longitude)) {
+      setErrorMessage("Please select a valid incident location on the interactive map or use GPS.");
+      return;
+    }
+
+    if (imageFiles.length === 0) {
+      setErrorMessage("At least one incident photograph must be uploaded before submitting.");
       return;
     }
 
     setIsSubmitting(true);
-    setErrorMessage(null);
 
     try {
-      // 1. Upload images if any selected
-      let uploadedUrls: string[] = [];
-      if (imageFiles.length > 0) {
-        setIsUploadingImages(true);
-        const formData = new FormData();
-        imageFiles.forEach((file) => formData.append("files", file));
-        uploadedUrls = await api.uploadIncidentImages(formData);
-        setIsUploadingImages(false);
+      // 1. Upload images (mandatory)
+      setIsUploadingImages(true);
+      const formData = new FormData();
+      imageFiles.forEach((file) => formData.append("files", file));
+      const uploadedUrls = await api.uploadIncidentImages(formData);
+      setIsUploadingImages(false);
+
+      if (!uploadedUrls || uploadedUrls.length === 0) {
+        setErrorMessage("Failed to upload incident photograph. Please try uploading the image again.");
+        setIsSubmitting(false);
+        return;
       }
 
       // 2. Resolve Animal Name
@@ -209,28 +216,27 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
         animalNameStr = customAnimalType.trim();
       }
 
+      const locationStr = address.trim() || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+
       const payload = {
-        incident_title: incidentTitle.trim() || `${animalNameStr} Sighting at ${address || "Sector Range"}`,
+        incident_title: incidentTitle.trim() || `${animalNameStr} Sighting at ${locationStr}`,
         incident_category: incidentCategory,
         animal_species_id: speciesIdNum,
         animal_type: animalNameStr,
         severity,
-        description: description.trim(),
+        description: description.trim() || undefined,
         latitude,
         longitude,
-        location: address || `${latitude?.toFixed(4)}, ${longitude?.toFixed(4)}`,
-        address,
+        location: locationStr,
+        address: address.trim() || undefined,
         weather,
         people_injured: peopleInjured,
         livestock_damage: livestockDamage,
         property_damage: propertyDamage,
         crop_damage: cropDamage,
-        date_reported: dateReported,
-        time_reported: timeReported,
         images: uploadedUrls,
         reporter_name: reporterName.trim() || undefined,
         contact_number: reporterPhone.trim() || undefined,
-        // Include resolved station_id so backend routes correctly
         station_id: routingStation?.station_id ?? undefined,
       };
 
@@ -488,14 +494,15 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Incident Description *</label>
+          <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
+            Incident Description <span className="text-emerald-700/60 font-semibold">(Optional)</span>
+          </label>
           <textarea
-            rows={6}
-            required
-            placeholder="Provide comprehensive details of the sighting or conflict (e.g. number of animals, movement direction, proximity to residential structures, actions taken)..."
+            rows={4}
+            placeholder="Provide any additional details of the sighting or conflict (optional)..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full min-h-[180px] p-4 text-xs rounded-2xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-medium leading-relaxed"
+            className="w-full min-h-[120px] p-4 text-xs rounded-2xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-medium leading-relaxed"
           />
         </div>
       </div>
@@ -597,27 +604,31 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Date Reported</label>
+            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
+              Report Date <span className="text-[10px] text-emerald-700 font-semibold">(System Time)</span>
+            </label>
             <div className="relative">
               <Calendar className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
-                type="date"
-                value={dateReported}
-                onChange={(e) => setDateReported(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none text-emerald-950 font-bold"
+                type="text"
+                readOnly
+                value={new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-slate-100 text-emerald-950 font-bold cursor-not-allowed select-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Time Reported</label>
+            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
+              Report Time <span className="text-[10px] text-emerald-700 font-semibold">(System Time)</span>
+            </label>
             <div className="relative">
               <Clock className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
-                type="time"
-                value={timeReported}
-                onChange={(e) => setTimeReported(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none text-emerald-950 font-bold"
+                type="text"
+                readOnly
+                value={new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-slate-100 text-emerald-950 font-bold cursor-not-allowed select-none"
               />
             </div>
           </div>
@@ -732,8 +743,13 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
             4
           </div>
           <div>
-            <h3 className="text-base font-extrabold text-emerald-950">Section 4: Incident Photos (Up to 5)</h3>
-            <p className="text-xs text-emerald-800/70 font-medium">Attach field photographs of wildlife, animal tracks, or damage</p>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-extrabold text-emerald-950">Section 4: Incident Photos (Up to 5)</h3>
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+                Mandatory *
+              </span>
+            </div>
+            <p className="text-xs text-emerald-800/70 font-medium">At least one field photograph of wildlife, tracks, or damage is required</p>
           </div>
         </div>
 

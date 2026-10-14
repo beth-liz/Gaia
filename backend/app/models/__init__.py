@@ -21,5 +21,10 @@ from app.models.inventory import (
     EquipmentRequest,
     EquipmentAssignment
 )
+from app.models.camera import Camera
+from app.models.camera_capture import CameraCapture
+from app.models.camera_capture_result import CameraCaptureAIResult
+from app.models.camera_detection_event import CameraDetectionEvent
+from app.models.password_reset_code import PasswordResetCode
 
 Base.metadata.create_all(bind=engine)

@@ -17,7 +17,9 @@ import {
   RotateCcw,
   History,
   Clock,
-  Globe
+  Globe,
+  Video,
+  ShieldAlert
 } from "lucide-react";
 
 const rfoNavItems: NavItem[] = [
@@ -28,6 +30,9 @@ const rfoNavItems: NavItem[] = [
   { label: "Incidents", path: "/officer/incidents", icon: Radio, sectionHeader: "Field Operations" },
   { label: "Forest Guards", path: "/officer/guards", icon: Users },
   { label: "Station Overview", path: "/officer/station", icon: Building2 },
+  { label: "Cameras", path: "/officer/cameras", icon: Video },
+  { label: "Camera Detections", path: "/officer/camera-detections", icon: Video },
+  { label: "Camera Incidents", path: "/officer/camera-incidents", icon: ShieldAlert },
 
   { label: "Inventory Dashboard", path: "/officer/inventory/dashboard", icon: LayoutDashboard, sectionHeader: "Inventory Management" },
   { label: "Add / Update Station Stock", path: "/officer/inventory/stock", icon: Warehouse },

@@ -237,8 +237,11 @@ export default function GISPage() {
 
                 {selectedFeature.species && selectedFeature.species !== "Unknown" && (
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <span className="text-[10px] font-extrabold text-amber-800 uppercase">Primary Species</span>
+                    <span className="text-[10px] font-extrabold text-amber-800 uppercase">{selectedFeature.confidence ? "AI Detection" : "Primary Species"}</span>
                     <p className="text-sm font-black text-amber-950">{selectedFeature.species}</p>
+                    {selectedFeature.confidence && (
+                      <p className="text-[11px] font-bold text-amber-700 mt-1">Confidence: {(selectedFeature.confidence * 100).toFixed(1)}%</p>
+                    )}
                   </div>
                 )}
 

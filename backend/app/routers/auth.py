@@ -103,3 +103,50 @@ def change_password(
         new_password=data.new_password,
         db=db
     )
+
+
+from app.schemas.user import (
+    PasswordResetRequest,
+    PasswordResetVerify,
+    PasswordResetConfirm
+)
+
+@router.post(
+    "/forgot-password",
+    status_code=status.HTTP_200_OK,
+    summary="Initiate password reset by requesting a 6-digit email code"
+)
+def forgot_password(
+    data: PasswordResetRequest,
+    db: Session = Depends(get_db)
+):
+    return auth_service.request_password_reset(data.email, db)
+
+
+@router.post(
+    "/verify-reset-code",
+    status_code=status.HTTP_200_OK,
+    summary="Verify the 6-digit email code and receive a one-time reset token"
+)
+def verify_reset_code(
+    data: PasswordResetVerify,
+    db: Session = Depends(get_db)
+):
+    return auth_service.verify_password_reset_code(data.email, data.code, db)
+
+
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_200_OK,
+    summary="Set new password using verified one-time reset token"
+)
+def reset_password(
+    data: PasswordResetConfirm,
+    db: Session = Depends(get_db)
+):
+    return auth_service.complete_password_reset(
+        email=data.email,
+        reset_token=data.reset_token,
+        new_password=data.new_password,
+        db=db
+    )

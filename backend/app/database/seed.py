@@ -12,6 +12,7 @@ from app.models.monitoring_station import MonitoringStation
 from app.models.user import User
 from app.models.village import Village
 from app.models.designation import Designation
+from app.models.camera import Camera
 from app.core.security import hash_password
 from app.database.session import SessionLocal
 
@@ -316,6 +317,34 @@ def seed_inventory(db: Session):
 
     db.commit()
 
+def seed_cameras(db: Session):
+    stations = db.query(MonitoringStation).all()
+    locations = ["North Forest Area", "Water Source Area", "Forest Boundary"]
+    
+    for station in stations:
+        for i in range(1, 4):
+            # Create a simple unique short code
+            short_name = station.station_name.split()[0].upper()
+            cam_code = f"CAM-{short_name}-{i:02d}"
+            
+            exists = db.query(Camera).filter(Camera.camera_code == cam_code).first()
+            if not exists:
+                lat_offset = i * 0.002
+                lng_offset = i * 0.002
+                base_lat = station.latitude if station.latitude else 11.6
+                base_lng = station.longitude if station.longitude else 76.2
+                
+                db.add(Camera(
+                    camera_name=f"Camera {i:02d}",
+                    camera_code=cam_code,
+                    monitoring_station_id=station.id,
+                    location_name=locations[i-1],
+                    latitude=base_lat + lat_offset,
+                    longitude=base_lng - lng_offset,
+                    status="Active"
+                ))
+    db.commit()
+
 
 def run_seed():
     db = SessionLocal()
@@ -326,6 +355,7 @@ def run_seed():
         seed_admin_user(db)
         seed_sample_officers(db)
         seed_inventory(db)
+        seed_cameras(db)
     finally:
         db.close()
 

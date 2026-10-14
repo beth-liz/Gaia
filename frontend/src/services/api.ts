@@ -1,4 +1,4 @@
-const API_BASE = "http://127.0.0.1:8000";
+export const API_BASE = "http://127.0.0.1:8000";
 
 const getHeaders = (includeAuth = true) => {
   const headers: Record<string, string> = {
@@ -57,6 +57,33 @@ export const api = {
 
   registerVillager: async (data: any) => {
     const res = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: getHeaders(false),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  forgotPassword: async (email: string) => {
+    const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+      method: "POST",
+      headers: getHeaders(false),
+      body: JSON.stringify({ email }),
+    });
+    return handleResponse<any>(res);
+  },
+
+  verifyResetCode: async (email: string, code: string) => {
+    const res = await fetch(`${API_BASE}/auth/verify-reset-code`, {
+      method: "POST",
+      headers: getHeaders(false),
+      body: JSON.stringify({ email, code }),
+    });
+    return handleResponse<any>(res);
+  },
+
+  resetPassword: async (data: { email: string; reset_token: string; new_password: string; confirm_password: string }) => {
+    const res = await fetch(`${API_BASE}/auth/reset-password`, {
       method: "POST",
       headers: getHeaders(false),
       body: JSON.stringify(data),
@@ -251,6 +278,13 @@ export const api = {
       headers: getHeaders(true),
     });
     return handleResponse<any[]>(res);
+  },
+  
+  getStationById: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/monitoring-stations/${id}`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
   },
 
   createMonitoringStation: async (data: any) => {
@@ -489,7 +523,15 @@ export const api = {
     });
     return handleResponse<any>(res);
   },
-getIncidentById: async (id: number) => {
+  analyzeIncidentEvidence: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/analyze`, {
+      method: "POST",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  getIncidentById: async (id: number) => {
     const res = await fetch(`${API_BASE}/api/incidents/${id}`, {
       headers: getHeaders(true),
     });
@@ -909,6 +951,104 @@ getIncidentById: async (id: number) => {
   getDashboardStats: async () => {
     const res = await fetch(`${API_BASE}/api/dashboard/stats`, {
       headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  // --- CAMERAS ---
+  getAllCameras: async () => {
+    const res = await fetch(`${API_BASE}/api/cameras/`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  getCamerasForStation: async (stationId: number) => {
+    const res = await fetch(`${API_BASE}/api/cameras/station/${stationId}`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  createCamera: async (data: {
+    camera_name: string;
+    camera_code: string;
+    monitoring_station_id: number;
+    location_name?: string;
+    latitude: number;
+    longitude: number;
+    status?: string;
+  }) => {
+    const res = await fetch(`${API_BASE}/api/cameras/`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<any>(res);
+  },
+
+  getAvailableTestImages: async () => {
+    const res = await fetch(`${API_BASE}/api/cameras/test-images/available`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  getTestImagePreviewUrl: (image: string) => {
+    return `${API_BASE}/api/cameras/test-images/preview?image=${encodeURIComponent(image)}`;
+  },
+
+  simulateCameraCapture: async (cameraId: number, testImage?: string) => {
+    const res = await fetch(`${API_BASE}/api/cameras/${cameraId}/simulate-capture`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify({ test_image: testImage })
+    });
+    return handleResponse<any>(res);
+  },
+
+  getCameraCaptures: async (cameraId: number) => {
+    const res = await fetch(`${API_BASE}/api/cameras/${cameraId}/captures`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  processCameraCaptureAI: async (captureId: number) => {
+    const res = await fetch(`${API_BASE}/api/cameras/captures/${captureId}/process-ai`, {
+      method: "POST",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  getCameraDetections: async () => {
+    const res = await fetch(`${API_BASE}/api/camera-detections/`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any[]>(res);
+  },
+
+  getCameraDetectionById: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/camera-detections/${id}`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  acceptCameraDetection: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/camera-detections/${id}/accept`, {
+      method: "POST",
+      headers: getHeaders(true),
+    });
+    return handleResponse<any>(res);
+  },
+
+  rejectCameraDetection: async (id: number, reason: string) => {
+    const res = await fetch(`${API_BASE}/api/camera-detections/${id}/reject`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify({ reason })
     });
     return handleResponse<any>(res);
   },

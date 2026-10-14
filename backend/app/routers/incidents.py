@@ -1,7 +1,7 @@
 import os
 import json
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
@@ -19,6 +19,7 @@ from app.models.village import Village
 from app.models.monitoring_station import MonitoringStation
 from app.models.district import District
 from app.models.state import State
+from app.models.animal_detection import AnimalDetection
 from app.schemas.incident import IncidentCreate, IncidentOut, IncidentAssignMulti, AssignedOfficerOut
 from app.schemas.incident_activity import IncidentActivityOut
 from app.utils.deps import get_current_user, get_current_user_optional, get_current_rfo, get_current_guard, get_current_officer_or_admin
@@ -27,6 +28,105 @@ router = APIRouter(
     prefix="/api/incidents",
     tags=["Incidents"]
 )
+
+
+
+from app.database.session import SessionLocal
+def _process_ai_for_incident_bg(incident_id: int, reporter_id: int):
+    db = SessionLocal()
+    try:
+        inc = db.query(Incident).filter(Incident.id == incident_id).first()
+        if not inc: return
+
+        images_to_analyze = []
+        if inc.images:
+            try:
+                import json
+                parsed = json.loads(inc.images)
+                if isinstance(parsed, list):
+                    images_to_analyze = parsed
+            except Exception:
+                images_to_analyze = [inc.images]
+        elif inc.photo_url:
+            images_to_analyze = [inc.photo_url]
+
+        if not images_to_analyze: return
+
+        import os
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        existing_detections = db.query(AnimalDetection).filter(AnimalDetection.incident_id == inc.id).count()
+        if existing_detections > 0: return
+
+        # Check if this incident originated from a CameraDetectionEvent that already has verified AI results
+        if inc.camera_detection_event_id:
+            from app.models.camera_detection_event import CameraDetectionEvent
+            from app.models.camera_capture_result import CameraCaptureAIResult
+            cde = db.query(CameraDetectionEvent).filter(CameraDetectionEvent.id == inc.camera_detection_event_id).first()
+            if cde and cde.camera_capture_id:
+                ai_res = db.query(CameraCaptureAIResult).filter(CameraCaptureAIResult.capture_id == cde.camera_capture_id).first()
+                if ai_res and ai_res.processing_status == "COMPLETED":
+                    det = AnimalDetection(
+                        animal_name=ai_res.overall_species or cde.species or "Unknown",
+                        normalized_species=ai_res.overall_species or cde.species or "Unknown",
+                        confidence=ai_res.overall_confidence if ai_res.overall_confidence is not None else cde.confidence,
+                        count=ai_res.animal_count if ai_res.animal_count is not None else cde.animal_count,
+                        bounding_boxes=ai_res.detections or [],
+                        image_path=cde.capture.image_path if cde.capture else inc.photo_url,
+                        station_id=inc.station_id,
+                        incident_id=inc.id,
+                        model_info="MegaDetector v5a.0.1 + Google SpeciesNet v4.0.3a (Edge Camera Pipeline)"
+                    )
+                    db.add(det)
+                    db.commit()
+                    log_activity(db, inc.id, reporter_id or inc.reporter_id, 'AI Analysis', f'AI analysis linked from Camera Detection. Top: {det.normalized_species}')
+                    return
+
+        detections_added = []
+        for img_url in images_to_analyze:
+            local_path = img_url
+            if img_url.startswith('/static/'):
+                candidate1 = os.path.join(base_dir, 'app', *img_url.strip('/').split('/'))
+                candidate2 = os.path.join(base_dir, *img_url.strip('/').split('/'))
+                local_path = candidate1 if os.path.exists(candidate1) else candidate2
+            elif not os.path.isabs(img_url):
+                candidate1 = os.path.join(base_dir, 'app', img_url)
+                candidate2 = os.path.join(base_dir, img_url)
+                local_path = candidate1 if os.path.exists(candidate1) else candidate2
+
+            if not os.path.exists(local_path): continue
+
+            try:
+                from app.services.ai_service import analyze_image
+                result = analyze_image(local_path)
+                if result.get('status') == 'error':
+                    db_detection = AnimalDetection(animal_name='Unknown', confidence=-1.0, count=0, image_path=img_url, station_id=inc.station_id, incident_id=inc.id, model_info=result.get('error', 'AI Analysis Failed'))
+                else:
+                    db_detection = AnimalDetection(animal_name=result.get('overall_species', 'Unknown'), normalized_species=result.get('overall_species', 'Unknown'), confidence=result.get('overall_confidence', 0.0), count=result.get('animal_count', 0), bounding_boxes=result.get('detections', []), image_path=img_url, station_id=inc.station_id, incident_id=inc.id, model_info=result.get('metadata', {}).get('pipeline'))
+                db.add(db_detection)
+                detections_added.append(db_detection)
+            except Exception as e:
+                db_detection = AnimalDetection(animal_name='Unknown', confidence=-1.0, count=0, image_path=img_url, station_id=inc.station_id, incident_id=inc.id, model_info=f'Error: {str(e)}'[:250])
+                db.add(db_detection)
+                detections_added.append(db_detection)
+
+        if not detections_added: return
+        db.commit()
+        for d in detections_added: db.refresh(d)
+
+        positive_detections = [d for d in detections_added if d.confidence > 0]
+        if positive_detections:
+            highest = max(positive_detections, key=lambda x: x.confidence)
+            log_activity(db, inc.id, reporter_id or inc.reporter_id, 'AI Analysis', f'AI analysis completed automatically on {len(detections_added)} images. Top: {highest.normalized_species}')
+            rfos = db.query(User).filter(User.station_id == inc.station_id, User.role.in_(['Range Forest Officer', 'Officer', 'Admin'])).all()
+            for rfo in rfos:
+                db.add(Notification(user_id=rfo.id, title=f'AI Analysis Complete [{inc.reference_id or inc.id}]', message=f'AI Detection: {highest.normalized_species}.'))
+            db.commit()
+        else:
+            log_activity(db, inc.id, reporter_id or inc.reporter_id, 'AI Analysis', f'AI analysis completed automatically on {len(detections_added)} images. No positive detections.')
+    except Exception as e:
+        print(f'Background AI failure: {e}')
+    finally:
+        db.close()
 
 
 def generate_reference_id(db: Session) -> str:
@@ -133,6 +233,36 @@ def format_incident_out(inc: Incident, db: Session, current_user: Optional[User]
 
     species_name = inc.animal_species_rel.animal_name if inc.animal_species_rel else inc.animal_type or inc.animal
 
+    ai_records = db.query(AnimalDetection).filter(AnimalDetection.incident_id == inc.id).order_by(AnimalDetection.id.asc()).all()
+    ai_results_list = []
+    
+    if ai_records:
+        for r in ai_records:
+            ai_results_list.append({
+                "id": r.id,
+                "normalized_species": r.normalized_species,
+                "confidence": r.confidence,
+                "count": r.count,
+                "bounding_boxes": r.bounding_boxes,
+                "image_path": r.image_path,
+                "model_info": r.model_info
+            })
+            
+        ai_record = ai_records[-1] # fallback for legacy fields
+        
+        has_success = any(r.confidence != -1.0 for r in ai_records)
+        has_failure = any(r.confidence == -1.0 for r in ai_records)
+        
+        if has_failure and not has_success:
+            ai_status = "Failed"
+        elif has_failure and has_success:
+            ai_status = "Partially Completed"
+        else:
+            ai_status = "Analysis Complete"
+    else:
+        ai_record = None
+        ai_status = "Pending" if inc.photo_url or parsed_images else "No Image"
+
     return IncidentOut(
         id=inc.id,
         reference_id=inc.reference_id or f"INC-2026-{inc.id:05d}",
@@ -184,6 +314,14 @@ def format_incident_out(inc: Incident, db: Session, current_user: Optional[User]
         closed_at=inc.closed_at.strftime("%Y-%m-%d %H:%M") if inc.closed_at else None,
         closed_by_name=inc.closed_by.full_name if inc.closed_by else None,
         final_closure_remarks=inc.final_closure_remarks,
+        ai_status=ai_status,
+        ai_species=ai_record.normalized_species if ai_record and ai_status != "Failed" else None,
+        ai_confidence=ai_record.confidence if ai_record and ai_status != "Failed" else None,
+        ai_count=ai_record.count if ai_record and ai_status != "Failed" else None,
+        ai_bounding_boxes=ai_record.bounding_boxes if ai_record and ai_status != "Failed" else None,
+        ai_model_info=ai_record.model_info if ai_record and ai_status != "Failed" else None,
+        ai_results=ai_results_list,
+        camera_detection_event_id=inc.camera_detection_event_id,
         created_at=inc.created_at
     )
 
@@ -377,8 +515,8 @@ def create_guard_incident(
         photo_url=data.images[0] if data.images else None,
         images=images_json,
         contact_number=data.contact_number or current_user.phone,
-        date_reported=data.date_reported or datetime.utcnow().strftime("%Y-%m-%d"),
-        time_reported=data.time_reported or datetime.utcnow().strftime("%H:%M")
+        date_reported=datetime.utcnow().strftime("%Y-%m-%d"),
+        time_reported=datetime.utcnow().strftime("%H:%M")
     )
     db.add(inc)
     db.commit()
@@ -403,6 +541,7 @@ def create_guard_incident(
 @router.post("", response_model=IncidentOut, status_code=status.HTTP_201_CREATED)
 def create_incident(
     data: IncidentCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -472,14 +611,15 @@ def create_incident(
         photo_url=data.images[0] if data.images else None,
         images=images_json,
         contact_number=data.contact_number or current_user.phone,
-        date_reported=data.date_reported or datetime.utcnow().strftime("%Y-%m-%d"),
-        time_reported=data.time_reported or datetime.utcnow().strftime("%H:%M")
+        date_reported=datetime.utcnow().strftime("%Y-%m-%d"),
+        time_reported=datetime.utcnow().strftime("%H:%M")
     )
     db.add(inc)
     db.commit()
     db.refresh(inc)
 
     log_activity(db, inc.id, current_user.id, "Reported", f"Villager/Reporter logged incident report [{ref_id}].")
+    background_tasks.add_task(_process_ai_for_incident_bg, inc.id, current_user.id)
 
     rfos = db.query(User).filter(
         User.station_id == st_id,
@@ -499,6 +639,7 @@ def create_incident(
 @router.post("/public", response_model=IncidentOut)
 def create_public_incident(
     data: IncidentCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     species_obj = None
@@ -569,14 +710,15 @@ def create_public_incident(
         photo_url=data.images[0] if data.images else None,
         images=images_json,
         contact_number=data.contact_number,
-        date_reported=data.date_reported or datetime.utcnow().strftime("%Y-%m-%d"),
-        time_reported=data.time_reported or datetime.utcnow().strftime("%H:%M")
+        date_reported=datetime.utcnow().strftime("%Y-%m-%d"),
+        time_reported=datetime.utcnow().strftime("%H:%M")
     )
     db.add(inc)
     db.commit()
     db.refresh(inc)
 
     log_activity(db, inc.id, None, "Reported", f"Public Visitor logged incident report [{ref_id}].")
+    background_tasks.add_task(_process_ai_for_incident_bg, inc.id, None)
 
     if st_id:
         rfos = db.query(User).filter(
@@ -795,6 +937,128 @@ def approve_incident(
     db.commit()
 
     log_activity(db, inc.id, current_user.id, "Head Officer Accepted", f"Incident accepted by Head Officer {current_user.full_name}. Ready for Guard Assignment.")
+    return format_incident_out(inc, db, current_user)
+
+from app.services.ai_service import analyze_image
+
+@router.post("/{incident_id}/analyze", response_model=IncidentOut)
+def analyze_incident_evidence(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    inc = db.query(Incident).filter(Incident.id == incident_id).first()
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    images_to_analyze = []
+    if inc.images:
+        try:
+            parsed = json.loads(inc.images)
+            if isinstance(parsed, list):
+                images_to_analyze = parsed
+        except Exception:
+            images_to_analyze = [inc.images]
+    elif inc.photo_url:
+        images_to_analyze = [inc.photo_url]
+
+    if not images_to_analyze:
+        raise HTTPException(status_code=400, detail="Incident has no evidence image to analyze.")
+
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    
+    existing_detections = db.query(AnimalDetection).filter(AnimalDetection.incident_id == inc.id).count()
+    if existing_detections > 0:
+        return format_incident_out(inc, db, current_user)
+
+    # Check if this incident originated from a CameraDetectionEvent that already has verified AI results
+    if inc.camera_detection_event_id:
+        from app.models.camera_detection_event import CameraDetectionEvent
+        from app.models.camera_capture_result import CameraCaptureAIResult
+        cde = db.query(CameraDetectionEvent).filter(CameraDetectionEvent.id == inc.camera_detection_event_id).first()
+        if cde and cde.camera_capture_id:
+            ai_res = db.query(CameraCaptureAIResult).filter(CameraCaptureAIResult.capture_id == cde.camera_capture_id).first()
+            if ai_res and ai_res.processing_status == "COMPLETED":
+                det = AnimalDetection(
+                    animal_name=ai_res.overall_species or cde.species or "Unknown",
+                    normalized_species=ai_res.overall_species or cde.species or "Unknown",
+                    confidence=ai_res.overall_confidence if ai_res.overall_confidence is not None else cde.confidence,
+                    count=ai_res.animal_count if ai_res.animal_count is not None else cde.animal_count,
+                    bounding_boxes=ai_res.detections or [],
+                    image_path=cde.capture.image_path if cde.capture else inc.photo_url,
+                    station_id=inc.station_id,
+                    incident_id=inc.id,
+                    model_info="MegaDetector v5a.0.1 + Google SpeciesNet v4.0.3a (Edge Camera Pipeline)"
+                )
+                db.add(det)
+                db.commit()
+                db.refresh(det)
+                log_activity(db, inc.id, current_user.id, 'AI Analysis', f'AI analysis linked from Camera Detection. Top: {det.normalized_species}')
+                return format_incident_out(inc, db, current_user)
+
+    detections_added = []
+    for img_url in images_to_analyze:
+        local_path = img_url
+        if img_url.startswith("/static/"):
+            candidate1 = os.path.join(base_dir, "app", *img_url.strip("/").split("/"))
+            candidate2 = os.path.join(base_dir, *img_url.strip("/").split("/"))
+            local_path = candidate1 if os.path.exists(candidate1) else candidate2
+        elif not os.path.isabs(img_url):
+            candidate1 = os.path.join(base_dir, "app", img_url)
+            candidate2 = os.path.join(base_dir, img_url)
+            local_path = candidate1 if os.path.exists(candidate1) else candidate2
+
+        if not os.path.exists(local_path):
+            continue
+
+        try:
+            result = analyze_image(local_path)
+            if result.get("status") == "error":
+                db_detection = AnimalDetection(
+                    animal_name="Unknown", confidence=-1.0, count=0,
+                    image_path=img_url, station_id=inc.station_id, incident_id=inc.id,
+                    model_info=result.get("error", "AI Analysis Failed")
+                )
+            else:
+                db_detection = AnimalDetection(
+                    animal_name=result.get("overall_species", "Unknown"),
+                    normalized_species=result.get("overall_species", "Unknown"),
+                    confidence=result.get("overall_confidence", 0.0),
+                    count=result.get("animal_count", 0),
+                    bounding_boxes=result.get("detections", []),
+                    image_path=img_url, station_id=inc.station_id, incident_id=inc.id,
+                    model_info=result.get("metadata", {}).get("pipeline")
+                )
+            db.add(db_detection)
+            detections_added.append(db_detection)
+        except Exception as e:
+            db_detection = AnimalDetection(
+                animal_name="Unknown", confidence=-1.0, count=0,
+                image_path=img_url, station_id=inc.station_id, incident_id=inc.id,
+                model_info=f"Error: {str(e)}"[:250]
+            )
+            db.add(db_detection)
+            detections_added.append(db_detection)
+
+    if not detections_added:
+        raise HTTPException(status_code=400, detail="Failed to analyze any images.")
+
+    db.commit()
+    for d in detections_added:
+        db.refresh(d)
+
+    positive_detections = [d for d in detections_added if d.confidence > 0]
+    if positive_detections:
+        highest = max(positive_detections, key=lambda x: x.confidence)
+        log_activity(db, inc.id, current_user.id, "AI Analysis", f"AI analysis completed on {len(detections_added)} images. Top: {highest.normalized_species}")
+        rfos = db.query(User).filter(User.station_id == inc.station_id, User.role.in_(["Range Forest Officer", "Officer", "Admin"])).all()
+        for rfo in rfos:
+            if rfo.id != current_user.id:
+                db.add(Notification(user_id=rfo.id, title=f"AI Analysis Complete [{inc.reference_id or inc.id}]", message=f"AI Detection: {highest.normalized_species}."))
+        db.commit()
+    else:
+        log_activity(db, inc.id, current_user.id, "AI Analysis", f"AI analysis completed on {len(detections_added)} images. No positive detections.")
+
     return format_incident_out(inc, db, current_user)
 
 

@@ -153,6 +153,9 @@ const LoginPage: React.FC = () => {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
+              {/* Fake hidden input traps to absorb browser password-manager auto-population */}
+              <input type="text" name="fake_email_prevent_autofill" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" autoComplete="off" />
+              <input type="password" name="fake_password_prevent_autofill" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" autoComplete="off" />
 
               {/* Email Input */}
               <div className="group">
@@ -162,9 +165,10 @@ const LoginPage: React.FC = () => {
                 <div className="relative flex items-center">
                   <input
                     id="email"
+                    name="gaia_login_email"
                     type="email"
                     required
-                    autoComplete="email"
+                    autoComplete="off"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="email@example.com"
@@ -183,9 +187,10 @@ const LoginPage: React.FC = () => {
                 <div className="relative flex items-center">
                   <input
                     id="password"
+                    name="gaia_login_password"
                     type={showPassword ? "text" : "password"}
                     required
-                    autoComplete="current-password"
+                    autoComplete="new-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••••"
@@ -214,13 +219,12 @@ const LoginPage: React.FC = () => {
                   />
                   Remember me
                 </label>
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); alert("Contact Admin at admin@gaia.com to reset password."); }}
-                  className="text-[#E0E5E2] hover:text-white font-medium transition-colors drop-shadow-sm"
+                <Link
+                  to="/forgot-password"
+                  className="text-[#E0E5E2] hover:text-[#3FBF7F] font-medium transition-colors drop-shadow-sm"
                 >
                   Forgot Password?
-                </button>
+                </Link>
               </div>
 
               {/* Login Button */}

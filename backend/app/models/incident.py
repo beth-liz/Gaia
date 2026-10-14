@@ -60,11 +60,15 @@ class Incident(Base):
     closed_at = Column(DateTime, nullable=True)
     closed_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     final_closure_remarks = Column(Text, nullable=True)
+    
+    camera_detection_event_id = Column(Integer, ForeignKey("camera_detection_events.id", ondelete="SET NULL"), unique=True, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    from sqlalchemy.orm import backref
     # Relationships
+    camera_detection_event = relationship("CameraDetectionEvent", backref=backref("incident", uselist=False), lazy="joined")
     animal_species_rel = relationship("AnimalSpecies", back_populates="incidents", lazy="joined")
     reporter_rel = relationship("User", foreign_keys=[reported_by], lazy="joined")
     reporter = relationship("User", foreign_keys=[reporter_id], lazy="joined")

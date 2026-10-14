@@ -224,7 +224,7 @@ export default function GISMapComponent({
             </div>
             <h4 class="text-xs font-bold text-gray-900 leading-snug">${feat.name}</h4>
             <p class="text-[11px] text-gray-600 mt-1">${feat.sector || "Sanctuary Perimeter"}</p>
-            ${feat.species ? `<p class="text-[11px] font-semibold text-emerald-900 mt-1 font-sans">Detect: ${feat.species}</p>` : ""}
+            ${feat.confidence ? `<div class="mt-1 p-1 bg-amber-50 border border-amber-200 rounded text-[10px] text-amber-900 leading-tight"><strong>AI Detection:</strong> ${feat.species}<br/>Confidence: ${(feat.confidence * 100).toFixed(0)}%</div>` : (feat.species ? `<p class="text-[11px] font-semibold text-emerald-900 mt-1 font-sans">Detect: ${feat.species}</p>` : "")}
             <div class="mt-2.5 pt-2 border-t border-gray-150 flex items-center justify-between text-[10px] text-gray-500 font-mono">
               <span>Lat: ${feat.lat.toFixed(4)}</span>
               <span>Lng: ${feat.lng.toFixed(4)}</span>

@@ -5,6 +5,7 @@ import { api } from "@/services/api";
 import { PageHeader } from "@/components/common/PageHeader";
 import { IncidentProgressTracker } from "@/components/incidents/IncidentProgressTracker";
 import { IncidentActivityTimeline } from "@/components/incidents/IncidentActivityTimeline";
+import { AIAssessmentCard } from "@/components/incidents/AIAssessmentCard";
 import type { Incident, IncidentActivity, User, FieldOperation } from "@/types";
 import {
   AlertCircle,
@@ -59,10 +60,10 @@ export const IncidentReviewPage: React.FC = () => {
 
   const incidentId = Number(id);
 
-  const fetchIncidentDetails = async () => {
+  const fetchIncidentDetails = async (silent = false) => {
     if (!incidentId) return;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const [incData, actData, opData] = await Promise.all([
         api.getIncidentById(incidentId),
@@ -80,7 +81,7 @@ export const IncidentReviewPage: React.FC = () => {
     } catch (err: any) {
       setError(err.message || "Failed to load incident details.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -335,6 +336,31 @@ export const IncidentReviewPage: React.FC = () => {
       {/* Horizontal Lifecycle Progress Bar */}
       <IncidentProgressTracker currentStatus={incident.status} />
 
+      {/* Camera AI Provenance Banner if generated from camera detection */}
+      {incident.camera_detection_event_id && (
+        <div className="p-4 rounded-2xl bg-indigo-50/90 border border-indigo-200 text-indigo-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Radio className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <p className="font-extrabold text-indigo-950 text-sm">
+                Generated from AI Camera Sighting #{incident.camera_detection_event_id}
+              </p>
+              <p className="text-[11px] text-indigo-700">
+                Official incident generated via camera monitoring review workflow. Verified by MegaDetector v5a + SpeciesNet v4.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate(isAdmin ? "/admin/camera-incidents" : "/officer/camera-incidents")}
+            className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs transition-colors shrink-0 shadow-xs text-center"
+          >
+            View Camera Review Queue
+          </button>
+        </div>
+      )}
+
       {/* Main Workspace Split Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* LEFT COLUMN: Incident Details Workspace & Assigned Officers (8 cols) */}
@@ -345,20 +371,8 @@ export const IncidentReviewPage: React.FC = () => {
               Incident Operational Parameters
             </h3>
 
-            {/* Visual Photos Grid */}
-            {incident.images && incident.images.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {incident.images.map((img, idx) => (
-                  <div key={idx} className="w-full h-32 rounded-2xl overflow-hidden bg-gray-100 border border-emerald-950/10 shadow-2xs">
-                    <img
-                      src={img.startsWith("/static") ? `http://127.0.0.1:8000${img}` : img}
-                      alt={`Incident Photo ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* AI Assessment Card (replaces plain photos grid) */}
+            <AIAssessmentCard incident={incident} onUpdate={fetchIncidentDetails} />
 
             {/* Metric Attributes Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">

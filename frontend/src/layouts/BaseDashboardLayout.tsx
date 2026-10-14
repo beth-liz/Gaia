@@ -106,7 +106,7 @@ export const BaseDashboardLayout: React.FC<BaseDashboardLayoutProps> = ({
   const profileImg = getProfileImage();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#fdfbf7] via-[#f7f4eb] to-[#eef5ef] flex flex-col overflow-hidden">
+    <div className="h-screen w-full bg-gradient-to-br from-[#fdfbf7] via-[#f7f4eb] to-[#eef5ef] flex flex-col overflow-hidden">
       {/* Fixed Top Navigation Bar with Visual 1px Sidebar Separator */}
       <header className="fixed top-0 inset-x-0 z-40 h-16 bg-white/95 backdrop-blur-md border-b border-emerald-950/10 flex items-center shadow-xs">
         {/* Left Section: Logo Container with 1px Right Separator Line matching Sidebar Width (w-64) */}
@@ -192,12 +192,12 @@ export const BaseDashboardLayout: React.FC<BaseDashboardLayoutProps> = ({
       </header>
 
       {/* Main Container below Fixed Top Bar */}
-      <div className="flex pt-16 h-screen overflow-hidden">
+      <div className="flex flex-1 pt-16 overflow-hidden">
         {/* Fixed Sidebar Navigation with 1px Right Border */}
         <aside
-          className={`fixed md:sticky top-16 inset-y-0 left-0 z-30 w-64 bg-white/90 backdrop-blur-md border-r border-emerald-950/10 flex flex-col justify-between transition-transform duration-300 ${
+          className={`fixed md:relative top-16 md:top-0 inset-y-0 left-0 z-30 w-64 bg-white/90 backdrop-blur-md border-r border-emerald-950/10 flex flex-col justify-between transition-transform duration-300 ${
             mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-          } h-[calc(100vh-4rem)]`}
+          }`}
         >
           <div className="flex flex-col h-full justify-between">
             {/* Nav Items List */}

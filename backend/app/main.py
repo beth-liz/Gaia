@@ -33,7 +33,8 @@ from app.routers import (
     animal_species,
     officers,
     field_ops,
-    inventory
+    inventory,
+    cameras
 )
 
 app = FastAPI(title="Gaia Wildlife Operations API", version="2.0.0")
@@ -69,6 +70,13 @@ app.include_router(districts.router)
 app.include_router(monitoring_stations.router)
 app.include_router(inventory.router)
 app.include_router(gis.router)
+app.include_router(cameras.router)
+
+from app.routers import camera_detections
+app.include_router(camera_detections.router)
+
+from app.routers import ai
+app.include_router(ai.router)
 
 
 @app.get("/")

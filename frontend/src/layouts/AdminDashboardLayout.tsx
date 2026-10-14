@@ -14,6 +14,7 @@ import {
   Trees,
   Package,
   Warehouse,
+  Video,
 } from "lucide-react";
 
 const adminNavItems: NavItem[] = [
@@ -24,6 +25,9 @@ const adminNavItems: NavItem[] = [
   { label: "States", path: "/admin/states", icon: Globe, sectionHeader: "Master Data & Hierarchy" },
   { label: "Districts", path: "/admin/districts", icon: Building2 },
   { label: "Monitoring Stations", path: "/admin/monitoring-stations", icon: Radio },
+  { label: "Cameras", path: "/admin/cameras", icon: Video },
+  { label: "Camera Detections", path: "/admin/camera-detections", icon: Video },
+  { label: "Camera Incidents", path: "/admin/camera-incidents", icon: ShieldAlert },
   { label: "Animal Species", path: "/admin/animal-species", icon: Trees },
 
   // Inventory Management section
