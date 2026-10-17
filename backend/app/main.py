@@ -37,12 +37,40 @@ from app.routers import (
     cameras
 )
 
+# Import settings
+from app.core.config import settings
+
 app = FastAPI(title="Gaia Wildlife Operations API", version="2.0.0")
 
-# CORS middleware for local frontend communication
+# CORS middleware: strict configuration for production vs. permissive local development
+is_prod = settings.ENVIRONMENT.lower() in ("production", "prod")
+raw_cors = (settings.CORS_ORIGINS or "").strip()
+
+if is_prod:
+    # In production, require explicit frontend origins and do not permit wildcard or fallback
+    if not raw_cors or raw_cors == "*":
+        raise ValueError(
+            "Production configuration error: CORS_ORIGINS must be set to the explicit frontend origin(s) "
+            "(e.g., 'https://gaia.vercel.app') in production. Wildcard '*' or empty CORS_ORIGINS is prohibited."
+        )
+    origins = [origin.strip() for origin in raw_cors.split(",") if origin.strip()]
+    if not origins:
+        raise ValueError("Production configuration error: No valid origins found in CORS_ORIGINS.")
+else:
+    # In development, support wildcard or explicit list, and include standard localhost dev servers
+    if raw_cors == "*" or not raw_cors:
+        origins = ["*"]
+    else:
+        origins = [origin.strip() for origin in raw_cors.split(",") if origin.strip()]
+
+    dev_defaults = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"]
+    for dev_origin in dev_defaults:
+        if dev_origin not in origins and "*" not in origins:
+            origins.append(dev_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

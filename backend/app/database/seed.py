@@ -92,24 +92,56 @@ def seed_villages(db: Session):
     db.commit()
 
 
+from app.core.config import settings
+import logging
+
+logger = logging.getLogger("gaia.seed")
+
+
 def seed_admin_user(db: Session):
+    if not settings.SEED_ADMIN:
+        logger.info("SEED_ADMIN is set to False; skipping Admin user seeding.")
+        return
+
     admin_user = db.query(User).filter(User.role == "Admin").first()
-    if not admin_user:
-        default_admin = User(
-            full_name="Gaia System Administrator",
-            email="admin@gaia.com",
-            phone="9876543210",
-            password=hash_password("AdminPassword123"),
-            role="Admin",
-            is_verified=True,
-            is_active=True,
-            must_change_password=False
+    if admin_user:
+        return
+
+    is_prod = settings.ENVIRONMENT.lower() in ("production", "prod")
+
+    # In production, require ADMIN_PASSWORD to be explicitly configured
+    admin_password = settings.ADMIN_PASSWORD
+    if is_prod and (not admin_password or not admin_password.strip()):
+        raise ValueError(
+            "Production configuration error: SEED_ADMIN=true but ADMIN_PASSWORD is not set. "
+            "Please configure ADMIN_PASSWORD in your environment variables to create the initial Admin account safely, "
+            "or set SEED_ADMIN=false if the Admin account has already been provisioned."
         )
-        db.add(default_admin)
-        db.commit()
+
+    if not admin_password:
+        admin_password = "AdminPassword123"
+
+    default_admin = User(
+        full_name=settings.ADMIN_NAME,
+        email=settings.ADMIN_EMAIL,
+        phone=settings.ADMIN_PHONE,
+        password=hash_password(admin_password),
+        role="Admin",
+        is_verified=True,
+        is_active=True,
+        must_change_password=is_prod  # In production, enforce password change on first login
+    )
+    db.add(default_admin)
+    db.commit()
+    logger.info(f"Initial Admin account created for {settings.ADMIN_EMAIL}")
 
 
 def seed_sample_officers(db: Session):
+    # Only seed sample demo officers in development/staging environments
+    if settings.ENVIRONMENT.lower() in ("production", "prod"):
+        logger.info("Production mode detected: skipping demo officers seeding.")
+        return
+
     rfo_desig = db.query(Designation).filter(Designation.designation_name == "Range Forest Officer").first()
     fg_desig = db.query(Designation).filter(Designation.designation_name == "Forest Guard").first()
     default_st = db.query(MonitoringStation).filter(MonitoringStation.station_name == "Muthanga Range Office").first()

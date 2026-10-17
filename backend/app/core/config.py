@@ -7,11 +7,28 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 ENV_FILE = BACKEND_DIR / ".env"
 
 class Settings(BaseSettings):
-    POSTGRES_SERVER: str
-    POSTGRES_PORT: int
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_DB: str
+    # Environment Mode
+    ENVIRONMENT: str = "development"
+
+    # Database connection parameters
+    # In production (e.g. Render with Neon), DATABASE_URL is typically provided directly.
+    DATABASE_URL: str | None = None
+    POSTGRES_SERVER: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_DB: str = "gaia"
+
+    # CORS Allowed Origins (comma-separated string or list in production)
+    CORS_ORIGINS: str = "*"
+
+    # Default Admin Seed configuration
+    # In production, set SEED_ADMIN=true and provide secure credentials if initial admin is desired.
+    SEED_ADMIN: bool = True
+    ADMIN_EMAIL: str = "admin@gaia.com"
+    ADMIN_PASSWORD: str | None = None
+    ADMIN_NAME: str = "Gaia System Administrator"
+    ADMIN_PHONE: str = "9876543210"
 
     SECRET_KEY: str
     ALGORITHM: str
