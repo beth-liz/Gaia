@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
+import { getImageUrl } from "@/utils/imageUrl";
 import {
   Trees,
   LogOut,
@@ -91,16 +92,9 @@ export const BaseDashboardLayout: React.FC<BaseDashboardLayoutProps> = ({
   };
 
   const getProfileImage = () => {
-    if (user?.profile_image) {
-      if (user.profile_image.startsWith("http") || user.profile_image.startsWith("/static")) {
-        return user.profile_image.startsWith("/static") ? `http://127.0.0.1:8000${user.profile_image}` : user.profile_image;
-      }
-      return user.profile_image;
-    }
-    if (user?.avatar_url) {
-      return user.avatar_url.startsWith("/static") ? `http://127.0.0.1:8000${user.avatar_url}` : user.avatar_url;
-    }
-    return null;
+    const rawPath = user?.profile_image || user?.avatar_url;
+    if (!rawPath) return null;
+    return getImageUrl(rawPath);
   };
 
   const profileImg = getProfileImage();

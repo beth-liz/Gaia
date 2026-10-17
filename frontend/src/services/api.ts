@@ -1,4 +1,19 @@
-export const API_BASE = "http://127.0.0.1:8000";
+const resolveApiBase = (): string => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl && typeof envUrl === "string" && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, "");
+  }
+  if (import.meta.env.PROD) {
+    console.error(
+      "Configuration Error: VITE_API_BASE_URL environment variable is missing in production build. " +
+      "API requests will fail until VITE_API_BASE_URL is configured."
+    );
+  }
+  return "http://127.0.0.1:8000";
+};
+
+export const API_BASE = resolveApiBase();
+
 
 const getHeaders = (includeAuth = true) => {
   const headers: Record<string, string> = {

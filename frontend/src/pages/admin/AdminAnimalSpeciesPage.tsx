@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { api } from "@/services/api";
+import { getImageUrl } from "@/utils/imageUrl";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ActionToolbar } from "@/components/common/ActionToolbar";
 import { DataTable } from "@/components/common/DataTable";
@@ -89,7 +90,7 @@ export const AdminAnimalSpeciesPage: React.FC = () => {
     setDescription(spec.description || "");
     setIsActive(spec.is_active);
     setSelectedFile(null);
-    setImagePreview(spec.image ? (spec.image.startsWith("/static") ? `http://127.0.0.1:8000${spec.image}` : spec.image) : null);
+    setImagePreview(spec.image ? getImageUrl(spec.image) : null);
     setNameError(null);
     setError(null);
     setIsModalOpen(true);
@@ -237,7 +238,7 @@ export const AdminAnimalSpeciesPage: React.FC = () => {
     {
       header: "Image",
       cell: (spec) => {
-        const imgUrl = spec.image ? (spec.image.startsWith("/static") ? `http://127.0.0.1:8000${spec.image}` : spec.image) : null;
+        const imgUrl = spec.image ? getImageUrl(spec.image) : null;
         return (
           <div className="w-10 h-10 rounded-xl bg-emerald-900/10 text-emerald-900 font-extrabold text-xs flex items-center justify-center overflow-hidden border border-emerald-950/10 shrink-0">
             {imgUrl ? (
@@ -562,7 +563,7 @@ export const AdminAnimalSpeciesPage: React.FC = () => {
             {viewingSpecies.image && (
               <div className="w-full h-44 rounded-2xl overflow-hidden bg-gray-100 border border-emerald-950/10">
                 <img
-                  src={viewingSpecies.image.startsWith("/static") ? `http://127.0.0.1:8000${viewingSpecies.image}` : viewingSpecies.image}
+                  src={getImageUrl(viewingSpecies.image)}
                   alt={viewingSpecies.animal_name}
                   className="w-full h-full object-cover"
                 />

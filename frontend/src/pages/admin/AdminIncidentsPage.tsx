@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "@/services/api";
+import { getImageUrl } from "@/utils/imageUrl";
 import { PageHeader } from "@/components/common/PageHeader";
 import { DataTable } from "@/components/common/DataTable";
 import type { Column } from "@/components/common/DataTable";
@@ -439,7 +440,7 @@ export const AdminIncidentsPage: React.FC = () => {
             {(selectedIncident.images && selectedIncident.images.length > 0) || selectedIncident.photo_url ? (
               <div className="grid grid-cols-2 gap-2">
                 {(selectedIncident.images && selectedIncident.images.length > 0 ? selectedIncident.images : [selectedIncident.photo_url]).map((img, i) => (
-                  img && <img key={i} src={img.startsWith("/static") ? `http://127.0.0.1:8000${img}` : img} alt="Incident Evidence" className="w-full h-32 object-cover rounded-xl border border-emerald-950/10" />
+                  img && <img key={i} src={getImageUrl(img)} alt="Incident Evidence" className="w-full h-32 object-cover rounded-xl border border-emerald-950/10" />
                 ))}
               </div>
             ) : null}

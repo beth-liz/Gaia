@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
+import { getImageUrl } from "@/utils/imageUrl";
 import { PageHeader } from "@/components/common/PageHeader";
 import {
   User,
@@ -119,13 +120,9 @@ const ProfilePage: React.FC = () => {
 
   const getProfileImg = () => {
     if (isVillager) return null; // No profile picture for villager
-    if (user?.profile_image) {
-      return user.profile_image.startsWith("/static") ? `http://127.0.0.1:8000${user.profile_image}` : user.profile_image;
-    }
-    if (user?.avatar_url) {
-      return user.avatar_url.startsWith("/static") ? `http://127.0.0.1:8000${user.avatar_url}` : user.avatar_url;
-    }
-    return null;
+    const rawPath = user?.profile_image || user?.avatar_url;
+    if (!rawPath) return null;
+    return getImageUrl(rawPath);
   };
 
   const profileImg = getProfileImg();

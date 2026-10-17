@@ -52,11 +52,10 @@ function severityColor(s: string | undefined): string {
   }
 }
 
-const API_BASE = "http://127.0.0.1:8000";
+import { getImageUrl } from "@/utils/imageUrl";
+
 function imgSrc(url?: string): string {
-  if (!url) return "";
-  if (url.startsWith("http")) return url;
-  return `${API_BASE}${url}`;
+  return getImageUrl(url);
 }
 
 function SectionCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {

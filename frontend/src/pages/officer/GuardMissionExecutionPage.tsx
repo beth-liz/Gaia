@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { api } from "@/services/api";
+import { api, API_BASE } from "@/services/api";
 import { inventoryService } from "@/services/inventoryService";
 import { PageHeader } from "@/components/common/PageHeader";
 import { AIAssessmentCard } from "@/components/incidents/AIAssessmentCard";
@@ -1221,10 +1221,10 @@ export const GuardMissionExecutionPage: React.FC = () => {
 
                 {fieldOp?.report_generated_content && (
                   <div className="flex gap-2 mb-4">
-                    <a href={`http://localhost:8000${fieldOp.report_generated_content}`} target="_blank" rel="noreferrer" className="flex-1 py-2.5 rounded-xl bg-blue-100 hover:bg-blue-200 text-blue-900 font-black text-xs text-center shadow-xs">
+                    <a href={`${API_BASE}${fieldOp.report_generated_content}`} target="_blank" rel="noreferrer" className="flex-1 py-2.5 rounded-xl bg-blue-100 hover:bg-blue-200 text-blue-900 font-black text-xs text-center shadow-xs">
                       View Report
                     </a>
-                    <button onClick={() => handleDownload(`http://localhost:8000${fieldOp.report_generated_content}`, `Gaia_Incident_INC-${incident?.reference_id || incident?.id}_Final_Report.pdf`)} className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs text-center shadow-xs">
+                    <button onClick={() => handleDownload(`${API_BASE}${fieldOp.report_generated_content}`, `Gaia_Incident_INC-${incident?.reference_id || incident?.id}_Final_Report.pdf`)} className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs text-center shadow-xs">
                       Download PDF
                     </button>
                   </div>

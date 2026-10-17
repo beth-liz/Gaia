@@ -11,8 +11,7 @@ import type {
   AdminPaginatedStationsResponse,
   RFOInventoryDashboardData,
 } from "@/types/inventory";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "@/services/api";
 
 const getHeaders = (): Record<string, string> => {
   const token = localStorage.getItem("gaia_token");
@@ -303,7 +302,7 @@ export const inventoryService = {
   },
 
   getForestGuards: async (): Promise<any[]> => {
-    const res = await fetch(`http://127.0.0.1:8000/api/officers/guards`, {
+    const res = await fetch(`${API_BASE}/api/officers/guards`, {
       headers: getHeaders(),
     });
     return handleResponse<any[]>(res);

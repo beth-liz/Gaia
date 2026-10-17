@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
+import { getImageUrl } from "@/utils/imageUrl";
 import { ShieldCheck, CheckCircle2, AlertTriangle, ArrowRight, Loader2, User } from "lucide-react";
 
 const GuardDashboardHome: React.FC = () => {
@@ -80,7 +81,7 @@ const GuardDashboardHome: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
           <div className="w-16 h-16 rounded-full bg-emerald-900 text-amber-300 font-black text-xl flex items-center justify-center border-2 border-white shadow-sm overflow-hidden shrink-0">
             {user?.profile_image || user?.avatar_url ? (
-              <img src={String(user.profile_image || user.avatar_url).startsWith('/static') ? `http://127.0.0.1:8000${user.profile_image || user.avatar_url}` : String(user.profile_image || user.avatar_url)} alt="Profile" className="w-full h-full object-cover" />
+              <img src={getImageUrl(user.profile_image || user.avatar_url)} alt="Profile" className="w-full h-full object-cover" />
             ) : (
               user?.full_name ? user.full_name.charAt(0).toUpperCase() : "G"
             )}
