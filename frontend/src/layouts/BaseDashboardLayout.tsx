@@ -157,7 +157,15 @@ export const BaseDashboardLayout: React.FC<BaseDashboardLayoutProps> = ({
 
             {/* Notifications Button */}
             <Link
-              to={user?.role === "Admin" ? "/admin/notifications" : user?.role === "Villager" ? "/villager/notifications" : "/officer/notifications"}
+              to={
+                user?.role === "Admin"
+                  ? "/admin/notifications"
+                  : user?.role === "Villager"
+                  ? "/villager/notifications"
+                  : user?.role === "Forest Guard"
+                  ? "/guard/notifications"
+                  : "/officer/notifications"
+              }
               className="relative p-2 rounded-2xl bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 transition-colors border border-emerald-950/10"
               title="Notifications"
             >

@@ -384,9 +384,9 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
       )}
 
       {/* SECTION 1: Incident Information */}
-      <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-6 shadow-xs">
+      <div className="bg-white rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-6 shadow-xs">
         <div className="flex items-center gap-3 border-b border-emerald-950/10 pb-4">
-          <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center font-black text-sm shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-black text-sm shrink-0 border border-emerald-200">
             1
           </div>
           <div>
@@ -395,24 +395,28 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Incident Title</label>
+            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
+              Incident Title
+            </label>
             <input
               type="text"
               placeholder="e.g. Lone Wild Elephant Herd Sighting near Farm"
               value={incidentTitle}
               onChange={(e) => setIncidentTitle(e.target.value)}
-              className="w-full px-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-semibold"
+              className="w-full px-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-semibold transition-all"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Incident Category *</label>
+            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
+              Incident Category <span className="text-red-600">*</span>
+            </label>
             <select
               value={incidentCategory}
               onChange={(e) => setIncidentCategory(e.target.value)}
-              className="w-full px-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-semibold"
+              className="w-full px-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-semibold transition-all cursor-pointer"
             >
               <option value="Wildlife Sighting">Wildlife Sighting</option>
               <option value="Human Wildlife Conflict">Human Wildlife Conflict</option>
@@ -425,9 +429,11 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Animal Detected *</label>
+            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
+              Animal Detected <span className="text-red-600">*</span>
+            </label>
             {loadingSpecies ? (
               <div className="py-2 text-xs text-emerald-800/70 flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-emerald-800" />
@@ -508,13 +514,18 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
       </div>
 
       {/* SECTION 2: Location (Leaflet & GPS) */}
-      <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-4 shadow-xs">
+      <div className="bg-white rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-4 shadow-xs">
         <div className="flex items-center gap-3 border-b border-emerald-950/10 pb-4">
-          <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center font-black text-sm shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-black text-sm shrink-0 border border-emerald-200">
             2
           </div>
           <div>
-            <h3 className="text-base font-extrabold text-emerald-950">Section 2: Incident Field Location</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-extrabold text-emerald-950">Section 2: Incident Field Location</h3>
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+                Required *
+              </span>
+            </div>
             <p className="text-xs text-emerald-800/70 font-medium">Use GPS geolocation or select exact coordinates on interactive map</p>
           </div>
         </div>
@@ -591,9 +602,9 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
       </div>
 
       {/* SECTION 3: Additional Details */}
-      <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-6 shadow-xs">
+      <div className="bg-white rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-6 shadow-xs">
         <div className="flex items-center gap-3 border-b border-emerald-950/10 pb-4">
-          <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center font-black text-sm shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-black text-sm shrink-0 border border-emerald-200">
             3
           </div>
           <div>
@@ -613,7 +624,7 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
                 type="text"
                 readOnly
                 value={new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-slate-100 text-emerald-950 font-bold cursor-not-allowed select-none"
+                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-slate-50 text-emerald-950 font-bold cursor-not-allowed select-none"
               />
             </div>
           </div>
@@ -628,7 +639,7 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
                 type="text"
                 readOnly
                 value={new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-slate-100 text-emerald-950 font-bold cursor-not-allowed select-none"
+                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-slate-50 text-emerald-950 font-bold cursor-not-allowed select-none"
               />
             </div>
           </div>
@@ -640,7 +651,7 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
               <select
                 value={weather}
                 onChange={(e) => setWeather(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none text-emerald-950 font-bold"
+                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-bold cursor-pointer"
               >
                 <option value="Sunny">Sunny</option>
                 <option value="Rainy">Rainy</option>
@@ -660,14 +671,14 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
               <button
                 type="button"
                 onClick={() => setPeopleInjured(true)}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${peopleInjured ? "bg-red-600 text-white" : "bg-white text-emerald-950 border border-emerald-950/10"}`}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${peopleInjured ? "bg-red-600 text-white shadow-sm" : "bg-white text-emerald-950 border border-emerald-950/10 hover:bg-emerald-50"}`}
               >
                 Yes
               </button>
               <button
                 type="button"
                 onClick={() => setPeopleInjured(false)}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${!peopleInjured ? "bg-emerald-900 text-white" : "bg-white text-emerald-950 border border-emerald-950/10"}`}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${!peopleInjured ? "bg-emerald-900 text-white shadow-sm" : "bg-white text-emerald-950 border border-emerald-950/10 hover:bg-emerald-50"}`}
               >
                 No
               </button>
@@ -680,14 +691,14 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
               <button
                 type="button"
                 onClick={() => setLivestockDamage(true)}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${livestockDamage ? "bg-amber-600 text-white" : "bg-white text-emerald-950 border border-emerald-950/10"}`}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${livestockDamage ? "bg-amber-600 text-white shadow-sm" : "bg-white text-emerald-950 border border-emerald-950/10 hover:bg-emerald-50"}`}
               >
                 Yes
               </button>
               <button
                 type="button"
                 onClick={() => setLivestockDamage(false)}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${!livestockDamage ? "bg-emerald-900 text-white" : "bg-white text-emerald-950 border border-emerald-950/10"}`}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${!livestockDamage ? "bg-emerald-900 text-white shadow-sm" : "bg-white text-emerald-950 border border-emerald-950/10 hover:bg-emerald-50"}`}
               >
                 No
               </button>
@@ -700,14 +711,14 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
               <button
                 type="button"
                 onClick={() => setPropertyDamage(true)}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${propertyDamage ? "bg-amber-600 text-white" : "bg-white text-emerald-950 border border-emerald-950/10"}`}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${propertyDamage ? "bg-amber-600 text-white shadow-sm" : "bg-white text-emerald-950 border border-emerald-950/10 hover:bg-emerald-50"}`}
               >
                 Yes
               </button>
               <button
                 type="button"
                 onClick={() => setPropertyDamage(false)}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${!propertyDamage ? "bg-emerald-900 text-white" : "bg-white text-emerald-950 border border-emerald-950/10"}`}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${!propertyDamage ? "bg-emerald-900 text-white shadow-sm" : "bg-white text-emerald-950 border border-emerald-950/10 hover:bg-emerald-50"}`}
               >
                 No
               </button>
@@ -720,14 +731,14 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
               <button
                 type="button"
                 onClick={() => setCropDamage(true)}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${cropDamage ? "bg-amber-600 text-white" : "bg-white text-emerald-950 border border-emerald-950/10"}`}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${cropDamage ? "bg-amber-600 text-white shadow-sm" : "bg-white text-emerald-950 border border-emerald-950/10 hover:bg-emerald-50"}`}
               >
                 Yes
               </button>
               <button
                 type="button"
                 onClick={() => setCropDamage(false)}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${!cropDamage ? "bg-emerald-900 text-white" : "bg-white text-emerald-950 border border-emerald-950/10"}`}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all ${!cropDamage ? "bg-emerald-900 text-white shadow-sm" : "bg-white text-emerald-950 border border-emerald-950/10 hover:bg-emerald-50"}`}
               >
                 No
               </button>
@@ -737,9 +748,9 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
       </div>
 
       {/* SECTION 4: Image Upload */}
-      <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-4 shadow-xs">
+      <div className="bg-white rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-4 shadow-xs">
         <div className="flex items-center gap-3 border-b border-emerald-950/10 pb-4">
-          <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center font-black text-sm shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-black text-sm shrink-0 border border-emerald-200">
             4
           </div>
           <div>

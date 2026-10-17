@@ -90,10 +90,10 @@ export const GuardCompletedReportsPage: React.FC = () => {
 
               <div className="pt-3 border-t border-emerald-950/10 flex items-center justify-end gap-2">
                 <Link
-                  to={`/incidents/${inc.id}`}
+                  to={`/guard/completed/${inc.id}/audit`}
                   className="px-5 py-2.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white font-black text-xs shadow-md flex items-center gap-1.5 transition-all active:scale-95"
                 >
-                  View Full Audit Log <ArrowRight className="w-3.5 h-3.5" />
+                  View Full Report <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
             </div>

@@ -19,12 +19,14 @@ import {
   Clock,
   Globe,
   Video,
-  ShieldAlert
+  ShieldAlert,
+  Flame,
 } from "lucide-react";
 
 const rfoNavItems: NavItem[] = [
   { label: "Dashboard", path: "/officer/dashboard", icon: LayoutDashboard },
-  { label: "GIS Intelligence", path: "/officer/gis", icon: Globe, sectionHeader: "Spatial Operations" },
+  { label: "GIS Mapping", path: "/officer/gis", icon: Globe, sectionHeader: "Spatial Operations" },
+  { label: "Conflict Heatmap", path: "/officer/gis/heatmap", icon: Flame },
   { label: "Report Incident", path: "/officer/report-incident", icon: FileCheck },
   { label: "My Reports", path: "/officer/my-reports", icon: FileCheck },
   { label: "Incidents", path: "/officer/incidents", icon: Radio, sectionHeader: "Field Operations" },

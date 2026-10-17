@@ -1,7 +1,7 @@
 import os
 import json
 import uuid
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
@@ -32,30 +32,62 @@ router = APIRouter(
 
 
 from app.database.session import SessionLocal
+from threading import Lock
+
+# In-memory incident lock to prevent concurrent AI processing races
+_incident_ai_locks = {}
+_incident_ai_locks_guard = Lock()
+
+def _get_incident_lock(incident_id: int) -> Lock:
+    with _incident_ai_locks_guard:
+        if incident_id not in _incident_ai_locks:
+            _incident_ai_locks[incident_id] = Lock()
+        return _incident_ai_locks[incident_id]
+
 def _process_ai_for_incident_bg(incident_id: int, reporter_id: int):
+    lock = _get_incident_lock(incident_id)
+    acquired = lock.acquire(blocking=False)
+    if not acquired:
+        # Another worker or request is already running AI for this incident
+        return
+
     db = SessionLocal()
     try:
         inc = db.query(Incident).filter(Incident.id == incident_id).first()
         if not inc: return
 
-        images_to_analyze = []
+        raw_images = []
         if inc.images:
             try:
-                import json
                 parsed = json.loads(inc.images)
                 if isinstance(parsed, list):
-                    images_to_analyze = parsed
+                    raw_images = parsed
+                elif isinstance(parsed, str):
+                    raw_images = [parsed]
             except Exception:
-                images_to_analyze = [inc.images]
+                raw_images = [inc.images]
         elif inc.photo_url:
-            images_to_analyze = [inc.photo_url]
+            raw_images = [inc.photo_url]
+
+        # Normalize and deduplicate unique original image paths
+        images_to_analyze = []
+        for img in raw_images:
+            if img and isinstance(img, str) and img.strip() and img.strip() not in images_to_analyze:
+                images_to_analyze.append(img.strip())
 
         if not images_to_analyze: return
 
+        # Check existing detections to see if all images are already analyzed
+        existing_dets = db.query(AnimalDetection).filter(AnimalDetection.incident_id == inc.id).all()
+        existing_paths = {d.image_path for d in existing_dets if d.image_path}
+        
+        # Determine which images actually still need analysis
+        pending_images = [img for img in images_to_analyze if img not in existing_paths]
+        if not pending_images:
+            return
+
         import os
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        existing_detections = db.query(AnimalDetection).filter(AnimalDetection.incident_id == inc.id).count()
-        if existing_detections > 0: return
 
         # Check if this incident originated from a CameraDetectionEvent that already has verified AI results
         if inc.camera_detection_event_id:
@@ -82,7 +114,7 @@ def _process_ai_for_incident_bg(incident_id: int, reporter_id: int):
                     return
 
         detections_added = []
-        for img_url in images_to_analyze:
+        for img_url in pending_images:
             local_path = img_url
             if img_url.startswith('/static/'):
                 candidate1 = os.path.join(base_dir, 'app', *img_url.strip('/').split('/'))
@@ -99,13 +131,41 @@ def _process_ai_for_incident_bg(incident_id: int, reporter_id: int):
                 from app.services.ai_service import analyze_image
                 result = analyze_image(local_path)
                 if result.get('status') == 'error':
-                    db_detection = AnimalDetection(animal_name='Unknown', confidence=-1.0, count=0, image_path=img_url, station_id=inc.station_id, incident_id=inc.id, model_info=result.get('error', 'AI Analysis Failed'))
+                    db_detection = AnimalDetection(
+                        animal_name='Unknown',
+                        normalized_species='Unknown',
+                        confidence=-1.0,
+                        count=0,
+                        image_path=img_url,
+                        station_id=inc.station_id,
+                        incident_id=inc.id,
+                        model_info=result.get('error', 'AI Analysis Failed')
+                    )
                 else:
-                    db_detection = AnimalDetection(animal_name=result.get('overall_species', 'Unknown'), normalized_species=result.get('overall_species', 'Unknown'), confidence=result.get('overall_confidence', 0.0), count=result.get('animal_count', 0), bounding_boxes=result.get('detections', []), image_path=img_url, station_id=inc.station_id, incident_id=inc.id, model_info=result.get('metadata', {}).get('pipeline'))
+                    db_detection = AnimalDetection(
+                        animal_name=result.get('overall_species', 'Unknown'),
+                        normalized_species=result.get('overall_species', 'Unknown'),
+                        confidence=result.get('overall_confidence', 0.0),
+                        count=result.get('animal_count', 0),
+                        bounding_boxes=result.get('detections', []),
+                        image_path=img_url,
+                        station_id=inc.station_id,
+                        incident_id=inc.id,
+                        model_info=result.get('metadata', {}).get('pipeline')
+                    )
                 db.add(db_detection)
                 detections_added.append(db_detection)
             except Exception as e:
-                db_detection = AnimalDetection(animal_name='Unknown', confidence=-1.0, count=0, image_path=img_url, station_id=inc.station_id, incident_id=inc.id, model_info=f'Error: {str(e)}'[:250])
+                db_detection = AnimalDetection(
+                    animal_name='Unknown',
+                    normalized_species='Unknown',
+                    confidence=-1.0,
+                    count=0,
+                    image_path=img_url,
+                    station_id=inc.station_id,
+                    incident_id=inc.id,
+                    model_info=f'Error: {str(e)}'[:250]
+                )
                 db.add(db_detection)
                 detections_added.append(db_detection)
 
@@ -127,6 +187,7 @@ def _process_ai_for_incident_bg(incident_id: int, reporter_id: int):
         print(f'Background AI failure: {e}')
     finally:
         db.close()
+        lock.release()
 
 
 def generate_reference_id(db: Session) -> str:
@@ -225,19 +286,41 @@ def format_incident_out(inc: Incident, db: Session, current_user: Optional[User]
     parsed_images = []
     if inc.images:
         try:
-            parsed_images = json.loads(inc.images)
+            raw_imgs = json.loads(inc.images)
+            if isinstance(raw_imgs, list):
+                parsed_images = raw_imgs
+            else:
+                parsed_images = [str(raw_imgs)]
         except Exception:
             parsed_images = [inc.images]
     elif inc.photo_url:
         parsed_images = [inc.photo_url]
 
+    # Deduplicate parsed_images while preserving order
+    seen_imgs = set()
+    deduped_images = []
+    for img in parsed_images:
+        if img:
+            norm_img = os.path.normpath(str(img)).replace("\\", "/")
+            if norm_img not in seen_imgs:
+                seen_imgs.add(norm_img)
+                deduped_images.append(img)
+    parsed_images = deduped_images
+
     species_name = inc.animal_species_rel.animal_name if inc.animal_species_rel else inc.animal_type or inc.animal
 
     ai_records = db.query(AnimalDetection).filter(AnimalDetection.incident_id == inc.id).order_by(AnimalDetection.id.asc()).all()
     ai_results_list = []
+    seen_ai_paths = set()
     
     if ai_records:
         for r in ai_records:
+            norm_r_path = os.path.normpath(str(r.image_path)).replace("\\", "/") if r.image_path else ""
+            if norm_r_path and norm_r_path in seen_ai_paths:
+                continue
+            if norm_r_path:
+                seen_ai_paths.add(norm_r_path)
+
             ai_results_list.append({
                 "id": r.id,
                 "normalized_species": r.normalized_species,
@@ -262,6 +345,31 @@ def format_incident_out(inc: Incident, db: Session, current_user: Optional[User]
     else:
         ai_record = None
         ai_status = "Pending" if inc.photo_url or parsed_images else "No Image"
+
+    # Check whether final field operation report PDF exists for completed/closed incidents
+    # A report is only valid and accessible once the incident is genuinely Completed or Closed
+    is_completed_or_closed = inc.status in ["Completed", "Closed"] or inc.incident_status in ["Completed", "Closed"]
+    has_report = False
+
+    if is_completed_or_closed:
+        op_report = db.query(FieldOperation).filter(
+            FieldOperation.incident_id == inc.id,
+            FieldOperation.report_generated_content.isnot(None)
+        ).first()
+        if op_report and op_report.report_generated_content:
+            has_report = True
+        else:
+            clean_ref = (inc.reference_id or f"INC-{inc.id}").strip()
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            potential_names = [
+                f"Gaia_Incident_INC-{clean_ref}_Final_Report.pdf",
+                f"Gaia_Incident_{clean_ref}_Final_Report.pdf",
+                f"Gaia_Incident_INC-{inc.id}_Final_Report.pdf"
+            ]
+            for name in potential_names:
+                if os.path.exists(os.path.join(base_dir, "app", "static", "reports", name)):
+                    has_report = True
+                    break
 
     return IncidentOut(
         id=inc.id,
@@ -322,6 +430,9 @@ def format_incident_out(inc: Incident, db: Session, current_user: Optional[User]
         ai_model_info=ai_record.model_info if ai_record and ai_status != "Failed" else None,
         ai_results=ai_results_list,
         camera_detection_event_id=inc.camera_detection_event_id,
+        has_report=has_report,
+        report_url=f"/api/incidents/{inc.id}/report/download?inline=true" if has_report else None,
+        report_download_url=f"/api/incidents/{inc.id}/report/download?inline=false" if has_report else None,
         created_at=inc.created_at
     )
 
@@ -951,24 +1062,35 @@ def analyze_incident_evidence(
     if not inc:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    images_to_analyze = []
+    raw_images = []
     if inc.images:
         try:
             parsed = json.loads(inc.images)
             if isinstance(parsed, list):
-                images_to_analyze = parsed
+                raw_images = parsed
+            elif isinstance(parsed, str):
+                raw_images = [parsed]
         except Exception:
-            images_to_analyze = [inc.images]
+            raw_images = [inc.images]
     elif inc.photo_url:
-        images_to_analyze = [inc.photo_url]
+        raw_images = [inc.photo_url]
+
+    # Normalize and deduplicate unique original image paths
+    images_to_analyze = []
+    for img in raw_images:
+        if img and isinstance(img, str) and img.strip() and img.strip() not in images_to_analyze:
+            images_to_analyze.append(img.strip())
 
     if not images_to_analyze:
         raise HTTPException(status_code=400, detail="Incident has no evidence image to analyze.")
 
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    # Check if all images already have completed detection records in the database
+    existing_detections = db.query(AnimalDetection).filter(AnimalDetection.incident_id == inc.id).all()
+    existing_paths = {d.image_path for d in existing_detections if d.image_path}
     
-    existing_detections = db.query(AnimalDetection).filter(AnimalDetection.incident_id == inc.id).count()
-    if existing_detections > 0:
+    pending_images = [img for img in images_to_analyze if img not in existing_paths]
+    if not pending_images:
+        # All images are already analyzed. Return existing results immediately without running AI models.
         return format_incident_out(inc, db, current_user)
 
     # Check if this incident originated from a CameraDetectionEvent that already has verified AI results
@@ -996,70 +1118,93 @@ def analyze_incident_evidence(
                 log_activity(db, inc.id, current_user.id, 'AI Analysis', f'AI analysis linked from Camera Detection. Top: {det.normalized_species}')
                 return format_incident_out(inc, db, current_user)
 
-    detections_added = []
-    for img_url in images_to_analyze:
-        local_path = img_url
-        if img_url.startswith("/static/"):
-            candidate1 = os.path.join(base_dir, "app", *img_url.strip("/").split("/"))
-            candidate2 = os.path.join(base_dir, *img_url.strip("/").split("/"))
-            local_path = candidate1 if os.path.exists(candidate1) else candidate2
-        elif not os.path.isabs(img_url):
-            candidate1 = os.path.join(base_dir, "app", img_url)
-            candidate2 = os.path.join(base_dir, img_url)
-            local_path = candidate1 if os.path.exists(candidate1) else candidate2
+    # Acquire per-incident lock to prevent duplicate concurrent inference jobs
+    lock = _get_incident_lock(inc.id)
+    with lock:
+        # Re-check after acquiring lock in case concurrent background task just finished
+        db.expire_all()
+        recheck_dets = db.query(AnimalDetection).filter(AnimalDetection.incident_id == inc.id).all()
+        recheck_paths = {d.image_path for d in recheck_dets if d.image_path}
+        unprocessed_images = [img for img in images_to_analyze if img not in recheck_paths]
+        
+        if not unprocessed_images:
+            return format_incident_out(inc, db, current_user)
 
-        if not os.path.exists(local_path):
-            continue
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        detections_added = []
+        for img_url in unprocessed_images:
+            local_path = img_url
+            if img_url.startswith("/static/"):
+                candidate1 = os.path.join(base_dir, "app", *img_url.strip("/").split("/"))
+                candidate2 = os.path.join(base_dir, *img_url.strip("/").split("/"))
+                local_path = candidate1 if os.path.exists(candidate1) else candidate2
+            elif not os.path.isabs(img_url):
+                candidate1 = os.path.join(base_dir, "app", img_url)
+                candidate2 = os.path.join(base_dir, img_url)
+                local_path = candidate1 if os.path.exists(candidate1) else candidate2
 
-        try:
-            result = analyze_image(local_path)
-            if result.get("status") == "error":
+            if not os.path.exists(local_path):
+                continue
+
+            try:
+                result = analyze_image(local_path)
+                if result.get("status") == "error":
+                    db_detection = AnimalDetection(
+                        animal_name="Unknown",
+                        normalized_species="Unknown",
+                        confidence=-1.0,
+                        count=0,
+                        image_path=img_url,
+                        station_id=inc.station_id,
+                        incident_id=inc.id,
+                        model_info=result.get("error", "AI Analysis Failed")
+                    )
+                else:
+                    db_detection = AnimalDetection(
+                        animal_name=result.get("overall_species", "Unknown"),
+                        normalized_species=result.get("overall_species", "Unknown"),
+                        confidence=result.get("overall_confidence", 0.0),
+                        count=result.get("animal_count", 0),
+                        bounding_boxes=result.get("detections", []),
+                        image_path=img_url,
+                        station_id=inc.station_id,
+                        incident_id=inc.id,
+                        model_info=result.get("metadata", {}).get("pipeline")
+                    )
+                db.add(db_detection)
+                detections_added.append(db_detection)
+            except Exception as e:
                 db_detection = AnimalDetection(
-                    animal_name="Unknown", confidence=-1.0, count=0,
-                    image_path=img_url, station_id=inc.station_id, incident_id=inc.id,
-                    model_info=result.get("error", "AI Analysis Failed")
+                    animal_name="Unknown",
+                    normalized_species="Unknown",
+                    confidence=-1.0,
+                    count=0,
+                    image_path=img_url,
+                    station_id=inc.station_id,
+                    incident_id=inc.id,
+                    model_info=f"Error: {str(e)}"[:250]
                 )
+                db.add(db_detection)
+                detections_added.append(db_detection)
+
+        if detections_added:
+            db.commit()
+            for d in detections_added:
+                db.refresh(d)
+
+            positive_detections = [d for d in detections_added if d.confidence > 0]
+            if positive_detections:
+                highest = max(positive_detections, key=lambda x: x.confidence)
+                log_activity(db, inc.id, current_user.id, "AI Analysis", f"AI analysis completed on {len(detections_added)} images. Top: {highest.normalized_species}")
+                rfos = db.query(User).filter(User.station_id == inc.station_id, User.role.in_(["Range Forest Officer", "Officer", "Admin"])).all()
+                for rfo in rfos:
+                    if rfo.id != current_user.id:
+                        db.add(Notification(user_id=rfo.id, title=f"AI Analysis Complete [{inc.reference_id or inc.id}]", message=f"AI Detection: {highest.normalized_species}."))
+                db.commit()
             else:
-                db_detection = AnimalDetection(
-                    animal_name=result.get("overall_species", "Unknown"),
-                    normalized_species=result.get("overall_species", "Unknown"),
-                    confidence=result.get("overall_confidence", 0.0),
-                    count=result.get("animal_count", 0),
-                    bounding_boxes=result.get("detections", []),
-                    image_path=img_url, station_id=inc.station_id, incident_id=inc.id,
-                    model_info=result.get("metadata", {}).get("pipeline")
-                )
-            db.add(db_detection)
-            detections_added.append(db_detection)
-        except Exception as e:
-            db_detection = AnimalDetection(
-                animal_name="Unknown", confidence=-1.0, count=0,
-                image_path=img_url, station_id=inc.station_id, incident_id=inc.id,
-                model_info=f"Error: {str(e)}"[:250]
-            )
-            db.add(db_detection)
-            detections_added.append(db_detection)
+                log_activity(db, inc.id, current_user.id, "AI Analysis", f"AI analysis completed on {len(detections_added)} images. No positive detections.")
 
-    if not detections_added:
-        raise HTTPException(status_code=400, detail="Failed to analyze any images.")
-
-    db.commit()
-    for d in detections_added:
-        db.refresh(d)
-
-    positive_detections = [d for d in detections_added if d.confidence > 0]
-    if positive_detections:
-        highest = max(positive_detections, key=lambda x: x.confidence)
-        log_activity(db, inc.id, current_user.id, "AI Analysis", f"AI analysis completed on {len(detections_added)} images. Top: {highest.normalized_species}")
-        rfos = db.query(User).filter(User.station_id == inc.station_id, User.role.in_(["Range Forest Officer", "Officer", "Admin"])).all()
-        for rfo in rfos:
-            if rfo.id != current_user.id:
-                db.add(Notification(user_id=rfo.id, title=f"AI Analysis Complete [{inc.reference_id or inc.id}]", message=f"AI Detection: {highest.normalized_species}."))
-        db.commit()
-    else:
-        log_activity(db, inc.id, current_user.id, "AI Analysis", f"AI analysis completed on {len(detections_added)} images. No positive detections.")
-
-    return format_incident_out(inc, db, current_user)
+        return format_incident_out(inc, db, current_user)
 
 
 @router.post("/{incident_id}/assign-multi", response_model=IncidentOut)
@@ -1414,4 +1559,135 @@ def delete_incident(
     db.delete(inc)
     db.commit()
     return None
+
+
+# --- INCIDENT REPORT ACCESS & DOWNLOAD ENDPOINTS ---
+
+from fastapi.responses import FileResponse
+
+def _get_verified_incident_report(incident_id: int, db: Session, current_user: User):
+    """
+    Retrieve incident and verify role-based access to the incident report.
+    Admins: Authorized across all stations.
+    Range/Head Forest Officers: Authorized for their assigned monitoring station.
+    Forest Guards: Authorized if assigned to the incident.
+    """
+    inc = db.query(Incident).filter(Incident.id == incident_id).first()
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident record not found")
+
+    # Authorization Check
+    if current_user.role == "Admin":
+        pass  # Global access
+    elif current_user.role in ["Range Forest Officer", "Head Forest Officer", "Officer"]:
+        if current_user.station_id and inc.station_id and current_user.station_id != inc.station_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access reports for incidents outside your station range.")
+    elif current_user.role == "Forest Guard":
+        asgn = db.query(IncidentAssignment).filter(
+            IncidentAssignment.incident_id == incident_id,
+            IncidentAssignment.assigned_to_id == current_user.id
+        ).first()
+        if not asgn and current_user.station_id != inc.station_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this incident report.")
+    # Completion check: Final investigation report is only accessible once incident is Completed or Closed
+    is_completed_or_closed = inc.status in ["Completed", "Closed"] or inc.incident_status in ["Completed", "Closed"]
+    if not is_completed_or_closed:
+        raise HTTPException(
+            status_code=400,
+            detail="Official final incident investigation report is only accessible after incident verification and formal closure."
+        )
+
+    # Find field operation report
+    op = db.query(FieldOperation).filter(
+        FieldOperation.incident_id == incident_id,
+        FieldOperation.report_generated_content.isnot(None)
+    ).order_by(FieldOperation.id.desc()).first()
+
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+    report_path = None
+    if op and op.report_generated_content:
+        clean_p = op.report_generated_content.strip()
+        candidates = [
+            os.path.join(base_dir, "app", *clean_p.strip("/").split("/")),
+            os.path.join(base_dir, *clean_p.strip("/").split("/")),
+            clean_p
+        ]
+        report_path = next((c for c in candidates if os.path.exists(c)), None)
+
+    # Fallback: check if standard naming report exists on disk
+    if not report_path:
+        clean_ref = (inc.reference_id or f"INC-{inc.id}").strip()
+        potential_names = [
+            f"Gaia_Incident_INC-{clean_ref}_Final_Report.pdf",
+            f"Gaia_Incident_{clean_ref}_Final_Report.pdf",
+            f"Gaia_Incident_INC-{inc.id}_Final_Report.pdf"
+        ]
+        for name in potential_names:
+            candidate = os.path.join(base_dir, "app", "static", "reports", name)
+            if os.path.exists(candidate):
+                report_path = candidate
+                if op and not op.report_generated_content:
+                    op.report_generated_content = f"/static/reports/{name}"
+                    db.commit()
+                break
+
+    return inc, op, report_path
+
+
+@router.get("/{incident_id}/report")
+def get_incident_report_metadata(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieve metadata and availability status of the final report for an incident."""
+    inc, op, report_path = _get_verified_incident_report(incident_id, db, current_user)
+    
+    has_report = report_path is not None and os.path.exists(report_path)
+    
+    clean_ref = (inc.reference_id or f"INC-{inc.id}").strip()
+    download_filename = f"GAIA_Incident_{clean_ref}_Report.pdf"
+
+    return {
+        "incident_id": inc.id,
+        "reference_id": inc.reference_id,
+        "has_report": has_report,
+        "status": inc.status,
+        "report_generated_at": op.submitted_at.isoformat() if op and op.submitted_at else (inc.closed_at.isoformat() if inc.closed_at else None),
+        "submitted_by_guard": op.guard.full_name if op and op.guard else None,
+        "download_filename": download_filename,
+        "view_url": f"/api/incidents/{inc.id}/report/download?inline=true" if has_report else None,
+        "download_url": f"/api/incidents/{inc.id}/report/download?inline=false" if has_report else None
+    }
+
+
+@router.get("/{incident_id}/report/download")
+def download_incident_report_pdf(
+    incident_id: int,
+    inline: bool = Query(False, description="Whether to display inline (in-browser preview) or download"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Stream or download the official Gaia investigation PDF report."""
+    inc, op, report_path = _get_verified_incident_report(incident_id, db, current_user)
+
+    if not report_path or not os.path.exists(report_path):
+        raise HTTPException(
+            status_code=404,
+            detail="Official final incident report has not been generated or submitted yet."
+        )
+
+    clean_ref = (inc.reference_id or f"INC-{inc.id}").strip()
+    filename = f"GAIA_Incident_{clean_ref}_Report.pdf"
+
+    disposition = "inline" if inline else f'attachment; filename="{filename}"'
+
+    return FileResponse(
+        path=report_path,
+        media_type="application/pdf",
+        filename=filename,
+        headers={"Content-Disposition": disposition}
+    )
+
 

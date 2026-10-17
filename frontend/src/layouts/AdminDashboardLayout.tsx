@@ -15,11 +15,14 @@ import {
   Package,
   Warehouse,
   Video,
+  Map,
+  Flame,
 } from "lucide-react";
 
 const adminNavItems: NavItem[] = [
   { label: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
-  { label: "GIS Intelligence", path: "/admin/gis", icon: Globe, sectionHeader: "Spatial Operations" },
+  { label: "GIS Mapping", path: "/admin/gis/mapping", icon: Map, sectionHeader: "Spatial Operations" },
+  { label: "Conflict Heatmap", path: "/admin/gis/heatmap", icon: Flame },
   
   // Master Data & Administrative Hierarchy section
   { label: "States", path: "/admin/states", icon: Globe, sectionHeader: "Master Data & Hierarchy" },

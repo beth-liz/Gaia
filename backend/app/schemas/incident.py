@@ -157,6 +157,11 @@ class IncidentOut(BaseModel):
     # Camera Provenance Fields
     camera_detection_event_id: Optional[int] = None
 
+    # Report Fields
+    has_report: bool = False
+    report_url: Optional[str] = None
+    report_download_url: Optional[str] = None
+
     created_at: datetime
 
     class Config:

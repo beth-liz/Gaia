@@ -23,6 +23,7 @@ const CamerasPage: React.FC = () => {
     // Add Camera Modal State
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [stations, setStations] = useState<any[]>([]);
+    const [selectedStationId, setSelectedStationId] = useState<string>('ALL');
     const [addFormData, setAddFormData] = useState({
         camera_name: '',
         camera_code: '',
@@ -280,10 +281,6 @@ const CamerasPage: React.FC = () => {
 
     const isCameraActive = (cam: any) => (cam?.status || '').toUpperCase() === 'ACTIVE';
 
-    const activeCount = cameras.filter(c => isCameraActive(c)).length;
-    const inactiveCount = cameras.filter(c => (c.status || '').toUpperCase() === 'INACTIVE').length;
-    const maintenanceCount = cameras.filter(c => (c.status || '').toUpperCase() === 'MAINTENANCE').length;
-
     const canAddCamera = user?.role === 'Admin' || user?.role === 'Range Forest Officer' || user?.role === 'Officer';
 
     const openAddCameraModal = () => {
@@ -379,98 +376,180 @@ const CamerasPage: React.FC = () => {
         }
     };
 
+    const filteredCameras = cameras.filter(c => {
+        if (selectedStationId === 'ALL') return true;
+        return String(c.monitoring_station_id) === String(selectedStationId);
+    });
+
+    const activeCount = filteredCameras.filter(c => isCameraActive(c)).length;
+    const inactiveCount = filteredCameras.filter(c => (c.status || '').toUpperCase() === 'INACTIVE').length;
+    const maintenanceCount = filteredCameras.filter(c => (c.status || '').toUpperCase() === 'MAINTENANCE').length;
+
     return (
-        <div className="space-y-8 pb-12 bg-slate-50 min-h-screen">
-            {/* Header */}
-            <div className="bg-slate-900 text-white p-8 rounded-b-3xl shadow-lg relative overflow-hidden">
-                <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-400 via-emerald-900 to-slate-900 pointer-events-none" />
-                <div className="relative z-10 flex flex-col md:flex-row md:justify-between md:items-end gap-6">
+        <div className="space-y-6">
+            {/* Standard Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-emerald-950/10 mb-6">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-emerald-900 text-amber-300 shadow-md shrink-0">
+                        <Camera className="w-6 h-6" />
+                    </div>
                     <div>
-                        <div className="flex items-center gap-3 mb-2">
-                            <Camera className="w-8 h-8 text-emerald-400" />
-                            <h1 className="text-3xl font-black tracking-tight">Camera Surveillance</h1>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-xl font-extrabold text-emerald-950 tracking-tight">Camera Surveillance</h1>
+                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-[10px] font-bold">
+                                {filteredCameras.length} Cameras
+                            </span>
                         </div>
-                        <p className="text-slate-300 max-w-2xl text-sm leading-relaxed">
+                        <p className="text-xs text-emerald-800/70 font-medium mt-0.5">
                             Gaia Remote Wildlife Sensing Console. Monitor field cameras, review camera captures, and test edge AI wildlife detection pipeline for {stationName}.
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
-                        {canAddCamera && (
-                            <button
-                                onClick={openAddCameraModal}
-                                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded-2xl shadow-md transition-all active:scale-95"
-                            >
-                                <Plus className="w-4 h-4" />
-                                <span>Add Camera</span>
-                            </button>
-                        )}
-                        <div className="flex items-center gap-3 bg-slate-800/80 backdrop-blur border border-slate-700/60 px-4 py-2.5 rounded-2xl">
-                            <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-                            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">IoT Simulation Mode Active</span>
-                        </div>
-                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    {canAddCamera && (
+                        <button
+                            onClick={openAddCameraModal}
+                            className="inline-flex items-center gap-2 bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider px-4 py-2 rounded-xl shadow-xs transition-all active:scale-95"
+                        >
+                            <Plus className="w-4 h-4" />
+                            <span>Add Camera</span>
+                        </button>
+                    )}
+                    <button
+                        onClick={refreshCameras}
+                        className="px-4 py-2 rounded-xl bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-950/20 font-bold text-xs flex items-center gap-2 shadow-xs transition-colors"
+                    >
+                        <RefreshCw className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Refresh</span>
+                    </button>
                 </div>
             </div>
 
-            {/* Summary Cards */}
-            <div className="px-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                        <Video className="w-6 h-6 text-slate-700" />
+            {/* Station Selector Bar */}
+            {user?.role === 'Admin' && stations.length > 0 && (
+                <div className="bg-white p-4 rounded-2xl border border-emerald-950/10 shadow-xs flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <Radio className="w-4 h-4 text-emerald-700 shrink-0" />
+                        <div>
+                            <span className="text-xs font-black uppercase text-emerald-950 block">Filter By Monitoring Station</span>
+                            <span className="text-[11px] text-emerald-800/70 font-medium">Select a station to focus camera telemetry</span>
+                        </div>
                     </div>
-                    <div>
-                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Units</div>
-                        <div className="text-2xl font-black text-slate-900">{cameras.length}</div>
+                    <div className="flex items-center gap-3">
+                        <select
+                            value={selectedStationId}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setSelectedStationId(val);
+                                if (val === 'ALL') {
+                                    setStationName('All Monitoring Stations (HQ)');
+                                } else {
+                                    const st = stations.find(s => String(s.id) === String(val));
+                                    setStationName(st ? st.station_name : 'Selected Station');
+                                }
+                            }}
+                            className="bg-emerald-50/50 border border-emerald-950/20 text-emerald-950 font-bold text-xs rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer min-w-[240px]"
+                        >
+                            <option value="ALL">All Monitoring Stations ({cameras.length} cameras)</option>
+                            {stations.map(st => {
+                                const stCamCount = cameras.filter(c => c.monitoring_station_id === st.id).length;
+                                return (
+                                    <option key={st.id} value={st.id}>
+                                        {st.station_name} {st.district_name ? `(${st.district_name})` : ''} — {stCamCount} {stCamCount === 1 ? 'camera' : 'cameras'}
+                                    </option>
+                                );
+                            })}
+                        </select>
                     </div>
                 </div>
-                <div className="bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
-                        <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+            )}
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-emerald-950/10 shadow-xs flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                        <Video className="w-5 h-5 text-slate-700" />
                     </div>
                     <div>
-                        <div className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Active</div>
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Units</div>
+                        <div className="text-2xl font-black text-slate-900">{filteredCameras.length}</div>
+                    </div>
+                </div>
+                <div className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-xs flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                        <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Active</div>
                         <div className="text-2xl font-black text-slate-900">{activeCount}</div>
                     </div>
                 </div>
-                <div className="bg-white p-6 rounded-2xl border border-red-100 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
-                        <XCircle className="w-6 h-6 text-red-600" />
+                <div className="bg-white p-5 rounded-2xl border border-red-100 shadow-xs flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                        <XCircle className="w-5 h-5 text-red-600" />
                     </div>
                     <div>
-                        <div className="text-xs font-bold text-red-600 uppercase tracking-wider">Offline</div>
+                        <div className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Offline</div>
                         <div className="text-2xl font-black text-slate-900">{inactiveCount}</div>
                     </div>
                 </div>
-                <div className="bg-white p-6 rounded-2xl border border-amber-100 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
-                        <AlertCircle className="w-6 h-6 text-amber-600" />
+                <div className="bg-white p-5 rounded-2xl border border-amber-100 shadow-xs flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                        <AlertCircle className="w-5 h-5 text-amber-600" />
                     </div>
                     <div>
-                        <div className="text-xs font-bold text-amber-600 uppercase tracking-wider">Maintenance</div>
+                        <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Maintenance</div>
                         <div className="text-2xl font-black text-slate-900">{maintenanceCount}</div>
                     </div>
                 </div>
             </div>
 
-            {/* Camera Grid */}
-            <div className="px-8">
+            {/* Camera Grid / States */}
+            <div>
                 {loading ? (
-                    <div className="text-center py-20 bg-white rounded-3xl border border-slate-200">
-                        <Activity className="w-10 h-10 text-emerald-500 animate-pulse mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-slate-800">Connecting to telemetry network...</h3>
+                    <div className="text-center py-20 bg-white rounded-3xl border border-emerald-950/10 shadow-xs">
+                        <Activity className="w-10 h-10 text-emerald-600 animate-pulse mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-emerald-950">Connecting to telemetry network...</h3>
                         <p className="text-xs text-slate-400 mt-1">Polling optical camera feeds and station statuses</p>
                     </div>
                 ) : error ? (
-                    <div className="bg-red-50 border border-red-200 text-red-700 p-6 rounded-2xl font-medium flex items-center gap-3">
-                        <XCircle className="w-6 h-6 shrink-0" />
-                        <div>
-                            <div className="font-bold">Access Alert</div>
-                            <div className="text-sm">{error}</div>
+                    <div className="bg-red-50 border border-red-200 text-red-700 p-6 rounded-2xl font-medium flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <XCircle className="w-6 h-6 shrink-0" />
+                            <div>
+                                <div className="font-bold">Access Alert</div>
+                                <div className="text-sm">{error}</div>
+                            </div>
                         </div>
+                        <button
+                            onClick={refreshCameras}
+                            className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                ) : filteredCameras.length === 0 ? (
+                    <div className="text-center py-20 bg-white rounded-3xl border border-emerald-950/10 shadow-xs">
+                        <Camera className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                        <h3 className="text-base font-bold text-slate-800">No Cameras Found</h3>
+                        <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                            {selectedStationId === 'ALL'
+                                ? "No cameras have been registered in the system yet."
+                                : "No cameras are registered under the selected monitoring station."}
+                        </p>
+                        {canAddCamera && (
+                            <button
+                                onClick={openAddCameraModal}
+                                className="mt-4 inline-flex items-center gap-2 bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xs"
+                            >
+                                <Plus className="w-4 h-4" />
+                                <span>Add Camera</span>
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {cameras.map(camera => {
+                        {filteredCameras.map(camera => {
                             const active = isCameraActive(camera);
                             return (
                                 <div 

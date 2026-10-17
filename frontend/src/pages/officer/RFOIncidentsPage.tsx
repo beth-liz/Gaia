@@ -6,7 +6,7 @@ import { ActionToolbar } from "@/components/common/ActionToolbar";
 import { DataTable } from "@/components/common/DataTable";
 import type { Column } from "@/components/common/DataTable";
 import type { Incident } from "@/types";
-import { AlertCircle, MapPin, Eye, Navigation } from "lucide-react";
+import { AlertCircle, MapPin, Eye, Navigation, FileText } from "lucide-react";
 
 export const RFOIncidentsPage: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -73,7 +73,7 @@ export const RFOIncidentsPage: React.FC = () => {
       header: "Reference",
       accessorKey: "reference_id",
       cell: (inc) => (
-        <span className="font-mono text-xs font-black text-emerald-950 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-900/10">
+        <span className="font-mono text-xs font-black text-emerald-950 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-900/10 whitespace-nowrap inline-block">
           {inc.reference_id}
         </span>
       ),
@@ -83,9 +83,9 @@ export const RFOIncidentsPage: React.FC = () => {
       accessorKey: "animal",
       sortable: true,
       cell: (inc) => (
-        <div>
-          <span className="font-black text-emerald-950 block">{inc.animal_species_name || inc.animal}</span>
-          <span className="text-[11px] text-emerald-800/70 font-semibold block">{inc.incident_category}</span>
+        <div className="min-w-[130px]">
+          <span className="font-black text-emerald-950 block whitespace-nowrap">{inc.animal_species_name || inc.animal}</span>
+          <span className="text-[11px] text-emerald-800/70 font-semibold block truncate">{inc.incident_category}</span>
         </div>
       ),
     },
@@ -94,7 +94,7 @@ export const RFOIncidentsPage: React.FC = () => {
       accessorKey: "severity",
       sortable: true,
       cell: (inc) => (
-        <span className={`px-3 py-1 rounded-full text-xs border ${getSeverityBadge(inc.severity)}`}>
+        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border whitespace-nowrap inline-block ${getSeverityBadge(inc.severity)}`}>
           {inc.severity}
         </span>
       ),
@@ -104,7 +104,7 @@ export const RFOIncidentsPage: React.FC = () => {
       accessorKey: "status",
       sortable: true,
       cell: (inc) => (
-        <span className={`px-3 py-1 rounded-full text-xs border ${getStatusBadge(inc.status)}`}>
+        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border whitespace-nowrap inline-block ${getStatusBadge(inc.status)}`}>
           {inc.status || "Pending Review"}
         </span>
       ),
@@ -113,12 +113,12 @@ export const RFOIncidentsPage: React.FC = () => {
       header: "Location Range",
       accessorKey: "location",
       cell: (inc) => (
-        <div>
+        <div className="min-w-[140px]">
           <span className="text-xs text-emerald-950 font-extrabold flex items-center gap-1">
             <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-            {inc.location || "Sector Range"}
+            <span className="truncate">{inc.location || "Sector Range"}</span>
           </span>
-          <span className="text-[11px] text-emerald-800/70 block">{inc.station_name || "Muthanga HQ"}</span>
+          <span className="text-[11px] text-emerald-800/70 block truncate">{inc.station_name || "Muthanga HQ"}</span>
         </div>
       ),
     },
@@ -126,8 +126,8 @@ export const RFOIncidentsPage: React.FC = () => {
       header: "Reporter",
       accessorKey: "reporter_name",
       cell: (inc) => (
-        <div>
-          <span className="font-bold text-emerald-950 block text-xs">{inc.reporter_name || "Field User"}</span>
+        <div className="min-w-[110px]">
+          <span className="font-bold text-emerald-950 block text-xs truncate">{inc.reporter_name || "Field User"}</span>
           <span className="text-[11px] text-emerald-800/70 block">{inc.reporter_role || "Villager"}</span>
         </div>
       ),
@@ -138,18 +138,52 @@ export const RFOIncidentsPage: React.FC = () => {
       cell: (inc) => {
         const officers = inc.assigned_officers || [];
         if (officers.length === 0) {
-          return <span className="text-[11px] text-gray-400 font-semibold italic">Unassigned</span>;
+          return <span className="text-[11px] text-gray-400 font-semibold italic whitespace-nowrap">Unassigned</span>;
         }
         if (officers.length === 1) {
-          return <span className="text-xs font-bold text-emerald-950">{officers[0].full_name}</span>;
+          return <span className="text-xs font-bold text-emerald-950 whitespace-nowrap">{officers[0].full_name}</span>;
         }
         return (
-          <div>
+          <div className="whitespace-nowrap">
             <span className="text-xs font-bold text-emerald-950 block">{officers[0].full_name}</span>
-            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-md">+{officers.length - 1} others</span>
+            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.2 rounded-md">+{officers.length - 1} others</span>
           </div>
         );
       }
+    },
+    {
+      header: "Report",
+      accessorKey: "has_report",
+      sortable: true,
+      cell: (inc) => {
+        const isComplete = inc.status === "Completed" || inc.status === "Closed";
+        return (
+          <div className="flex items-center gap-1.5 whitespace-nowrap min-w-[105px]">
+            {isComplete && inc.has_report ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  api.openIncidentReportPdf(inc.id);
+                }}
+                title="Open Official Incident Investigation PDF Report"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition-all shadow-xs group"
+              >
+                <FileText className="w-3.5 h-3.5 text-red-600 group-hover:scale-110 transition-transform" />
+                <span>PDF Report</span>
+              </button>
+            ) : isComplete ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200">
+                Report Pending
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-semibold text-slate-400 bg-slate-50 border border-slate-200">
+                Not Available
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       header: "Actions",
@@ -161,10 +195,10 @@ export const RFOIncidentsPage: React.FC = () => {
         const hasGuard = !["Pending Review", "Reported", "Ready For Guard Assignment", "Rejected"].includes(status);
 
         return (
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 whitespace-nowrap">
             <button
               onClick={() => navigate(`/officer/incidents/${inc.id}`)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all active:scale-95 ${requiresAction ? 'bg-emerald-900 text-white hover:bg-emerald-950' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all active:scale-95 ${requiresAction ? 'bg-emerald-900 text-white hover:bg-emerald-950' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
             >
               <Eye className="w-3.5 h-3.5" /> 
               {isReviewStage ? "Details & Review" : 
@@ -176,9 +210,9 @@ export const RFOIncidentsPage: React.FC = () => {
             <button
               onClick={() => navigate(`/officer/incidents/${inc.id}/progress`)}
               disabled={!hasGuard}
-              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all ${hasGuard ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 active:scale-95 border border-blue-200' : 'bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-100'}`}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all ${hasGuard ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 active:scale-95 border border-blue-200' : 'bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-100'}`}
             >
-              <Navigation className="w-3.5 h-3.5" /> View Progress
+              <Navigation className="w-3.5 h-3.5" /> Progress
             </button>
           </div>
         );

@@ -1,117 +1,97 @@
 import { useEffect, useRef, useState } from "react"
 import L from "leaflet"
 import "leaflet.heat"
+import { MAP_TILE_PROVIDERS, DEFAULT_TILE_PROVIDER, type TileProviderKey } from "./mapLayers"
 
 export interface GISFeature {
   id: string
-  type: "camera" | "acoustic" | "ranger" | "incident" | "village"
+  db_id?: number
+  type: "incident" | "camera" | "detection" | "station" | "village"
   name: string
   lat: number
   lng: number
   status: "active" | "critical" | "warning" | "offline"
   species?: string
+  animal_count?: number
   confidence?: number
   timestamp?: string
   image?: string
   sector?: string
-  battery?: number
-  assignedUnit?: string
   details?: string
   severity?: string
+  description?: string
+  village?: string
+  station?: string
+  camera_code?: string
+  camera_name?: string
+  review_status?: string
+  linked_incident_ref?: string
+  location_name?: string
+  address?: string
 }
 
 interface GISMapComponentProps {
-  onSelectFeature?: (feature: GISFeature) => void
+  onSelectFeature?: (feature: GISFeature | null) => void
   selectedFeatureId?: string | null
   height?: string
   features?: GISFeature[]
   showHeatmap?: boolean
+  heatmapIntensityWeights?: { [key: string]: number }
+  heatmapDataMode?: "incidents" | "detections" | "combined"
   onRefresh?: () => Promise<void> | void
+  initialTileProvider?: TileProviderKey
 }
-
-// Removed INITIAL_GIS_FEATURES as fake data is prohibited
 
 export default function GISMapComponent({ 
   onSelectFeature, 
   selectedFeatureId,
   height = "h-[650px]",
-  features: propFeatures,
+  features = [],
   showHeatmap = false,
-  onRefresh
+  heatmapDataMode = "incidents",
+  onRefresh,
+  initialTileProvider = DEFAULT_TILE_PROVIDER
 }: GISMapComponentProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<L.Map | null>(null)
+  const currentTileLayerRef = useRef<L.TileLayer | null>(null)
   const heatLayerRef = useRef<any>(null)
   const markersRef = useRef<{ [key: string]: L.Marker }>({})
-  const circlesRef = useRef<L.Circle[]>([])
-  const polylinesRef = useRef<L.Polyline[]>([])
 
-  const [tileProvider, setTileProvider] = useState<"carto" | "osm" | "satellite">("osm")
+  const [tileProvider, setTileProvider] = useState<TileProviderKey>(initialTileProvider)
+  
+  // Visibility layer toggles (for GIS Mapping mode)
   const [layers, setLayers] = useState({
     incidents: true,
     cameras: true,
-    acoustics: true,
-    rangers: true,
-    villages: true,
-    corridors: true,
-    buffers: true
+    detections: true,
+    stations: true
   })
 
-  const [features, setFeatures] = useState<GISFeature[]>(propFeatures || [])
-
-  useEffect(() => {
-    if (propFeatures) setFeatures(propFeatures)
-  }, [propFeatures])
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toLocaleTimeString())
 
-  // Tile Provider Layer Definitions
-  const tileUrls = {
-    carto: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-    osm: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-  }
-
-  const tileAttributions = {
-    carto: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap',
-    osm: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    satellite: '&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP'
-  }
-
-  const getTileOptions = (provider: string) => ({
-    attribution: tileAttributions[provider as keyof typeof tileAttributions],
-    maxZoom: provider === "satellite" ? 17 : 19
-  })
-
-  // Simulated API call to refresh map telemetry data
-  const handleFetchLiveTelemetry = async () => {
-    if (onRefresh) {
-      setIsRefreshing(true)
-      try {
-        await onRefresh()
-        setLastUpdated(new Date().toLocaleTimeString())
-      } catch (e) {
-        console.error("Telemetry fetch error", e)
-      } finally {
-        setIsRefreshing(false)
-      }
-    }
-  }
-
-  // Initialize Map
+  // 1. Initialize Map instance
   useEffect(() => {
     if (!mapContainerRef.current) return
 
     if (!mapInstanceRef.current) {
       const map = L.map(mapContainerRef.current, {
         center: [11.6054, 76.2731],
-        zoom: 13,
+        zoom: 12,
         zoomControl: false
       })
 
       L.control.zoom({ position: "bottomright" }).addTo(map)
 
-      L.tileLayer(tileUrls[tileProvider], getTileOptions(tileProvider)).addTo(map)
+      // Add Initial Tile Layer
+      const cfg = MAP_TILE_PROVIDERS[tileProvider]
+      const tileLayer = L.tileLayer(cfg.url, {
+        attribution: cfg.attribution,
+        maxZoom: cfg.maxZoom,
+        subdomains: cfg.subdomains || ["a", "b", "c"]
+      }).addTo(map)
+      currentTileLayerRef.current = tileLayer
 
       mapInstanceRef.current = map
     }
@@ -124,110 +104,121 @@ export default function GISMapComponent({
     }
   }, [])
 
-  // Update Tile Layer
+  // 2. Tile Provider Switching
   useEffect(() => {
     if (!mapInstanceRef.current) return
     const map = mapInstanceRef.current
 
-    map.eachLayer(layer => {
-      if (layer instanceof L.TileLayer) {
-        map.removeLayer(layer)
-      }
-    })
+    if (currentTileLayerRef.current) {
+      map.removeLayer(currentTileLayerRef.current)
+      currentTileLayerRef.current = null
+    }
 
-    L.tileLayer(tileUrls[tileProvider], getTileOptions(tileProvider)).addTo(map)
+    const cfg = MAP_TILE_PROVIDERS[tileProvider]
+    const tileLayer = L.tileLayer(cfg.url, {
+      attribution: cfg.attribution,
+      maxZoom: cfg.maxZoom,
+      subdomains: cfg.subdomains || ["a", "b", "c"]
+    }).addTo(map)
+    currentTileLayerRef.current = tileLayer
   }, [tileProvider])
 
-  // Render Features & Custom SVG Markers
+  // 3. Render Features & Markers (When not in pure heatmap mode or when toggles are enabled)
   useEffect(() => {
     if (!mapInstanceRef.current) return
     const map = mapInstanceRef.current
 
-    // Clear existing markers & shapes
+    // Clear previous markers
     Object.values(markersRef.current).forEach(m => map.removeLayer(m))
     markersRef.current = {}
-    circlesRef.current.forEach(c => map.removeLayer(c))
-    circlesRef.current = []
-    polylinesRef.current.forEach(p => map.removeLayer(p))
-    polylinesRef.current = []
-    if (heatLayerRef.current) {
-      map.removeLayer(heatLayerRef.current)
-      heatLayerRef.current = null
+
+    // In heatmap mode, we typically only show markers if explicitly wanted, but in mapping mode we render markers
+    if (showHeatmap) {
+      // In heatmap mode, render lightweight reference markers for stations if enabled
+      return
     }
 
-    // 1. Draw Wildlife Migration Corridor (Polyline overlay)
-    // No real backend data for corridors yet.
-    if (layers.corridors) {
-      // Future implementation: Fetch corridors from API
-    }
+    const validFeatures = features.filter(feat => {
+      const lat = typeof feat.lat === "number" ? feat.lat : parseFloat(String(feat.lat))
+      const lng = typeof feat.lng === "number" ? feat.lng : parseFloat(String(feat.lng))
+      return !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+    })
 
-    // 2. Draw Features (Incidents, Cameras, Acoustics, Rangers, Villages)
-    features.forEach(feat => {
+    validFeatures.forEach(feat => {
       let isVisible = false
-      if (feat.type === "incident" && layers.incidents && !showHeatmap) isVisible = true
+      if (feat.type === "incident" && layers.incidents) isVisible = true
       if (feat.type === "camera" && layers.cameras) isVisible = true
-      if (feat.type === "acoustic" && layers.acoustics) isVisible = true
-      if (feat.type === "ranger" && layers.rangers) isVisible = true
-      if (feat.type === "village" && layers.villages) isVisible = true
+      if (feat.type === "detection" && layers.detections) isVisible = true
+      if (feat.type === "station" && layers.stations) isVisible = true
 
       if (!isVisible) return
 
       let iconHtml = ""
-      let bgClass = "bg-[#1b4332]"
       let size = 32
 
       if (feat.type === "incident") {
-        bgClass = feat.status === "critical" ? "bg-rose-700 pulse-red-ring" : "bg-amber-600"
+        const bg = feat.status === "critical" ? "bg-rose-600 ring-4 ring-rose-400/40" : (feat.status === "warning" ? "bg-amber-500 ring-2 ring-amber-300" : "bg-emerald-700")
         size = 36
-        iconHtml = `<div class="${bgClass} text-white w-9 h-9 rounded-full flex items-center justify-center border-2 border-white shadow-md text-xs font-black">
-          ⚠
+        iconHtml = `<div class="${bg} text-white w-9 h-9 rounded-full flex items-center justify-center border-2 border-white shadow-lg text-sm font-black transition-transform hover:scale-110">
+          ⚠️
         </div>`
       } else if (feat.type === "camera") {
-        iconHtml = `<div class="bg-[#1b4332] text-white w-8 h-8 rounded-md flex items-center justify-center border-2 border-white shadow-md">
+        size = 32
+        const bg = feat.status === "active" ? "bg-emerald-800" : "bg-slate-600"
+        iconHtml = `<div class="${bg} text-white w-8 h-8 rounded-lg flex items-center justify-center border-2 border-white shadow-md transition-transform hover:scale-110">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
         </div>`
-      } else if (feat.type === "acoustic") {
-        iconHtml = `<div class="bg-[#2d5a3f] text-white w-8 h-8 rounded-md flex items-center justify-center border-2 border-white shadow-md">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+      } else if (feat.type === "detection") {
+        size = 32
+        const bg = feat.status === "critical" ? "bg-purple-700 ring-2 ring-purple-400" : "bg-indigo-600"
+        iconHtml = `<div class="${bg} text-white w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-md text-xs font-bold transition-transform hover:scale-110">
+          🐾
         </div>`
-      } else if (feat.type === "ranger") {
-        iconHtml = `<div class="bg-blue-800 text-white w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-md">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-        </div>`
-      } else if (feat.type === "village") {
-        iconHtml = `<div class="bg-amber-800 text-white w-8 h-8 rounded-md flex items-center justify-center border-2 border-white shadow-md">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      } else if (feat.type === "station") {
+        size = 32
+        iconHtml = `<div class="bg-blue-900 text-white w-8 h-8 rounded-md flex items-center justify-center border-2 border-white shadow-md transition-transform hover:scale-110">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
         </div>`
       }
 
       const customIcon = L.divIcon({
         html: iconHtml,
-        className: "custom-leaflet-div-icon",
+        className: "gaia-gis-marker-icon",
         iconSize: [size, size],
         iconAnchor: [size / 2, size / 2]
       })
 
       const marker = L.marker([feat.lat, feat.lng], { icon: customIcon }).addTo(map)
 
+      // Bind detailed popup
       const popupHtml = `
-        <div class="w-64 bg-white text-gray-900 rounded overflow-hidden">
-          ${feat.image ? `<img src="${feat.image}" class="w-full h-28 object-cover border-b border-gray-200" />` : ""}
-          <div class="p-3">
-            <div class="flex items-center justify-between gap-1 mb-1">
-              <span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                feat.status === "critical" ? "bg-rose-100 text-rose-800" :
-                feat.status === "warning" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+        <div class="w-68 bg-white text-slate-900 rounded-lg overflow-hidden font-sans text-xs shadow-md">
+          ${feat.image ? `<img src="${feat.image}" class="w-full h-28 object-cover border-b border-slate-200" onerror="this.style.display='none'"/>` : ""}
+          <div class="p-3 space-y-1.5">
+            <div class="flex items-center justify-between gap-1">
+              <span class="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                feat.type === 'incident' ? 'bg-rose-100 text-rose-800' :
+                feat.type === 'camera' ? 'bg-emerald-100 text-emerald-800' :
+                feat.type === 'detection' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
               }">
-                ${feat.status}
+                ${feat.type.toUpperCase()}
               </span>
-              <span class="text-[10px] text-gray-500 font-mono">${feat.id}</span>
+              <span class="text-[10px] text-slate-500 font-mono">${feat.id}</span>
             </div>
-            <h4 class="text-xs font-bold text-gray-900 leading-snug">${feat.name}</h4>
-            <p class="text-[11px] text-gray-600 mt-1">${feat.sector || "Sanctuary Perimeter"}</p>
-            ${feat.confidence ? `<div class="mt-1 p-1 bg-amber-50 border border-amber-200 rounded text-[10px] text-amber-900 leading-tight"><strong>AI Detection:</strong> ${feat.species}<br/>Confidence: ${(feat.confidence * 100).toFixed(0)}%</div>` : (feat.species ? `<p class="text-[11px] font-semibold text-emerald-900 mt-1 font-sans">Detect: ${feat.species}</p>` : "")}
-            <div class="mt-2.5 pt-2 border-t border-gray-150 flex items-center justify-between text-[10px] text-gray-500 font-mono">
-              <span>Lat: ${feat.lat.toFixed(4)}</span>
-              <span>Lng: ${feat.lng.toFixed(4)}</span>
+
+            <h4 class="text-sm font-bold text-slate-900 leading-snug">${feat.name}</h4>
+
+            ${feat.species ? `<div class="p-1.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-900 text-[11px] font-semibold">
+              <strong>Wildlife Species:</strong> ${feat.species} ${feat.animal_count ? `(${feat.animal_count} detected)` : ''}
+              ${feat.confidence ? `<br/><span class="text-[10px] text-emerald-700">AI Confidence: ${(feat.confidence * 100).toFixed(0)}%</span>` : ''}
+            </div>` : ''}
+
+            ${feat.details ? `<p class="text-[11px] text-slate-600">${feat.details}</p>` : ''}
+            ${feat.description ? `<p class="text-[11px] text-slate-500 italic line-clamp-2">"${feat.description}"</p>` : ''}
+
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-mono">
+              <span>Lat: ${feat.lat.toFixed(4)}°</span>
+              <span>Lng: ${feat.lng.toFixed(4)}°</span>
             </div>
           </div>
         </div>
@@ -241,30 +232,18 @@ export default function GISMapComponent({
       })
 
       markersRef.current[feat.id] = marker
-
-      if (feat.type === "village" && layers.buffers) {
-        const circle1 = L.circle([feat.lat, feat.lng], {
-          radius: 1000,
-          color: "#92400e",
-          weight: 1,
-          fillColor: "#fffbe6",
-          fillOpacity: 0.15
-        }).addTo(map)
-
-        const circle2 = L.circle([feat.lat, feat.lng], {
-          radius: 3000,
-          color: "#6b705c",
-          weight: 1,
-          dashArray: "4, 4",
-          fillColor: "transparent"
-        }).addTo(map)
-
-        circlesRef.current.push(circle1, circle2)
-      }
     })
-  }, [features, layers])
 
-  // Center on selected feature
+    // If there are valid markers and this is first mount/load, fit bounds
+    if (validFeatures.length > 0 && !selectedFeatureId) {
+      const group = L.featureGroup(Object.values(markersRef.current))
+      if (group.getLayers().length > 0) {
+        map.fitBounds(group.getBounds().pad(0.1), { maxZoom: 14 })
+      }
+    }
+  }, [features, layers, showHeatmap])
+
+  // 4. Center & highlight on selectedFeatureId
   useEffect(() => {
     if (!selectedFeatureId || !mapInstanceRef.current) return
     const feat = features.find(f => f.id === selectedFeatureId)
@@ -275,147 +254,219 @@ export default function GISMapComponent({
         marker.openPopup()
       }
     }
-  }, [selectedFeatureId])
+  }, [selectedFeatureId, features])
 
+  // 5. Render Heatmap Overlay
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
-    
-    // Draw Heatmap if enabled
+    if (!mapInstanceRef.current) return
+    const map = mapInstanceRef.current
+
+    if (heatLayerRef.current) {
+      map.removeLayer(heatLayerRef.current)
+      heatLayerRef.current = null
+    }
+
     if (showHeatmap && typeof (L as any).heatLayer === "function") {
-      const heatPoints = features
-        .filter(f => f.type === "incident")
-        .map(f => [f.lat, f.lng, f.severity === "Critical" ? 1.0 : f.severity === "High" ? 0.8 : f.severity === "Medium" ? 0.5 : 0.3])
+      const heatPoints: [number, number, number][] = []
+
+      // Collect linked detection IDs from incidents to avoid double-counting in combined mode
+      const linkedDetectionDbIds = new Set<number>()
+      if (heatmapDataMode === "combined") {
+        features.forEach(f => {
+          if (f.type === "incident" && (f as any).camera_detection_event_id) {
+            linkedDetectionDbIds.add((f as any).camera_detection_event_id)
+          }
+        })
+      }
+
+      // Filter features based on active heatmapDataMode
+      const eligibleFeatures = features.filter(f => {
+        if (heatmapDataMode === "incidents") return f.type === "incident"
+        if (heatmapDataMode === "detections") return f.type === "detection"
+        // In combined mode, skip detection if it is already represented as an official incident
+        if (f.type === "detection" && f.db_id && linkedDetectionDbIds.has(f.db_id)) {
+          return false
+        }
+        return f.type === "incident" || f.type === "detection"
+      })
+
+      eligibleFeatures.forEach(f => {
+        const lat = typeof f.lat === "number" ? f.lat : parseFloat(String(f.lat))
+        const lng = typeof f.lng === "number" ? f.lng : parseFloat(String(f.lng))
+        if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+          // Weight calculation based on real record intensity
+          let weight = 0.5
+          if (f.type === "incident") {
+            weight = f.severity === "Critical" ? 1.0 : (f.severity === "High" ? 0.8 : (f.severity === "Medium" ? 0.5 : 0.3))
+          } else if (f.type === "detection") {
+            const count = f.animal_count || 1
+            const baseConf = f.confidence || 0.8
+            weight = Math.min(1.0, 0.4 + (count * 0.15) * baseConf)
+          }
+          heatPoints.push([lat, lng, weight])
+        }
+      })
+
       if (heatPoints.length > 0) {
         heatLayerRef.current = (L as any).heatLayer(heatPoints, {
-          radius: 25,
-          blur: 15,
-          maxZoom: 17,
-          gradient: { 0.4: 'blue', 0.6: 'cyan', 0.7: 'lime', 0.8: 'yellow', 1.0: 'red' }
+          radius: 28,
+          blur: 18,
+          maxZoom: 16,
+          gradient: {
+            0.2: "#0284c7", // Sky blue
+            0.4: "#10b981", // Emerald
+            0.6: "#eab308", // Yellow
+            0.8: "#f97316", // Orange
+            1.0: "#ef4444"  // Rose Red
+          }
         }).addTo(map)
+
+        // Fit bounds to heatpoints
+        const lats = heatPoints.map(p => p[0])
+        const lngs = heatPoints.map(p => p[1])
+        const minLat = Math.min(...lats)
+        const maxLat = Math.max(...lats)
+        const minLng = Math.min(...lngs)
+        const maxLng = Math.max(...lngs)
+        map.fitBounds([[minLat, minLng], [maxLat, maxLng]], { padding: [40, 40], maxZoom: 14 })
       }
     }
-    
-    return () => {
-        if (heatLayerRef.current) {
-            map.removeLayer(heatLayerRef.current);
-            heatLayerRef.current = null;
-        }
-    }
-  }, [features, showHeatmap]);
 
+    return () => {
+      if (heatLayerRef.current && mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(heatLayerRef.current)
+        heatLayerRef.current = null
+      }
+    }
+  }, [features, showHeatmap, heatmapDataMode])
+
+  const handleRefresh = async () => {
+    if (onRefresh) {
+      setIsRefreshing(true)
+      try {
+        await onRefresh()
+        setLastUpdated(new Date().toLocaleTimeString())
+      } catch (err) {
+        console.error("Refresh telemetry failed", err)
+      } finally {
+        setIsRefreshing(false)
+      }
+    }
+  }
 
   return (
-    <div className="relative w-full border border-[#dcd8cd] rounded bg-white overflow-hidden shadow-xs">
+    <div className="relative w-full border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm">
       
-      {/* Map Control Bar Top */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#f0eee8] border-b border-[#dcd8cd] text-xs font-semibold text-[#1b2e25]">
+      {/* Top Map Control Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200 text-xs">
         
-        {/* Layer Toggles */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#6b705c] mr-1">GIS Layers:</span>
-          
-          <button
-            onClick={() => setLayers(l => ({ ...l, incidents: !l.incidents }))}
-            className={`px-2 py-1 rounded text-[11px] font-bold border transition ${
-              layers.incidents ? "bg-rose-800 text-white border-rose-900" : "bg-white text-gray-600 border-gray-300"
-            }`}
-          >
-            ⚠ Incidents
-          </button>
+        {/* Layer Visibility Toggles (only in Mapping mode) */}
+        {!showHeatmap ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mr-1">Layers:</span>
+            
+            <button
+              onClick={() => setLayers(l => ({ ...l, incidents: !l.incidents }))}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                layers.incidents 
+                  ? "bg-rose-50 text-rose-800 border-rose-300 shadow-xs" 
+                  : "bg-white text-slate-400 border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+              <span>Official Incidents</span>
+            </button>
 
-          <button
-            onClick={() => setLayers(l => ({ ...l, cameras: !l.cameras }))}
-            className={`px-2 py-1 rounded text-[11px] font-bold border transition ${
-              layers.cameras ? "bg-[#1b4332] text-white border-[#0f291e]" : "bg-white text-gray-600 border-gray-300"
-            }`}
-          >
-            📷 Camera Traps
-          </button>
+            <button
+              onClick={() => setLayers(l => ({ ...l, cameras: !l.cameras }))}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                layers.cameras 
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 shadow-xs" 
+                  : "bg-white text-slate-400 border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+              <span>Cameras</span>
+            </button>
 
-          <button
-            onClick={() => setLayers(l => ({ ...l, acoustics: !l.acoustics }))}
-            className={`px-2 py-1 rounded text-[11px] font-bold border transition ${
-              layers.acoustics ? "bg-[#2d5a3f] text-white border-[#1b4332]" : "bg-white text-gray-600 border-gray-300"
-            }`}
-          >
-            🎙 Acoustics
-          </button>
+            <button
+              onClick={() => setLayers(l => ({ ...l, detections: !l.detections }))}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                layers.detections 
+                  ? "bg-purple-50 text-purple-800 border-purple-300 shadow-xs" 
+                  : "bg-white text-slate-400 border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-purple-600"></span>
+              <span>Wildlife Detections</span>
+            </button>
 
-          <button
-            onClick={() => setLayers(l => ({ ...l, rangers: !l.rangers }))}
-            className={`px-2 py-1 rounded text-[11px] font-bold border transition ${
-              layers.rangers ? "bg-blue-800 text-white border-blue-900" : "bg-white text-gray-600 border-gray-300"
-            }`}
-          >
-            🛡 Rangers
-          </button>
+            <button
+              onClick={() => setLayers(l => ({ ...l, stations: !l.stations }))}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                layers.stations 
+                  ? "bg-blue-50 text-blue-800 border-blue-300 shadow-xs" 
+                  : "bg-white text-slate-400 border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+              <span>Stations</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+            <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-orange-500 to-rose-600 animate-pulse"></span>
+            <span>Spatial Density Gradient Rendering Active</span>
+          </div>
+        )}
 
-          <button
-            onClick={() => setLayers(l => ({ ...l, villages: !l.villages }))}
-            className={`px-2 py-1 rounded text-[11px] font-bold border transition ${
-              layers.villages ? "bg-amber-800 text-white border-amber-900" : "bg-white text-gray-600 border-gray-300"
-            }`}
-          >
-            🏠 Villages
-          </button>
-
-          <button
-            onClick={() => setLayers(l => ({ ...l, corridors: !l.corridors }))}
-            className={`px-2 py-1 rounded text-[11px] font-bold border transition ${
-              layers.corridors ? "bg-emerald-800 text-white border-emerald-900" : "bg-white text-gray-600 border-gray-300"
-            }`}
-          >
-            ⚡ Corridors
-          </button>
-        </div>
-
-        {/* Tile Provider Select & Telemetry Refresh */}
-        <div className="flex items-center gap-2">
-          <div className="relative">
+        {/* Base Map Style Selector & Telemetry Refresh */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-xl border border-slate-200 shadow-xs">
+            <span className="text-[11px] font-bold text-slate-500">Base Map:</span>
             <select
               value={tileProvider}
-              onChange={(e: any) => setTileProvider(e.target.value)}
-              className="appearance-none bg-white border border-emerald-200 rounded-md text-[11px] font-bold px-3 py-1.5 pr-8 text-emerald-950 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all shadow-sm cursor-pointer"
+              onChange={(e) => setTileProvider(e.target.value as TileProviderKey)}
+              className="bg-transparent border-none text-xs font-bold text-slate-800 focus:outline-none cursor-pointer"
             >
-              <option value="osm">🗺️ OpenStreetMap (Default)</option>
-              <option value="carto">🗺️ Carto Light (Clean)</option>
-              <option value="satellite">🛰️ Esri Satellite (Terrain)</option>
+              {Object.values(MAP_TILE_PROVIDERS).map(provider => (
+                <option key={provider.key} value={provider.key}>
+                  {provider.icon} {provider.label}
+                </option>
+              ))}
             </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-emerald-700">
-              <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-            </div>
           </div>
 
           <button
-            onClick={handleFetchLiveTelemetry}
+            onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 bg-[#1b4332] hover:bg-[#143326] text-white px-2.5 py-1 rounded text-[11px] font-bold transition disabled:opacity-50"
+            className="flex items-center gap-1.5 bg-emerald-900 hover:bg-emerald-950 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-xs disabled:opacity-50"
+            title="Refresh GIS spatial data"
           >
             <span className={isRefreshing ? "animate-spin" : ""}>🔄</span>
-            <span>{isRefreshing ? "Syncing API..." : "Sync Telemetry"}</span>
+            <span>{isRefreshing ? "Syncing..." : "Sync"}</span>
           </button>
         </div>
 
       </div>
 
-      {/* Map Canvas */}
+      {/* Map Canvas Element */}
       <div ref={mapContainerRef} className={`w-full ${height}`} />
 
-      {/* Map Footer Bar: Coordinates & Status */}
-      <div className="flex items-center justify-between px-4 py-1.5 bg-white border-t border-[#dcd8cd] text-[11px] font-mono text-gray-600">
+      {/* Footer Status Bar */}
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-t border-slate-200 text-[11px] font-mono text-slate-500">
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-            <span>API Telemetry Stream: Live</span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+            <span>Telemetry: Connected</span>
           </span>
-          <span className="text-gray-300">|</span>
-          <span>Center: 11.6054° N, 76.2731° E</span>
-          <span className="text-gray-300">|</span>
-          <span>Grid Ref: WYN-SECTOR-4</span>
+          <span className="text-slate-300">|</span>
+          <span>Default: Esri Satellite/Terrain</span>
+          <span className="text-slate-300">|</span>
+          <span>Coverage: Wayanad Wildlife Sanctuary</span>
         </div>
         <div>
-          <span>Last Sync: {lastUpdated}</span>
+          <span>Last Synchronized: {lastUpdated}</span>
         </div>
       </div>
 

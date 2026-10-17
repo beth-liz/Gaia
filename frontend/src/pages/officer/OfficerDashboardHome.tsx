@@ -126,7 +126,7 @@ const OfficerDashboardHome: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-emerald-50/50">
-                  <th className="p-3 text-xs font-bold text-emerald-900 uppercase">ID</th>
+                  <th className="p-3 text-xs font-bold text-emerald-900 uppercase">Reference #</th>
                   <th className="p-3 text-xs font-bold text-emerald-900 uppercase">Date</th>
                   <th className="p-3 text-xs font-bold text-emerald-900 uppercase">Location</th>
                   <th className="p-3 text-xs font-bold text-emerald-900 uppercase">Type / Animal</th>

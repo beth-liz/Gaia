@@ -90,12 +90,6 @@ const DesignationsManagement: React.FC = () => {
 
   const columns: Column<any>[] = [
     {
-      header: "ID",
-      accessorKey: "id",
-      sortable: true,
-      cell: (d) => <span className="font-bold text-emerald-800">#{d.id}</span>,
-    },
-    {
       header: "Designation Title",
       accessorKey: "designation_name",
       sortable: true,

@@ -26,6 +26,7 @@ import {
   Navigation,
   FileText,
   PlusCircle,
+  Download,
 } from "lucide-react";
 
 export const IncidentReviewPage: React.FC = () => {
@@ -42,7 +43,7 @@ export const IncidentReviewPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
 
   // Modal States
-  const [activeModal, setActiveModal] = useState<"assign_multi" | "reject" | "request" | "verify" | "close" | "return_report" | null>(null);
+  const [activeModal, setActiveModal] = useState<"assign_multi" | "reject" | "request" | "verify" | "close" | "return_report" | "timeline" | null>(null);
 
   // Multi-Officer Form Inputs
   const [selectedOfficerIds, setSelectedOfficerIds] = useState<number[]>([]);
@@ -458,22 +459,63 @@ export const IncidentReviewPage: React.FC = () => {
             )}
           </div>
 
-          {/* AUTOMATED FIELD REPORT REVIEW (WHEN GENERATED) */}
-          {fieldOp && fieldOp.report_generated_content && (
-            <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 space-y-3 shadow-xs text-xs">
+          {/* AUTOMATED / OFFICIAL FIELD REPORT REVIEW */}
+          {((fieldOp && fieldOp.report_generated_content) || incident.has_report) && (
+            <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 space-y-4 shadow-xs text-xs">
               <div className="flex items-center justify-between border-b border-emerald-950/10 pb-3">
                 <h3 className="text-xs font-black uppercase tracking-wider text-emerald-950 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-emerald-700" />
-                  Forest Guard Automated Field Mission Report
+                  Official Wildlife Incident Investigation Report
                 </h3>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-950 border border-emerald-300">
-                  Report Submitted
+                  {incident.status === "Closed" || incident.status === "Verified" ? "Verified & Endorsed" : "Report Generated"}
                 </span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-emerald-950/5 border border-emerald-950/10 font-mono text-[11px] whitespace-pre-wrap leading-relaxed text-emerald-950 max-h-80 overflow-y-auto">
-                {fieldOp.report_generated_content}
+              <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-950/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-900 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <FileText className="w-5 h-5 text-amber-300" />
+                  </div>
+                  <div>
+                    <p className="font-extrabold text-sm text-emerald-950">Official Field Investigation Report (PDF)</p>
+                    <p className="text-[11px] font-medium text-emerald-800/70">
+                      Generated with digital endorsement, vision analysis, GPS logs & photographic exhibits
+                    </p>
+                  </div>
+                </div>
+
+                {(incident.status === "Closed" || incident.status === "Completed") ? (
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => api.openIncidentReportPdf(incident.id)}
+                      className="flex-1 sm:flex-none px-4 py-2 bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-black rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5"
+                    >
+                      View Report
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => api.downloadIncidentReportPdf(incident.id, `GAIA_Incident_${incident.reference_id || incident.id}_Report.pdf`)}
+                      className="flex-1 sm:flex-none px-4 py-2 bg-white border border-emerald-950/20 hover:bg-emerald-50 text-emerald-950 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-700" /> Download PDF
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold">
+                      Report Pending Final Closure
+                    </span>
+                  </div>
+                )}
               </div>
+
+              {fieldOp && fieldOp.report_generated_content && (
+                <div className="p-4 rounded-2xl bg-emerald-950/5 border border-emerald-950/10 font-mono text-[11px] whitespace-pre-wrap leading-relaxed text-emerald-950 max-h-48 overflow-y-auto">
+                  {fieldOp.report_generated_content}
+                </div>
+              )}
             </div>
           )}
 
@@ -532,8 +574,25 @@ export const IncidentReviewPage: React.FC = () => {
             )}
           </div>
 
-          {/* Audit Timeline */}
-          <IncidentActivityTimeline activities={activities} />
+          {/* Compact Timeline Trigger */}
+          <div className="bg-white rounded-2xl border border-emerald-950/10 p-4 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-emerald-50 rounded-xl text-emerald-800">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-emerald-950">Incident Audit Trail & History</h4>
+                <p className="text-[11px] text-emerald-800/60 font-semibold">{activities.length} activity entries recorded</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveModal("timeline")}
+              className="px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-black transition-all flex items-center gap-1.5"
+            >
+              <FileText className="w-3.5 h-3.5" /> View Timeline
+            </button>
+          </div>
         </div>
 
         {/* RIGHT COLUMN: Head Officer Operational Action Panel (4 cols) */}
@@ -947,6 +1006,46 @@ export const IncidentReviewPage: React.FC = () => {
               <button onClick={() => setActiveModal(null)} className="px-4 py-2 rounded-xl bg-gray-100 font-bold">Cancel</button>
               <button onClick={handleRequestInfo} disabled={submittingAction} className="px-5 py-2 rounded-xl bg-amber-600 text-white font-extrabold shadow-md">
                 Send Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TIMELINE MODAL */}
+      {activeModal === "timeline" && (
+        <div className="fixed inset-0 z-50 bg-emerald-950/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-emerald-950/20 shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-100 text-emerald-800 rounded-xl">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-emerald-950">Incident Activity Timeline</h3>
+                  <p className="text-xs text-emerald-800/60 font-semibold">Incident {incident.reference_id} • {activities.length} entries</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="w-8 h-8 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center text-gray-500 font-bold border border-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              {activities.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center italic py-8">No activity recorded yet.</p>
+              ) : (
+                <IncidentActivityTimeline activities={activities} />
+              )}
+            </div>
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => setActiveModal(null)}
+                className="px-5 py-2 rounded-xl bg-emerald-900 text-white font-extrabold text-xs shadow-md"
+              >
+                Close
               </button>
             </div>
           </div>

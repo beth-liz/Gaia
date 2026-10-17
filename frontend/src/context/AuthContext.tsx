@@ -21,6 +21,7 @@ export interface User {
   profile_image?: string;
   village_name?: string;
   designation_name?: string;
+  created_at?: string;
 }
 
 interface AuthContextType {

@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { DataTable } from "@/components/common/DataTable";
 import type { Column } from "@/components/common/DataTable";
 import type { Incident, AnimalSpecies, MonitoringStation, District } from "@/types";
-import { AlertCircle, Search, RefreshCw, Eye, MapPin } from "lucide-react";
+import { AlertCircle, Search, RefreshCw, Eye, MapPin, FileText, Download } from "lucide-react";
 
 export const AdminIncidentsPage: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -244,6 +244,40 @@ export const AdminIncidentsPage: React.FC = () => {
       ),
     },
     {
+      header: "Report",
+      accessorKey: "has_report",
+      sortable: true,
+      cell: (inc) => {
+        const isComplete = inc.status === "Completed" || inc.status === "Closed";
+        return (
+          <div className="flex items-center gap-1.5 whitespace-nowrap min-w-[105px]">
+            {isComplete && inc.has_report ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  api.openIncidentReportPdf(inc.id);
+                }}
+                title="Open Official Incident Investigation PDF Report"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition-all shadow-xs group"
+              >
+                <FileText className="w-3.5 h-3.5 text-red-600 group-hover:scale-110 transition-transform" />
+                <span>PDF Report</span>
+              </button>
+            ) : isComplete ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200">
+                Report Pending
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-semibold text-slate-400 bg-slate-50 border border-slate-200">
+                Not Available
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       header: "Action",
       align: "right",
       cell: (inc) => (
@@ -468,6 +502,48 @@ export const AdminIncidentsPage: React.FC = () => {
                 <p className="text-emerald-950 font-medium leading-relaxed bg-emerald-50/50 p-3 rounded-xl border border-emerald-950/5">
                   {selectedIncident.description || "No description provided."}
                 </p>
+              </div>
+
+              {/* Official Investigation Report Section */}
+              <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-950/10 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-emerald-800" />
+                    <span className="font-extrabold text-xs text-emerald-950">Official Investigation Report</span>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                    selectedIncident.has_report
+                      ? "bg-emerald-100 text-emerald-950 border border-emerald-300"
+                      : "bg-gray-100 text-gray-700 border border-gray-200"
+                  }`}>
+                    {selectedIncident.has_report ? "Report Available" : "Report Pending"}
+                  </span>
+                </div>
+
+                {selectedIncident.has_report && (selectedIncident.status === "Completed" || selectedIncident.status === "Closed") ? (
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => api.openIncidentReportPdf(selectedIncident.id)}
+                      className="flex-1 px-3 py-2 bg-emerald-900 hover:bg-emerald-950 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-amber-300" /> View Report
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => api.downloadIncidentReportPdf(selectedIncident.id, `GAIA_Incident_${selectedIncident.reference_id || selectedIncident.id}_Report.pdf`)}
+                      className="flex-1 px-3 py-2 bg-white hover:bg-emerald-50 text-emerald-950 border border-emerald-950/20 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-800" /> Download PDF
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-emerald-800/70 italic">
+                    {selectedIncident.status === "Completed" || selectedIncident.status === "Closed"
+                      ? "Official report is being compiled by Range Forest Command."
+                      : "The final investigation report is generated upon formal verification and closure of the incident."}
+                  </p>
+                )}
               </div>
             </div>
 

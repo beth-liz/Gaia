@@ -137,8 +137,8 @@ def accept_camera_detection(
     if not ev:
         raise HTTPException(status_code=404, detail="Camera detection event not found")
         
-    if current_user.role not in ["Admin", "Range Forest Officer", "Officer"]:
-        raise HTTPException(status_code=403, detail="Not authorized to review camera detections")
+    if current_user.role not in ["Range Forest Officer", "Officer"]:
+        raise HTTPException(status_code=403, detail="Not authorized to review camera detections. Only Range Forest Officers may accept camera incident candidates.")
 
     if current_user.role != "Admin" and ev.monitoring_station_id != current_user.station_id:
         raise HTTPException(status_code=403, detail="Not authorized to process this detection event")
@@ -265,8 +265,8 @@ def reject_camera_detection(
     if not ev:
         raise HTTPException(status_code=404, detail="Camera detection event not found")
         
-    if current_user.role not in ["Admin", "Range Forest Officer", "Officer"]:
-        raise HTTPException(status_code=403, detail="Not authorized to review camera detections")
+    if current_user.role not in ["Range Forest Officer", "Officer"]:
+        raise HTTPException(status_code=403, detail="Not authorized to review camera detections. Only Range Forest Officers may reject camera incident candidates.")
 
     if current_user.role != "Admin" and ev.monitoring_station_id != current_user.station_id:
         raise HTTPException(status_code=403, detail="Not authorized to process this detection event")

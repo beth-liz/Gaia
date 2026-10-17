@@ -146,6 +146,11 @@ export interface Incident {
   // Camera Provenance
   camera_detection_event_id?: number;
 
+  // Report fields
+  has_report?: boolean;
+  report_url?: string;
+  report_download_url?: string;
+
   created_at: string;
   user?: { full_name: string; role: string; };
 }

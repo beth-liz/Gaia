@@ -21,15 +21,61 @@ export const AIAssessmentCard: React.FC<Props> = ({ incident, onUpdate }) => {
   const isVillager = user?.role === 'villager';
   
   const aiStatus = incident.ai_status || "Pending";
-  const images = incident.images || [];
-  const aiResults = incident.ai_results || [];
+  const rawImages = (incident.images && incident.images.length > 0)
+    ? incident.images 
+    : (incident.photo_url ? [incident.photo_url] : []);
+  
+  // Deduplicate unique original images
+  const uniqueOriginalImages = React.useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const img of rawImages) {
+      if (!img) continue;
+      const norm = img.replace(/\\/g, '/').trim();
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        list.push(img);
+      }
+    }
+    return list;
+  }, [rawImages]);
+
+  const rawAiResults = incident.ai_results || [];
+
+  // Map each unique original image to its AI detection (if any)
+  const pairedResults = React.useMemo(() => {
+    const matchedDetections = new Set<any>();
+
+    return uniqueOriginalImages.map((origImg, idx) => {
+      const origNorm = origImg.replace(/\\/g, '/').toLowerCase();
+      const origBase = origNorm.split('/').pop() || origNorm;
+
+      // Find matching detection by path or filename
+      const match = rawAiResults.find((r: any) => {
+        if (!r.image_path) return false;
+        const detNorm = String(r.image_path).replace(/\\/g, '/').toLowerCase();
+        const detBase = detNorm.split('/').pop() || detNorm;
+        return detNorm === origNorm || detBase === origBase;
+      });
+
+      if (match) {
+        matchedDetections.add(match);
+      }
+
+      return {
+        imagePath: origImg,
+        detection: match || null,
+        idx
+      };
+    });
+  }, [uniqueOriginalImages, rawAiResults]);
 
   const isPending = aiStatus === "Pending";
   const isFailed = aiStatus === "Failed";
   const isPartiallyComplete = aiStatus === "Partially Completed";
   const isComplete = aiStatus === "Analysis Complete";
 
-  const hasResults = aiResults.length > 0;
+  const hasResults = pairedResults.some(p => p.detection !== null);
 
   // Auto-trigger analysis once if incident has images, status is Pending, and no AI records exist yet
   const triggerAnalysis = async () => {
@@ -49,35 +95,37 @@ export const AIAssessmentCard: React.FC<Props> = ({ incident, onUpdate }) => {
   };
 
   useEffect(() => {
-    if (isPending && !hasResults && !triggeredRef.current && (images.length > 0 || incident.photo_url)) {
+    if (isPending && !hasResults && !triggeredRef.current && uniqueOriginalImages.length > 0) {
       triggeredRef.current = true;
       triggerAnalysis();
     }
-  }, [incident.id, isPending, hasResults, images.length, incident.photo_url]);
+  }, [incident.id, isPending, hasResults, uniqueOriginalImages.length]);
 
   useEffect(() => {
-    if (isPending && onUpdate) {
+    if (isPending && !isAnalyzing && onUpdate) {
       const interval = setInterval(() => {
         onUpdate(true);
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, [isPending, onUpdate]);
+  }, [isPending, isAnalyzing, onUpdate]);
 
   if (isVillager && isPending) {
     return null; // completely hidden from villager during processing
   }
 
   let totalAnimals = 0;
-  let speciesCounts: Record<string, number> = {};
+  const speciesCounts: Record<string, number> = {};
+  let imagesWithAnalysis = 0;
   
-  if (hasResults) {
-    for (const r of aiResults) {
-        if (r.confidence > 0) {
-            totalAnimals += r.count || 0;
-            const sp = r.normalized_species || "Unknown";
-            speciesCounts[sp] = (speciesCounts[sp] || 0) + (r.count || 0);
-        }
+  for (const item of pairedResults) {
+    if (item.detection) {
+      imagesWithAnalysis += 1;
+      if (item.detection.confidence > 0) {
+        totalAnimals += item.detection.count || 0;
+        const sp = item.detection.normalized_species || "Unknown";
+        speciesCounts[sp] = (speciesCounts[sp] || 0) + (item.detection.count || 0);
+      }
     }
   }
 
@@ -119,13 +167,13 @@ export const AIAssessmentCard: React.FC<Props> = ({ incident, onUpdate }) => {
       <div className="overflow-y-auto p-6 space-y-8">
         
         {/* SUMMARY SECTION */}
-        {(isComplete || isPartiallyComplete) && hasResults && (
+        {(isComplete || isPartiallyComplete || hasResults) && (
             <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-5">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-800 mb-4">Incident AI Summary</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                         <div className="text-[10px] uppercase font-bold text-emerald-600/70 mb-1">Images Analyzed</div>
-                        <div className="text-xl font-black text-emerald-950">{aiResults.length}</div>
+                        <div className="text-xl font-black text-emerald-950">{imagesWithAnalysis} of {uniqueOriginalImages.length}</div>
                     </div>
                     <div>
                         <div className="text-[10px] uppercase font-bold text-emerald-600/70 mb-1">Total Animals</div>
@@ -148,11 +196,11 @@ export const AIAssessmentCard: React.FC<Props> = ({ incident, onUpdate }) => {
             </div>
         )}
 
-        {/* IMAGES COMPARISON GRID */}
-        {(isComplete || isPartiallyComplete) && hasResults ? (
+        {/* IMAGES COMPARISON GRID - Exactly 1 pair per unique evidence image */}
+        {(isComplete || isPartiallyComplete || hasResults) && pairedResults.length > 0 ? (
             <div className="space-y-6">
-                {aiResults.map((res: any, idx: number) => {
-                    const imgUrl = getImageUrl(res.image_path);
+                {pairedResults.map(({ imagePath, detection, idx }) => {
+                    const imgUrl = getImageUrl(imagePath);
                     return (
                         <div key={idx} className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col md:flex-row">
                             
@@ -162,7 +210,7 @@ export const AIAssessmentCard: React.FC<Props> = ({ incident, onUpdate }) => {
                                     <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Original Evidence {idx + 1}</h5>
                                 </div>
                                 <div className="bg-slate-950 flex items-center justify-center min-h-[320px] p-2 flex-1">
-                                    <img src={imgUrl} alt="Original Evidence" className="max-w-full max-h-[420px] object-contain rounded-md" />
+                                    <img src={imgUrl} alt={`Original Evidence ${idx + 1}`} className="max-w-full max-h-[420px] object-contain rounded-md" />
                                 </div>
                             </div>
                             
@@ -170,23 +218,29 @@ export const AIAssessmentCard: React.FC<Props> = ({ incident, onUpdate }) => {
                             <div className="flex-1 flex flex-col">
                                 <div className="p-3 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center">
                                     <h5 className="text-[10px] font-black uppercase tracking-widest text-emerald-700">AI Analyzed Overlay</h5>
-                                    {res.confidence > 0 && (
+                                    {detection && detection.confidence > 0 && (
                                         <span className="text-[10px] font-bold bg-emerald-200/50 text-emerald-800 px-2 py-0.5 rounded-full">
-                                            Count: {res.count}
+                                            Count: {detection.count}
                                         </span>
                                     )}
                                 </div>
-                                <div className="bg-slate-950 flex-1 flex flex-col">
-                                    <CameraDetectionViewer
-                                        imagePath={res.image_path}
-                                        detections={res.bounding_boxes}
-                                        species={res.normalized_species}
-                                        confidence={res.confidence}
-                                        animalCount={res.count}
-                                        maxHeight="420px"
-                                        showInspector={true}
-                                        className="border-0 rounded-none shadow-none bg-transparent"
-                                    />
+                                <div className="bg-slate-950 flex-1 flex flex-col min-h-[320px]">
+                                    {detection ? (
+                                        <CameraDetectionViewer
+                                            imagePath={detection.image_path || imagePath}
+                                            detections={detection.bounding_boxes}
+                                            species={detection.normalized_species}
+                                            confidence={detection.confidence}
+                                            animalCount={detection.count}
+                                            maxHeight="420px"
+                                            showInspector={true}
+                                            className="border-0 rounded-none shadow-none bg-transparent"
+                                        />
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full text-slate-400 text-xs">
+                                            No analysis result available for this image
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -199,7 +253,7 @@ export const AIAssessmentCard: React.FC<Props> = ({ incident, onUpdate }) => {
                     <div className="text-center space-y-4">
                         <Loader2 className="w-10 h-10 animate-spin text-emerald-600 mx-auto" />
                         <p className="text-sm font-bold text-emerald-900">
-                            {isAnalyzing ? "Running MegaDetector + SpeciesNet Analysis..." : `Processing ${images.length || 1} image(s)...`}
+                            {isAnalyzing ? "Running MegaDetector + SpeciesNet Analysis..." : `Processing ${uniqueOriginalImages.length || 1} image(s)...`}
                         </p>
                         <p className="text-xs text-emerald-700/70">AI is analyzing the incident evidence in the background.</p>
                         {analysisError && (

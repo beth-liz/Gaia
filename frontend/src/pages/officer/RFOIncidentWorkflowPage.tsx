@@ -304,6 +304,9 @@ export const RFOIncidentWorkflowPage: React.FC = () => {
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [returnRemarks, setReturnRemarks] = useState("");
 
+  // Timeline Modal State
+  const [showTimelineModal, setShowTimelineModal] = useState(false);
+
   // Close
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [closeRemarks, setCloseRemarks] = useState("");
@@ -1055,14 +1058,25 @@ export const RFOIncidentWorkflowPage: React.FC = () => {
             </SectionCard>
           )}
 
-          {/* ACTIVITY TIMELINE */}
-          <SectionCard title="Activity Timeline">
-            {activities.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center italic">No activity recorded yet.</p>
-            ) : (
-              <IncidentActivityTimeline activities={activities} />
-            )}
-          </SectionCard>
+          {/* COMPACT ACTIVITY TIMELINE TRIGGER */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-emerald-50 text-emerald-800 rounded-xl">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-gray-900">Incident Audit Trail & Timeline</h4>
+                <p className="text-xs text-gray-500 font-semibold">{activities.length} activity events recorded</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowTimelineModal(true)}
+              className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-black rounded-xl transition-all flex items-center gap-2"
+            >
+              <Clock className="w-3.5 h-3.5" /> View Timeline
+            </button>
+          </div>
 
         </div>
 
@@ -1170,6 +1184,45 @@ export const RFOIncidentWorkflowPage: React.FC = () => {
 
         </div>
       </div>
+      {/* TIMELINE MODAL */}
+      {showTimelineModal && (
+        <div className="fixed inset-0 z-50 bg-emerald-950/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-emerald-950/20 shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-100 text-emerald-800 rounded-xl">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-emerald-950">Incident Activity Timeline</h3>
+                  <p className="text-xs text-emerald-800/60 font-semibold">{incident.reference_id || `INC-${incidentId}`} • {activities.length} entries</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTimelineModal(false)}
+                className="w-8 h-8 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center text-gray-500 font-bold border border-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              {activities.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center italic py-8">No activity recorded yet.</p>
+              ) : (
+                <IncidentActivityTimeline activities={activities} />
+              )}
+            </div>
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => setShowTimelineModal(false)}
+                className="px-5 py-2 rounded-xl bg-emerald-900 text-white font-extrabold text-xs shadow-md"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

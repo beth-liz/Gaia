@@ -129,12 +129,6 @@ export const AdminStatesPage: React.FC = () => {
 
   const columns: Column<StateItem>[] = [
     {
-      header: "ID",
-      accessorKey: "id",
-      sortable: true,
-      cell: (st) => <span className="text-emerald-800/70 font-bold">#{st.id}</span>,
-    },
-    {
       header: "State Name",
       accessorKey: "state_name",
       sortable: true,

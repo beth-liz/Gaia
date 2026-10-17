@@ -25,13 +25,21 @@ export const CameraDetectionsPage: React.FC = () => {
     const [speciesFilter, setSpeciesFilter] = useState<string>('ALL');
     const [searchQuery, setSearchQuery] = useState<string>('');
 
+    // Station-based organization
+    const [stations, setStations] = useState<any[]>([]);
+    const [selectedStationId, setSelectedStationId] = useState<string>('ALL');
+
     const loadDetections = async () => {
         try {
             setLoading(true);
-            const data = await api.getCameraDetections();
+            const [data, stList] = await Promise.all([
+                api.getCameraDetections(),
+                api.getMonitoringStations().catch(() => [])
+            ]);
             // Client-side safeguard: only include detections with valid, non-empty image_path
             const validData = Array.isArray(data) ? data.filter((d: any) => d && typeof d.image_path === 'string' && d.image_path.trim().length > 0) : [];
             setDetections(validData);
+            setStations(stList || []);
             setError(null);
         } catch (err: any) {
             setError(err.message || 'Failed to load detections');
@@ -59,17 +67,23 @@ export const CameraDetectionsPage: React.FC = () => {
         setSelectedDetection(null);
     };
 
-    // Metrics
-    const totalDetections = detections.length;
-    const pendingCount = detections.filter(d => d.status === 'PENDING_REVIEW').length;
-    const acceptedCount = detections.filter(d => d.status === 'ACCEPTED').length;
-    const rejectedCount = detections.filter(d => d.status === 'REJECTED').length;
+    // Filtered by station first (or all)
+    const stationDetections = detections.filter(d => {
+        if (selectedStationId === 'ALL') return true;
+        return String(d.monitoring_station_id) === String(selectedStationId);
+    });
+
+    // Metrics based on selected station scope
+    const totalDetections = stationDetections.length;
+    const pendingCount = stationDetections.filter(d => d.status === 'PENDING_REVIEW').length;
+    const acceptedCount = stationDetections.filter(d => d.status === 'ACCEPTED').length;
+    const rejectedCount = stationDetections.filter(d => d.status === 'REJECTED').length;
 
     // Available species list for filtering
-    const speciesList = Array.from(new Set(detections.map(d => d.species).filter(Boolean)));
+    const speciesList = Array.from(new Set(stationDetections.map(d => d.species).filter(Boolean)));
 
     // Filtered list
-    const filteredDetections = detections.filter(d => {
+    const filteredDetections = stationDetections.filter(d => {
         const matchesStatus = statusFilter === 'ALL' || d.status === statusFilter;
         const matchesSpecies = speciesFilter === 'ALL' || d.species === speciesFilter;
         const matchesSearch = !searchQuery.trim() || 
@@ -81,93 +95,129 @@ export const CameraDetectionsPage: React.FC = () => {
     });
 
     return (
-        <div className="space-y-8 pb-12 bg-slate-50 min-h-screen">
-            {/* Command Centre Header */}
-            <div className="bg-slate-900 text-white p-8 rounded-b-3xl shadow-lg relative overflow-hidden">
-                <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-400 via-emerald-900 to-slate-900"></div>
-                <div className="relative z-10 flex flex-col md:flex-row md:justify-between md:items-end gap-6">
+        <div className="space-y-6">
+            {/* Standard Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-emerald-950/10 mb-6">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-emerald-900 text-amber-300 shadow-md shrink-0">
+                        <Camera className="w-6 h-6" />
+                    </div>
                     <div>
-                        <div className="flex items-center gap-3 mb-2">
-                            <Camera className="w-8 h-8 text-emerald-400" />
-                            <h1 className="text-3xl font-black tracking-tight">Camera Detections Log</h1>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-xl font-extrabold text-emerald-950 tracking-tight">Camera Detections Log</h1>
+                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-[10px] font-bold">
+                                {totalDetections} Detections
+                            </span>
                         </div>
-                        <p className="text-slate-300 max-w-2xl text-sm leading-relaxed">
+                        <p className="text-xs text-emerald-800/70 font-medium mt-0.5">
                             Continuous AI wildlife sensing feed. Monitor camera observations, species classifications, and approximate animal counts across surveillance stations.
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={loadDetections}
-                            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-2 shadow-xs transition-colors"
-                        >
-                            <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
-                            Refresh Feed
-                        </button>
-                        <Link
-                            to={user?.role === 'Admin' ? '/admin/camera-incidents' : '/officer/camera-incidents'}
-                            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-2 shadow-md transition-all active:scale-95"
-                        >
-                            <ShieldAlert className="w-4 h-4 text-emerald-200" />
-                            Open Incident Review Queue ({pendingCount})
-                        </Link>
-                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={loadDetections}
+                        className="px-4 py-2 rounded-xl bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-950/20 font-bold text-xs flex items-center gap-2 shadow-xs transition-colors"
+                    >
+                        <RefreshCw className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Refresh Feed</span>
+                    </button>
+                    <Link
+                        to={user?.role === 'Admin' ? '/admin/camera-incidents' : '/officer/camera-incidents'}
+                        className="px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-black text-xs flex items-center gap-2 shadow-xs transition-all active:scale-95"
+                    >
+                        <ShieldAlert className="w-4 h-4 text-emerald-200" />
+                        <span>Incident Review ({pendingCount})</span>
+                    </Link>
                 </div>
             </div>
 
+            {/* Station Selector Bar */}
+            {user?.role === 'Admin' && stations.length > 0 && (
+                <div className="bg-white p-4 rounded-2xl border border-emerald-950/10 shadow-xs flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <Camera className="w-4 h-4 text-emerald-700 shrink-0" />
+                        <div>
+                            <span className="text-xs font-black uppercase text-emerald-950 block">Filter By Monitoring Station</span>
+                            <span className="text-[11px] text-emerald-800/70 font-medium">Select a station to view its camera detections</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <select
+                            value={selectedStationId}
+                            onChange={(e) => {
+                                setSelectedStationId(e.target.value);
+                            }}
+                            className="bg-emerald-50/50 border border-emerald-950/20 text-emerald-950 font-bold text-xs rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer min-w-[240px]"
+                        >
+                            <option value="ALL">All Monitoring Stations ({detections.length} detections)</option>
+                            {stations.map(st => {
+                                const stDetCount = detections.filter(d => d.monitoring_station_id === st.id).length;
+                                return (
+                                    <option key={st.id} value={st.id}>
+                                        {st.station_name} {st.district_name ? `(${st.district_name})` : ''} — {stDetCount} {stDetCount === 1 ? 'detection' : 'detections'}
+                                    </option>
+                                );
+                            })}
+                        </select>
+                    </div>
+                </div>
+            )}
+
             {/* Metrics Ribbon */}
-            <div className="px-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">
-                        <Camera className="w-6 h-6 text-slate-700" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-emerald-950/10 shadow-xs flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center">
+                        <Camera className="w-5 h-5 text-slate-700" />
                     </div>
                     <div>
-                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Detections</div>
-                        <div className="text-3xl font-black text-slate-900">{totalDetections}</div>
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Detections</div>
+                        <div className="text-2xl font-black text-slate-900">{totalDetections}</div>
                     </div>
                 </div>
 
                 <div 
                     onClick={() => setStatusFilter('PENDING_REVIEW')}
-                    className="bg-white p-6 rounded-2xl border border-amber-100 shadow-sm flex items-center gap-4 cursor-pointer hover:border-amber-300 transition-colors"
+                    className="bg-white p-5 rounded-2xl border border-amber-100 shadow-xs flex items-center gap-4 cursor-pointer hover:border-amber-300 transition-colors"
                 >
-                    <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center">
-                        <Clock className="w-6 h-6 text-amber-600" />
+                    <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-amber-600" />
                     </div>
                     <div>
-                        <div className="text-xs font-bold text-amber-600 uppercase tracking-wider">Pending Review</div>
-                        <div className="text-3xl font-black text-slate-900">{pendingCount}</div>
+                        <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Pending Review</div>
+                        <div className="text-2xl font-black text-slate-900">{pendingCount}</div>
                     </div>
                 </div>
 
                 <div 
                     onClick={() => setStatusFilter('ACCEPTED')}
-                    className="bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm flex items-center gap-4 cursor-pointer hover:border-emerald-300 transition-colors"
+                    className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-xs flex items-center gap-4 cursor-pointer hover:border-emerald-300 transition-colors"
                 >
-                    <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center">
-                        <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                    <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div>
-                        <div className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Accepted (Incidents)</div>
-                        <div className="text-3xl font-black text-slate-900">{acceptedCount}</div>
+                        <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Accepted (Incidents)</div>
+                        <div className="text-2xl font-black text-slate-900">{acceptedCount}</div>
                     </div>
                 </div>
 
                 <div 
                     onClick={() => setStatusFilter('REJECTED')}
-                    className="bg-white p-6 rounded-2xl border border-red-100 shadow-sm flex items-center gap-4 cursor-pointer hover:border-red-300 transition-colors"
+                    className="bg-white p-5 rounded-2xl border border-red-100 shadow-xs flex items-center gap-4 cursor-pointer hover:border-red-300 transition-colors"
                 >
-                    <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center">
-                        <XCircle className="w-6 h-6 text-red-600" />
+                    <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center">
+                        <XCircle className="w-5 h-5 text-red-600" />
                     </div>
                     <div>
-                        <div className="text-xs font-bold text-red-600 uppercase tracking-wider">Rejected Records</div>
-                        <div className="text-3xl font-black text-slate-900">{rejectedCount}</div>
+                        <div className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Rejected Records</div>
+                        <div className="text-2xl font-black text-slate-900">{rejectedCount}</div>
                     </div>
                 </div>
             </div>
 
             {/* Filter and Search Bar */}
-            <div className="px-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-2">
                     <button 
                         onClick={() => setStatusFilter('ALL')} 
@@ -221,7 +271,7 @@ export const CameraDetectionsPage: React.FC = () => {
             </div>
 
             {/* Detections Monitoring Feed */}
-            <div className="px-8">
+            <div>
                 {loading ? (
                     <div className="text-center py-24 bg-white rounded-3xl border border-slate-200 shadow-xs">
                         <ShieldCheck className="w-12 h-12 text-emerald-500 animate-pulse mx-auto mb-3" />

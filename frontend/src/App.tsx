@@ -19,6 +19,8 @@ import VillagerDashboardLayout from "@/layouts/VillagerDashboardLayout";
 // Admin Pages
 import AdminDashboardHome from "@/pages/admin/AdminDashboardHome";
 import GISPage from "@/pages/GISPage";
+import GISMappingPage from "@/pages/admin/GISMappingPage";
+import ConflictHeatmapPage from "@/pages/admin/ConflictHeatmapPage";
 import AdminStatesPage from "@/pages/admin/AdminStatesPage";
 import AdminDistrictsPage from "@/pages/admin/AdminDistrictsPage";
 import AdminMonitoringStationsPage from "@/pages/admin/AdminMonitoringStationsPage";
@@ -51,6 +53,7 @@ import { RFOAuditHistoryPage } from "@/pages/officer/inventory/RFOAuditHistoryPa
 import GuardDashboardHome from "@/pages/officer/GuardDashboardHome";
 import GuardIncidentsPage from "@/pages/officer/GuardIncidentsPage";
 import GuardCompletedReportsPage from "@/pages/officer/GuardCompletedReportsPage";
+import GuardIncidentAuditPage from "@/pages/officer/GuardIncidentAuditPage";
 import GuardMissionExecutionPage from "@/pages/officer/GuardMissionExecutionPage";
 import { GuardInventoryPage } from "@/pages/officer/GuardInventoryPage";
 import { GuardMyEquipmentPage } from "@/pages/guard/inventory/GuardMyEquipmentPage";
@@ -138,7 +141,9 @@ function App() {
           >
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboardHome />} />
-            <Route path="gis" element={<GISPage />} />
+            <Route path="gis" element={<Navigate to="/admin/gis/mapping" replace />} />
+            <Route path="gis/mapping" element={<GISMappingPage />} />
+            <Route path="gis/heatmap" element={<ConflictHeatmapPage />} />
             <Route path="states" element={<AdminStatesPage />} />
             <Route path="districts" element={<AdminDistrictsPage />} />
             <Route path="monitoring-stations" element={<AdminMonitoringStationsPage />} />
@@ -172,6 +177,8 @@ function App() {
             <Route index element={<Navigate to="/officer/dashboard" replace />} />
             <Route path="dashboard" element={<OfficerDashboardHome />} />
             <Route path="gis" element={<GISPage />} />
+            <Route path="gis/mapping" element={<GISPage />} />
+            <Route path="gis/heatmap" element={<ConflictHeatmapPage />} />
             <Route path="cameras" element={<CamerasPage />} />
             <Route path="camera-detections" element={<CameraDetectionsPage />} />
             <Route path="camera-incidents" element={<CameraIncidentsPage />} />
@@ -216,6 +223,8 @@ function App() {
             <Route index element={<Navigate to="/guard/dashboard" replace />} />
             <Route path="dashboard" element={<GuardDashboardHome />} />
             <Route path="gis" element={<GISPage />} />
+            <Route path="gis/mapping" element={<GISPage />} />
+            <Route path="gis/heatmap" element={<ConflictHeatmapPage />} />
             <Route path="assignments" element={<GuardIncidentsPage />} />
             <Route path="incidents" element={<GuardIncidentsPage />} />
             <Route path="inventory" element={<GuardInventoryPage />} />
@@ -224,6 +233,8 @@ function App() {
             <Route path="mission/:id" element={<GuardMissionExecutionPage />} />
             <Route path="incidents/:id" element={<GuardMissionExecutionPage />} />
             <Route path="completed" element={<GuardCompletedReportsPage />} />
+            <Route path="completed/:id/audit" element={<GuardIncidentAuditPage />} />
+            <Route path="incidents/:id/audit" element={<GuardIncidentAuditPage />} />
             <Route path="reports" element={<GuardCompletedReportsPage />} />
             <Route path="report-incident" element={<GuardReportIncident />} />
             <Route path="my-reports" element={<GuardMyReportsPage />} />
@@ -242,6 +253,9 @@ function App() {
           >
             <Route index element={<Navigate to="/villager/dashboard" replace />} />
             <Route path="dashboard" element={<VillagerDashboardHome />} />
+            <Route path="gis" element={<Navigate to="/villager/gis/mapping" replace />} />
+            <Route path="gis/mapping" element={<GISMappingPage />} />
+            <Route path="gis/heatmap" element={<ConflictHeatmapPage />} />
             <Route path="report-incident" element={<VillagerReportIncident />} />
             <Route path="my-reports" element={<MyReportsPage />} />
             <Route path="my-reports/:id" element={<IncidentReviewPage />} />

@@ -538,6 +538,55 @@ export const api = {
     return handleResponse<any>(res);
   },
 
+  getIncidentReportMetadata: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/report`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<{
+      incident_id: number;
+      reference_id: string;
+      has_report: boolean;
+      status: string;
+      report_generated_at?: string;
+      submitted_by_guard?: string;
+      download_filename: string;
+      view_url?: string;
+      download_url?: string;
+    }>(res);
+  },
+
+  downloadIncidentReportPdf: async (id: number, filename?: string) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/report/download?inline=false`, {
+      headers: getHeaders(true),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Failed to download PDF report" }));
+      throw new Error(err.detail || "Report not available");
+    }
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || `GAIA_Incident_Report_${id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
+  openIncidentReportPdf: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/incidents/${id}/report/download?inline=true`, {
+      headers: getHeaders(true),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Failed to load PDF report" }));
+      throw new Error(err.detail || "Report not available");
+    }
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+    window.open(url, "_blank");
+  },
+
   updateIncident: async (id: number, data: any) => {
     const res = await fetch(`${API_BASE}/api/incidents/${id}`, {
       method: "PUT",
@@ -1051,5 +1100,17 @@ export const api = {
       body: JSON.stringify({ reason })
     });
     return handleResponse<any>(res);
+  },
+
+  // --- GIS ---
+  getGISData: async (params?: { days?: number | ""; species?: string; status?: string }) => {
+    const qp = new URLSearchParams();
+    if (params?.days) qp.append("days", params.days.toString());
+    if (params?.species) qp.append("species", params.species);
+    if (params?.status) qp.append("status", params.status);
+    const res = await fetch(`${API_BASE}/api/gis/data?${qp.toString()}`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<{ features: any[]; analytics: any }>(res);
   },
 };

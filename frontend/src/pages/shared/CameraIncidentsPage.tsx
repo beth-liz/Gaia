@@ -126,37 +126,43 @@ export const CameraIncidentsPage: React.FC = () => {
         return matchesStatus && matchesSearch;
     });
 
+    const canReview = user?.role === 'Range Forest Officer' || user?.role === 'Officer';
+
     return (
-        <div className="space-y-8 pb-12 bg-slate-50 min-h-screen">
-            {/* Command Centre Header */}
-            <div className="bg-slate-900 text-white p-8 rounded-b-3xl shadow-lg relative overflow-hidden">
-                <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-400 via-amber-900 to-slate-900"></div>
-                <div className="relative z-10 flex flex-col md:flex-row md:justify-between md:items-end gap-6">
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-emerald-950/10 mb-6">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-emerald-900 text-amber-300 shadow-md shrink-0">
+                        <ShieldAlert className="w-6 h-6" />
+                    </div>
                     <div>
-                        <div className="flex items-center gap-3 mb-2">
-                            <ShieldAlert className="w-8 h-8 text-amber-400" />
-                            <h1 className="text-3xl font-black tracking-tight">Camera Incident Review Queue</h1>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-xl font-extrabold text-emerald-950 tracking-tight">Camera Incident Review Queue</h1>
+                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-[10px] font-bold">
+                                {candidates.length} Candidates
+                            </span>
                         </div>
-                        <p className="text-slate-300 max-w-2xl text-sm leading-relaxed">
-                            Authorised Range Forest Officer review portal. Verify AI-generated camera observations. 
-                            Accepting creates an official Gaia Incident; rejecting prevents incident creation.
+                        <p className="text-xs text-emerald-800/70 font-medium mt-0.5">
+                            {canReview
+                                ? "Authorised Range Forest Officer review portal. Verify AI-generated camera observations. Accepting creates an official Gaia Incident; rejecting prevents incident creation."
+                                : "Authorised Range Forest Officer review portal (View Only for Admin). Verify AI-generated camera observations and track incident candidate review outcomes."}
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={loadCandidates}
-                            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-2 shadow-xs transition-colors"
-                        >
-                            <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-                            Refresh Queue
-                        </button>
-                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={loadCandidates}
+                        className="px-4 py-2 rounded-xl bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-950/20 font-bold text-xs flex items-center gap-2 shadow-xs transition-colors"
+                    >
+                        <RefreshCw className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Refresh Queue</span>
+                    </button>
                 </div>
             </div>
 
             {/* Notification Banner */}
             {actionMessage && (
-                <div className="px-8">
+                <div>
                     <div className="p-4 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-950 text-xs font-bold flex items-center justify-between shadow-xs">
                         <div className="flex items-center gap-2">
                             <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
@@ -168,62 +174,62 @@ export const CameraIncidentsPage: React.FC = () => {
             )}
 
             {/* Metrics Ribbon */}
-            <div className="px-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div 
                     onClick={() => setStatusFilter('PENDING_REVIEW')}
-                    className="bg-white p-6 rounded-2xl border border-amber-200 shadow-xs flex items-center gap-4 cursor-pointer hover:border-amber-400 transition-colors"
+                    className="bg-white p-5 rounded-2xl border border-amber-200 shadow-xs flex items-center gap-4 cursor-pointer hover:border-amber-400 transition-colors"
                 >
-                    <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center">
-                        <Clock className="w-6 h-6 text-amber-600" />
+                    <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-amber-600" />
                     </div>
                     <div>
-                        <div className="text-xs font-bold text-amber-600 uppercase tracking-wider">Awaiting Review</div>
-                        <div className="text-3xl font-black text-slate-900">{pendingCount}</div>
+                        <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Awaiting Review</div>
+                        <div className="text-2xl font-black text-slate-900">{pendingCount}</div>
                     </div>
                 </div>
 
                 <div 
                     onClick={() => setStatusFilter('ACCEPTED')}
-                    className="bg-white p-6 rounded-2xl border border-emerald-100 shadow-xs flex items-center gap-4 cursor-pointer hover:border-emerald-300 transition-colors"
+                    className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-xs flex items-center gap-4 cursor-pointer hover:border-emerald-300 transition-colors"
                 >
-                    <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center">
-                        <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                    <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div>
-                        <div className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Accepted (Incidents)</div>
-                        <div className="text-3xl font-black text-slate-900">{acceptedCount}</div>
+                        <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Accepted (Incidents)</div>
+                        <div className="text-2xl font-black text-slate-900">{acceptedCount}</div>
                     </div>
                 </div>
 
                 <div 
                     onClick={() => setStatusFilter('REJECTED')}
-                    className="bg-white p-6 rounded-2xl border border-red-100 shadow-xs flex items-center gap-4 cursor-pointer hover:border-red-300 transition-colors"
+                    className="bg-white p-5 rounded-2xl border border-red-100 shadow-xs flex items-center gap-4 cursor-pointer hover:border-red-300 transition-colors"
                 >
-                    <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center">
-                        <XCircle className="w-6 h-6 text-red-600" />
+                    <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center">
+                        <XCircle className="w-5 h-5 text-red-600" />
                     </div>
                     <div>
-                        <div className="text-xs font-bold text-red-600 uppercase tracking-wider">Rejected Decisions</div>
-                        <div className="text-3xl font-black text-slate-900">{rejectedCount}</div>
+                        <div className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Rejected Decisions</div>
+                        <div className="text-2xl font-black text-slate-900">{rejectedCount}</div>
                     </div>
                 </div>
 
                 <div 
                     onClick={() => setStatusFilter('ALL')}
-                    className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4 cursor-pointer hover:border-slate-400 transition-colors"
+                    className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4 cursor-pointer hover:border-slate-400 transition-colors"
                 >
-                    <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">
-                        <Camera className="w-6 h-6 text-slate-700" />
+                    <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center">
+                        <Camera className="w-5 h-5 text-slate-700" />
                     </div>
                     <div>
-                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Candidates</div>
-                        <div className="text-3xl font-black text-slate-900">{totalCount}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Candidates</div>
+                        <div className="text-2xl font-black text-slate-900">{totalCount}</div>
                     </div>
                 </div>
             </div>
 
             {/* Filter and Search Bar */}
-            <div className="px-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-2">
                     <button 
                         onClick={() => setStatusFilter('PENDING_REVIEW')} 
@@ -264,7 +270,7 @@ export const CameraIncidentsPage: React.FC = () => {
             </div>
 
             {/* Candidates Listing */}
-            <div className="px-8">
+            <div>
                 {loading ? (
                     <div className="text-center py-24 bg-white rounded-3xl border border-slate-200 shadow-xs">
                         <Clock className="w-12 h-12 text-amber-500 animate-pulse mx-auto mb-3" />
@@ -479,76 +485,93 @@ export const CameraIncidentsPage: React.FC = () => {
                                 {/* Review Decision Box */}
                                 <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
                                     {selectedCandidate.status === 'PENDING_REVIEW' ? (
-                                        <>
-                                            <div>
-                                                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                                                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                                                    Range Officer Decision
-                                                </h4>
-                                                <p className="text-[11px] text-slate-500 leading-relaxed">
-                                                    Verify wildlife sighting authenticity. Accepting automatically creates an official Gaia Incident.
-                                                </p>
+                                        canReview ? (
+                                            <>
+                                                <div>
+                                                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                                                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                                                        Range Officer Decision
+                                                    </h4>
+                                                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                                                        Verify wildlife sighting authenticity. Accepting automatically creates an official Gaia Incident.
+                                                    </p>
+                                                </div>
+
+                                                {!isConfirmingReject ? (
+                                                    <div className="space-y-3 pt-1">
+                                                        <button
+                                                            disabled={actionLoading}
+                                                            onClick={handleAccept}
+                                                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                                                        >
+                                                            {actionLoading ? 'Creating Incident...' : (
+                                                                <>
+                                                                    <Check className="w-4 h-4" />
+                                                                    ACCEPT & CREATE INCIDENT
+                                                                </>
+                                                            )}
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsConfirmingReject(true)}
+                                                            className="w-full py-2.5 bg-white hover:bg-red-50 text-red-600 font-bold text-xs rounded-xl border border-red-200 transition-colors flex items-center justify-center gap-1.5"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                            Reject Candidate...
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-3 pt-2 border-t border-slate-200 animate-in fade-in duration-150">
+                                                        <div>
+                                                            <label className="text-[10px] font-black uppercase text-red-700 block mb-1">
+                                                                Rejection Remarks (Mandatory)
+                                                            </label>
+                                                            <textarea
+                                                                rows={3}
+                                                                placeholder="State why this observation is rejected (e.g., False positive, stray livestock, harmless sighting)..."
+                                                                value={rejectReason}
+                                                                onChange={(e) => setRejectReason(e.target.value)}
+                                                                className="w-full text-xs rounded-xl border border-red-300 p-2.5 focus:ring-red-500 focus:border-red-500"
+                                                            />
+                                                        </div>
+
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsConfirmingReject(false)}
+                                                                className="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                disabled={actionLoading || !rejectReason.trim()}
+                                                                onClick={handleReject}
+                                                                className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl disabled:opacity-50 shadow-sm"
+                                                            >
+                                                                {actionLoading ? 'Rejecting...' : 'Confirm Rejection'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="text-center py-4 space-y-2.5">
+                                                <Clock className="w-8 h-8 text-amber-500 mx-auto" />
+                                                <div>
+                                                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wide">
+                                                        Awaiting Officer Review
+                                                    </h4>
+                                                    <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
+                                                        This candidate observation is pending review by the authorized Range Forest Officer assigned to <strong>{selectedCandidate.station_name || 'the monitoring station'}</strong>.
+                                                    </p>
+                                                </div>
+                                                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold">
+                                                    Admins have read-only audit access to camera incident candidates.
+                                                </div>
                                             </div>
-
-                                            {!isConfirmingReject ? (
-                                                <div className="space-y-3 pt-1">
-                                                    <button
-                                                        disabled={actionLoading}
-                                                        onClick={handleAccept}
-                                                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
-                                                    >
-                                                        {actionLoading ? 'Creating Incident...' : (
-                                                            <>
-                                                                <Check className="w-4 h-4" />
-                                                                ACCEPT & CREATE INCIDENT
-                                                            </>
-                                                        )}
-                                                    </button>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsConfirmingReject(true)}
-                                                        className="w-full py-2.5 bg-white hover:bg-red-50 text-red-600 font-bold text-xs rounded-xl border border-red-200 transition-colors flex items-center justify-center gap-1.5"
-                                                    >
-                                                        <X className="w-4 h-4" />
-                                                        Reject Candidate...
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-3 pt-2 border-t border-slate-200 animate-in fade-in duration-150">
-                                                    <div>
-                                                        <label className="text-[10px] font-black uppercase text-red-700 block mb-1">
-                                                            Rejection Remarks (Mandatory)
-                                                        </label>
-                                                        <textarea
-                                                            rows={3}
-                                                            placeholder="State why this observation is rejected (e.g., False positive, stray livestock, harmless sighting)..."
-                                                            value={rejectReason}
-                                                            onChange={(e) => setRejectReason(e.target.value)}
-                                                            className="w-full text-xs rounded-xl border border-red-300 p-2.5 focus:ring-red-500 focus:border-red-500"
-                                                        />
-                                                    </div>
-
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setIsConfirmingReject(false)}
-                                                            className="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl"
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            disabled={actionLoading || !rejectReason.trim()}
-                                                            onClick={handleReject}
-                                                            className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl disabled:opacity-50 shadow-sm"
-                                                        >
-                                                            {actionLoading ? 'Rejecting...' : 'Confirm Rejection'}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </>
+                                        )
                                     ) : selectedCandidate.status === 'ACCEPTED' ? (
                                         <div className="text-center py-2 space-y-3">
                                             <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />

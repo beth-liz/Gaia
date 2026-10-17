@@ -3,9 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/services/api";
 import { inventoryService } from "@/services/inventoryService";
 import { PageHeader } from "@/components/common/PageHeader";
-import { IncidentActivityTimeline } from "@/components/incidents/IncidentActivityTimeline";
 import { AIAssessmentCard } from "@/components/incidents/AIAssessmentCard";
-import type { Incident, IncidentActivity, FieldOperation } from "@/types";
+import type { Incident, FieldOperation } from "@/types";
 import {
   CheckCircle2,
   Radio,
@@ -55,7 +54,6 @@ export const GuardMissionExecutionPage: React.FC = () => {
 
   const [incident, setIncident] = useState<Incident | null>(null);
   const [fieldOp, setFieldOp] = useState<FieldOperation | null>(null);
-  const [activities, setActivities] = useState<IncidentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -137,15 +135,13 @@ export const GuardMissionExecutionPage: React.FC = () => {
     if (!incidentId) return;
     try {
       setLoading(true);
-      const [incData, opData, actData, stStock] = await Promise.all([
+      const [incData, opData, stStock] = await Promise.all([
         api.getIncidentById(incidentId),
         api.getFieldOp(incidentId),
-        api.getIncidentActivities(incidentId),
         inventoryService.getMyStationInventory()
       ]);
       setIncident(incData);
       setFieldOp(opData);
-      setActivities(actData);
       setStationInventory(stStock);
 
       // Pre-fill defaults
@@ -1342,10 +1338,6 @@ export const GuardMissionExecutionPage: React.FC = () => {
 
       {/* BOTTOM SECTION 1: FIELD EVIDENCE GALLERY & AI */}
       <AIAssessmentCard incident={incident} onUpdate={loadMissionData} />
-
-
-      {/* BOTTOM SECTION 2: COMPLETE AUDIT TIMELINE */}
-      <IncidentActivityTimeline activities={activities} />
 
       {/* REINFORCEMENT REQUEST MODAL */}
       {showReinforcementModal && (

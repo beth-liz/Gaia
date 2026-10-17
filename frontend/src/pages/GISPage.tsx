@@ -1,20 +1,38 @@
 import { useState, useEffect } from "react"
+import { useSearchParams } from "react-router-dom"
 import GISMapComponent, { type GISFeature } from "@/components/gis/GISMapComponent"
 import { Badge } from "@/components/ui/badge"
-import { Search, Map, AlertTriangle, CheckCircle, Activity, MapPin } from "lucide-react"
+import { Search, Map, AlertTriangle, CheckCircle, Activity, MapPin, RefreshCw } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts"
+import { api } from "@/services/api"
 
 export default function GISPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [features, setFeatures] = useState<GISFeature[]>([])
   const [analytics, setAnalytics] = useState({ total_incidents: 0, active_incidents: 0, resolved_incidents: 0, stations_count: 0 })
   const [selectedFeature, setSelectedFeature] = useState<GISFeature | null>(null)
+  
+  // View mode synced with URL search params: ?view=map or ?view=heatmap
+  const urlView = searchParams.get("view")
+  const mode: "map" | "heatmap" = urlView === "heatmap" ? "heatmap" : "map"
+
+  const setMode = (newMode: "map" | "heatmap") => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (newMode === "heatmap") {
+        next.set("view", "heatmap")
+      } else {
+        next.delete("view")
+      }
+      return next
+    })
+  }
   
   // Filters & State
   const [searchQuery, setSearchQuery] = useState("")
   const [days, setDays] = useState<number | "">("")
   const [species, setSpecies] = useState("")
   const [status, setStatus] = useState("")
-  const [mode, setMode] = useState<"map" | "heatmap">("map")
   const [isLoading, setIsLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -22,21 +40,11 @@ export default function GISPage() {
     setIsLoading(true)
     setErrorMsg(null)
     try {
-      const params = new URLSearchParams()
-      if (days) params.append("days", days.toString())
-      if (species) params.append("species", species)
-      if (status) params.append("status", status)
-
-      const res = await fetch(`http://127.0.0.1:8000/api/gis/data?${params.toString()}`, {
-        headers: {
-          "Authorization": `Bearer ${localStorage.getItem("gaia_token")}`
-        }
+      const data = await api.getGISData({
+        days,
+        species: species || undefined,
+        status: status || undefined
       })
-      if (res.status === 401 || res.status === 403) {
-        throw new Error("Authentication failed. Please log in again.")
-      }
-      if (!res.ok) throw new Error("Unable to load incident locations. Please try again.")
-      const data = await res.json()
       setFeatures(data.features || [])
       setAnalytics(data.analytics || { total_incidents: 0, active_incidents: 0, resolved_incidents: 0, stations_count: 0 })
       
@@ -57,8 +65,8 @@ export default function GISPage() {
   }, [days, species, status])
 
   const filteredFeatures = features.filter(f => 
-    f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    f.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (f.name && f.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (f.id && f.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
     (f.species && f.species.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
@@ -71,52 +79,63 @@ export default function GISPage() {
   const chartData = Object.keys(speciesCounts).map(k => ({ name: k, value: speciesCounts[k] })).sort((a,b) => b.value - a.value).slice(0, 5)
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto pb-10">
+    <div className="space-y-6">
       
-      {/* ArcGIS Style Operational Header */}
-      <div className="bg-white border border-[#dcd8cd] rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-center space-x-3">
-          <div className="p-2.5 bg-emerald-900 text-white rounded-lg shadow-sm">
-            <Map className="h-6 w-6" />
+      {/* Standard Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-emerald-950/10 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-2xl bg-emerald-900 text-amber-300 shadow-md shrink-0">
+            <Map className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-base font-black uppercase tracking-wider text-emerald-950">
-              Gaia GIS Intelligence
-            </h2>
-            <p className="text-xs font-semibold text-emerald-800/70">
-              Real-time spatial view of wildlife incidents and conflict patterns
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-extrabold text-emerald-950 tracking-tight">Gaia GIS Intelligence</h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-[10px] font-bold">
+                {analytics.total_incidents} Incidents
+              </span>
+            </div>
+            <p className="text-xs text-emerald-800/70 font-medium mt-0.5">
+              Real-time spatial view of wildlife incidents and conflict patterns across surveillance ranges.
             </p>
           </div>
         </div>
 
-        {/* Spatial Search & Mode Switch */}
+        {/* Spatial Search, Mode Switch & Refresh */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex bg-gray-100/80 p-1.5 rounded-xl border border-gray-200/50 shadow-inner">
+          <div className="flex bg-slate-100 p-1.5 rounded-xl border border-emerald-950/10 shadow-inner">
             <button 
               onClick={() => setMode("map")}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-black rounded-lg transition-all ${mode === "map" ? "bg-white text-emerald-700 shadow shadow-emerald-100 border border-emerald-100" : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"}`}
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-black rounded-lg transition-all ${mode === "map" ? "bg-white text-emerald-900 shadow-sm border border-emerald-950/10" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"}`}
             >
-              <MapPin className="w-3.5 h-3.5" />
-              GIS Incident Map
+              <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+              GIS Mapping
             </button>
             <button 
               onClick={() => setMode("heatmap")}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-black rounded-lg transition-all ${mode === "heatmap" ? "bg-gradient-to-r from-orange-500 to-rose-500 text-white shadow-md shadow-orange-200" : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"}`}
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-black rounded-lg transition-all ${mode === "heatmap" ? "bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-md shadow-orange-200" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"}`}
             >
               <Activity className="w-3.5 h-3.5" />
-              Conflict Heat Map
+              Conflict Heatmap
             </button>
           </div>
-          <div className="relative w-56">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+          <div className="relative w-52">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input 
               type="text" 
               placeholder="Search ID, species..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-xs font-bold text-gray-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+              className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all shadow-xs"
             />
           </div>
+          <button
+            onClick={fetchData}
+            className="px-3.5 py-2 rounded-xl bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-950/20 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors"
+            title="Refresh spatial telemetry"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Refresh</span>
+          </button>
         </div>
       </div>
 
@@ -248,11 +267,11 @@ export default function GISPage() {
                 <div className="bg-gray-50 p-3 border border-gray-100 rounded-lg text-xs space-y-1.5 font-mono">
                   <div className="flex justify-between text-gray-500">
                     <span className="font-bold">Latitude:</span>
-                    <span className="font-bold text-gray-900">{selectedFeature.lat.toFixed(5)}A N</span>
+                    <span className="font-bold text-gray-900">{selectedFeature.lat.toFixed(5)}° N</span>
                   </div>
                   <div className="flex justify-between text-gray-500">
                     <span className="font-bold">Longitude:</span>
-                    <span className="font-bold text-gray-900">{selectedFeature.lng.toFixed(5)}A E</span>
+                    <span className="font-bold text-gray-900">{selectedFeature.lng.toFixed(5)}° E</span>
                   </div>
                   {selectedFeature.timestamp && (
                     <div className="flex justify-between text-gray-500">

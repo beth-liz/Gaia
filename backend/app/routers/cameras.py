@@ -67,6 +67,8 @@ def get_all_cameras(
             "created_at": c.created_at,
             "updated_at": c.updated_at
         })
+    return result
+
 @router.post("/", status_code=201)
 def create_camera(
     data: CameraCreate,

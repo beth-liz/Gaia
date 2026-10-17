@@ -110,6 +110,7 @@ ai/evaluation/elephant/
 
 *.db
 *.sqlite3
+*.dump
 *.png
 *.jpg
 *.jpeg
