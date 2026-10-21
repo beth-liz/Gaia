@@ -14,3 +14,9 @@ __pycache__/
 # OS Files
 .DS_Store
 Thumbs.db
+
+gmail_oauth_credentials.json
+token.json
+gmail_oauth_credentials.json.json
+*.bak
+*.bak-*

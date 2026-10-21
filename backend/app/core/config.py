@@ -35,13 +35,15 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int
 
     GOOGLE_CLIENT_ID: str = "YOUR_GOOGLE_CLIENT_ID_HERE"
-
+    # Brevo API Configuration
+    BREVO_API_KEY: str = ""
     # SMTP Configuration for Password Reset and Notifications
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = "noreply@gaia.org"
+    GMAIL_API_SENDER_EMAIL: str = ""
     SMTP_FROM_NAME: str = "Gaia Wildlife Operations"
     SMTP_TLS: bool = True
     PASSWORD_RESET_EXPIRE_MINUTES: int = 10
