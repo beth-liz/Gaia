@@ -1,13 +1,13 @@
-
 import base64
+import json
 import logging
+import os
 from email.message import EmailMessage
 from html import escape
 from pathlib import Path
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -22,7 +22,7 @@ GMAIL_SEND_SCOPE = ["https://www.googleapis.com/auth/gmail.send"]
 
 
 def _get_gmail_service():
-    """Create an authorized Gmail API client using the saved OAuth token."""
+    """Create an authorized Gmail API client locally or on Render."""
     creds = None
 
     if TOKEN_FILE.exists():
@@ -30,16 +30,33 @@ def _get_gmail_service():
             str(TOKEN_FILE),
             GMAIL_SEND_SCOPE,
         )
+    else:
+        token_json = os.getenv("GMAIL_TOKEN_JSON", "").strip()
+        if token_json:
+            token_info = json.loads(token_json)
+            creds = Credentials.from_authorized_user_info(
+                token_info,
+                GMAIL_SEND_SCOPE,
+            )
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+    if not creds:
+        raise RuntimeError(
+            "Gmail OAuth token is missing. Configure token.json "
+            "locally or GMAIL_TOKEN_JSON in the deployment environment."
+        )
+
+    if not creds.valid:
+        if creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            TOKEN_FILE.write_text(creds.to_json(), encoding="utf-8")
+            if TOKEN_FILE.exists():
+                TOKEN_FILE.write_text(
+                    creds.to_json(),
+                    encoding="utf-8",
+                )
         else:
-            # Never start an interactive login from a running API request.
             raise RuntimeError(
-                "Gmail OAuth token is missing or expired. "
-                "Reauthorize Gmail locally before starting Gaia."
+                "Gmail OAuth credentials are invalid or expired. "
+                "Reauthorize Gmail before sending email."
             )
 
     return build(
@@ -48,6 +65,7 @@ def _get_gmail_service():
         credentials=creds,
         cache_discovery=False,
     )
+
 
 
 def send_password_reset_email(
