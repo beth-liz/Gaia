@@ -8,6 +8,7 @@ from app.models.designation import Designation
 from app.models.village import Village
 from app.models.user import User
 from app.models.animal_species import AnimalSpecies
+from app.models.animal_detection import AnimalDetection
 from app.models.incident import Incident
 from app.models.incident_assignment import IncidentAssignment
 from app.models.notification import Notification
