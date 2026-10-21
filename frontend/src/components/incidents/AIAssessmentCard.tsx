@@ -11,6 +11,11 @@ interface Props {
   onUpdate?: (silent?: boolean) => void;
 }
 
+// Module-level guard: track incident IDs that have already completed an automatic analysis attempt
+// in the current browser session. This survives component remounts and prevents infinite retry loops
+// when the server returns 200 with no detections (e.g. image path not found on server disk).
+const autoAnalyzedIncidents = new Set<number>();
+
 export const AIAssessmentCard: React.FC<Props> = ({ incident, onUpdate }) => {
   const { user } = useAuth();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -77,38 +82,56 @@ export const AIAssessmentCard: React.FC<Props> = ({ incident, onUpdate }) => {
 
   const hasResults = pairedResults.some(p => p.detection !== null);
 
-  // Auto-trigger analysis once if incident has images, status is Pending, and no AI records exist yet
-  const triggerAnalysis = async () => {
+  // Keep a stable ref to onUpdate to prevent recreating interval timers on every parent render
+  const onUpdateRef = useRef(onUpdate);
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+
+  // Trigger analysis. When isManual is true, allows explicit user-driven re-analysis.
+  const triggerAnalysis = async (isManual = false) => {
     if (isAnalyzing || !incident.id) return;
+    if (!isManual && autoAnalyzedIncidents.has(incident.id)) return;
     setIsAnalyzing(true);
     setAnalysisError(null);
+    autoAnalyzedIncidents.add(incident.id);
     try {
       await api.analyzeIncidentEvidence(incident.id);
-      if (onUpdate) onUpdate(false);
+      // Silent refresh preserves the workspace view without triggering full-page loading replacement
+      if (onUpdateRef.current) onUpdateRef.current(true);
     } catch (err: any) {
       console.error("AI Evidence Analysis error:", err);
       setAnalysisError(err.message || "Failed to complete AI analysis.");
-      if (onUpdate) onUpdate(true);
+      if (onUpdateRef.current) onUpdateRef.current(true);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
   useEffect(() => {
-    if (isPending && !hasResults && !triggeredRef.current && uniqueOriginalImages.length > 0) {
+    // Only auto-trigger if this incident has not already been auto-analyzed in this session
+    if (
+      isPending &&
+      !hasResults &&
+      !triggeredRef.current &&
+      !autoAnalyzedIncidents.has(incident.id) &&
+      uniqueOriginalImages.length > 0
+    ) {
       triggeredRef.current = true;
-      triggerAnalysis();
+      triggerAnalysis(false);
     }
   }, [incident.id, isPending, hasResults, uniqueOriginalImages.length]);
 
   useEffect(() => {
-    if (isPending && !isAnalyzing && onUpdate) {
+    if (isPending && !isAnalyzing) {
       const interval = setInterval(() => {
-        onUpdate(true);
+        if (onUpdateRef.current) {
+          onUpdateRef.current(true);
+        }
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, [isPending, isAnalyzing, onUpdate]);
+  }, [isPending, isAnalyzing]);
 
   if (isVillager && isPending) {
     return null; // completely hidden from villager during processing
@@ -260,7 +283,7 @@ export const AIAssessmentCard: React.FC<Props> = ({ incident, onUpdate }) => {
                             <p className="text-xs text-red-600 font-medium">{analysisError}</p>
                         )}
                         <button
-                            onClick={triggerAnalysis}
+                            onClick={() => triggerAnalysis(true)}
                             disabled={isAnalyzing}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
                         >
@@ -276,7 +299,7 @@ export const AIAssessmentCard: React.FC<Props> = ({ incident, onUpdate }) => {
                             <p className="text-xs text-red-600 max-w-sm mx-auto">{analysisError}</p>
                         )}
                         <button
-                            onClick={triggerAnalysis}
+                            onClick={() => triggerAnalysis(true)}
                             disabled={isAnalyzing}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
                         >

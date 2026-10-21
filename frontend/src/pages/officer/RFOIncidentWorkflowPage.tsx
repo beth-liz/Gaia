@@ -614,7 +614,7 @@ export const RFOIncidentWorkflowPage: React.FC = () => {
           </SectionCard>
 
           {/* ── EVIDENCE & AI ANALYSIS ── */}
-          <AIAssessmentCard incident={incident} onUpdate={fetchAll} />
+          <AIAssessmentCard incident={incident} onUpdate={(silent = true) => fetchAll(silent)} />
 
           {/* ── STAGE-SPECIFIC ACTION PANEL ── */}
 
