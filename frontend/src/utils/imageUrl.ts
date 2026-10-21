@@ -25,6 +25,15 @@ export function getImageUrl(path: string | null | undefined): string {
   // Strip trailing slashes from base URL
   const base = API_BASE.replace(/\/+$/, "");
 
+  // If path is an API endpoint (e.g. /api/incidents/images/...)
+  if (trimmed.startsWith("/api/") || trimmed.startsWith("api/")) {
+    const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+    const token = typeof window !== "undefined" ? localStorage.getItem("gaia_token") : "";
+    const separator = cleanPath.includes("?") ? "&" : "?";
+    const tokenParam = token ? `${separator}token=${encodeURIComponent(token)}` : "";
+    return `${base}${cleanPath}${tokenParam}`;
+  }
+
   // If path is a test image identifier (e.g., 'deer/deer_1.jpg', 'blank.jpg') and not a static upload
   if (!trimmed.startsWith("/static/") && !trimmed.startsWith("static/")) {
     const token = typeof window !== "undefined" ? localStorage.getItem("gaia_token") : "";

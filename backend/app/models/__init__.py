@@ -27,5 +27,6 @@ from app.models.camera_capture import CameraCapture
 from app.models.camera_capture_result import CameraCaptureAIResult
 from app.models.camera_detection_event import CameraDetectionEvent
 from app.models.password_reset_code import PasswordResetCode
+from app.models.incident_image import IncidentImage
 
 Base.metadata.create_all(bind=engine)

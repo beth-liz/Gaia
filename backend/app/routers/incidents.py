@@ -1,7 +1,9 @@
 import os
+import re
 import json
 import uuid
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, UploadFile, File, Query
+import tempfile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, UploadFile, File, Query, Response, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
@@ -9,6 +11,7 @@ from datetime import datetime, timedelta
 
 from app.database.deps import get_db
 from app.models.incident import Incident
+from app.models.incident_image import IncidentImage
 from app.models.animal_species import AnimalSpecies
 from app.models.incident_assignment import IncidentAssignment
 from app.models.incident_activity import IncidentActivity
@@ -115,17 +118,50 @@ def _process_ai_for_incident_bg(incident_id: int, reporter_id: int):
 
         detections_added = []
         for img_url in pending_images:
-            local_path = img_url
-            if img_url.startswith('/static/'):
-                candidate1 = os.path.join(base_dir, 'app', *img_url.strip('/').split('/'))
-                candidate2 = os.path.join(base_dir, *img_url.strip('/').split('/'))
-                local_path = candidate1 if os.path.exists(candidate1) else candidate2
-            elif not os.path.isabs(img_url):
-                candidate1 = os.path.join(base_dir, 'app', img_url)
-                candidate2 = os.path.join(base_dir, img_url)
-                local_path = candidate1 if os.path.exists(candidate1) else candidate2
+            local_path = None
+            temp_file_to_clean = None
 
-            if not os.path.exists(local_path): continue
+            # 1. Check if database-backed incident image
+            img_id = _extract_image_id(img_url)
+            if img_id:
+                img_record = db.query(IncidentImage).filter(IncidentImage.id == img_id).first()
+                if img_record and img_record.image_bytes:
+                    ext = os.path.splitext(img_record.filename)[1] or ".jpg"
+                    fd, temp_file_to_clean = tempfile.mkstemp(prefix=f"gaia_ai_{img_id}_", suffix=ext)
+                    with os.fdopen(fd, "wb") as f:
+                        f.write(img_record.image_bytes)
+                    local_path = temp_file_to_clean
+
+            # 2. Check local static directory for legacy or fallback images
+            if not local_path:
+                if img_url.startswith('/static/'):
+                    candidate1 = os.path.join(base_dir, 'app', *img_url.strip('/').split('/'))
+                    candidate2 = os.path.join(base_dir, *img_url.strip('/').split('/'))
+                    if os.path.exists(candidate1): local_path = candidate1
+                    elif os.path.exists(candidate2): local_path = candidate2
+                elif not os.path.isabs(img_url):
+                    candidate1 = os.path.join(base_dir, 'app', img_url)
+                    candidate2 = os.path.join(base_dir, img_url)
+                    if os.path.exists(candidate1): local_path = candidate1
+                    elif os.path.exists(candidate2): local_path = candidate2
+                elif os.path.isabs(img_url) and os.path.exists(img_url):
+                    local_path = img_url
+
+            if not local_path or not os.path.exists(local_path):
+                # Mark as missing/failed detection rather than hanging in Pending indefinitely
+                db_detection = AnimalDetection(
+                    animal_name='Unknown',
+                    normalized_species='Unknown',
+                    confidence=-1.0,
+                    count=0,
+                    image_path=img_url,
+                    station_id=inc.station_id,
+                    incident_id=inc.id,
+                    model_info='Image file not found or inaccessible for inference'
+                )
+                db.add(db_detection)
+                detections_added.append(db_detection)
+                continue
 
             try:
                 from app.services.ai_service import analyze_image
@@ -168,6 +204,12 @@ def _process_ai_for_incident_bg(incident_id: int, reporter_id: int):
                 )
                 db.add(db_detection)
                 detections_added.append(db_detection)
+            finally:
+                if temp_file_to_clean and os.path.exists(temp_file_to_clean):
+                    try:
+                        os.remove(temp_file_to_clean)
+                    except Exception:
+                        pass
 
         if not detections_added: return
         db.commit()
@@ -532,33 +574,221 @@ def get_rfo_assignments(
     return out
 
 
+def _extract_image_id(url_or_ref: str) -> Optional[str]:
+    """Extract UUID / image ID from an image URL or reference string."""
+    if not url_or_ref or not isinstance(url_or_ref, str):
+        return None
+    # Matches /api/incidents/images/{id} or raw UUID
+    match = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", url_or_ref)
+    if match:
+        return match.group(0)
+    return None
+
+
+def cleanup_orphan_incident_images(db: Session, max_age_hours: int = 24) -> int:
+    """
+    Safely purges unassociated incident images older than max_age_hours (default 24h).
+    Never deletes:
+    - Images attached to an incident (incident_id IS NOT NULL).
+    - Recently uploaded images (created within the last 24h).
+    Returns the number of deleted records.
+    """
+    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+    orphans = db.query(IncidentImage).filter(
+        IncidentImage.incident_id.is_(None),
+        IncidentImage.created_at < cutoff
+    ).all()
+
+    count = len(orphans)
+    for img in orphans:
+        db.delete(img)
+    if count > 0:
+        db.commit()
+    return count
+
+
+@router.post("/images/cleanup-orphans")
+def trigger_orphan_image_cleanup(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Administrative maintenance endpoint to clean up orphaned images
+    older than 24 hours that were never attached to any incident.
+    """
+    if current_user.role != "Admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can trigger maintenance cleanup."
+        )
+    deleted_count = cleanup_orphan_incident_images(db, max_age_hours=24)
+    return {
+        "status": "success",
+        "deleted_count": deleted_count,
+        "message": f"Cleaned up {deleted_count} orphaned incident image(s) older than 24 hours."
+    }
+
+
+def _associate_and_validate_images(
+    images: List[str],
+    incident: Incident,
+    current_user: Optional[User],
+    db: Session
+):
+    """
+    Associates uploaded database-backed images with the newly created incident.
+    Validates that:
+    1. If the incident was reported by an authenticated user, image must belong to the user
+       or already be associated with this incident.
+    2. Image cannot already belong to another user's incident.
+    """
+    if not images:
+        return
+
+    for img_ref in images:
+        img_id = _extract_image_id(img_ref)
+        if not img_id:
+            continue
+        stored_img = db.query(IncidentImage).filter(IncidentImage.id == img_id).first()
+        if not stored_img:
+            continue
+
+        # If already linked to another incident
+        if stored_img.incident_id is not None and stored_img.incident_id != incident.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Image {img_id} is already linked to another incident."
+            )
+
+        # Authorization check: If image was uploaded by a user, ensure current_user matches or is Admin
+        if stored_img.uploader_id is not None:
+            if not current_user:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Unauthorized to attach image {img_id} to a public report."
+                )
+            if current_user.role != "Admin" and stored_img.uploader_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Unauthorized to attach image {img_id} uploaded by another user."
+                )
+
+        # Associate with this incident
+        stored_img.incident_id = incident.id
+
+    db.commit()
+
+
 @router.post("/upload-images", response_model=List[str])
 async def upload_incident_images(
     files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     if len(files) > 5:
         raise HTTPException(status_code=400, detail="Maximum 5 image uploads allowed per incident.")
 
-    upload_dir = os.path.join("app", "static", "uploads", "incidents")
-    os.makedirs(upload_dir, exist_ok=True)
+    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"}
+    max_file_size = 10 * 1024 * 1024  # 10MB per image
 
     saved_urls = []
-    user_prefix = current_user.id if current_user else "public"
     for file in files:
-        if not file.content_type.startswith("image/"):
-            continue
-        ext = os.path.splitext(file.filename)[1] or ".jpg"
-        filename = f"inc_{user_prefix}_{uuid.uuid4().hex[:8]}{ext}"
-        file_path = os.path.join(upload_dir, filename)
+        content_type = (file.content_type or "").lower()
+        if not content_type.startswith("image/") or content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type '{file.content_type}'. Only JPEG, PNG, WEBP, GIF, and BMP are supported."
+            )
 
-        with open(file_path, "wb") as f:
-            contents = await file.read()
-            f.write(contents)
+        contents = await file.read()
+        if len(contents) > max_file_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{file.filename}' exceeds maximum allowed size of 10MB."
+            )
 
-        saved_urls.append(f"/static/uploads/incidents/{filename}")
+        if len(contents) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{file.filename}' is empty."
+            )
 
+        safe_filename = os.path.basename(file.filename or "incident.jpg")
+        img_record = IncidentImage(
+            id=str(uuid.uuid4()),
+            filename=safe_filename,
+            content_type=content_type,
+            image_bytes=contents,
+            uploader_id=current_user.id if current_user else None,
+            incident_id=None
+        )
+        db.add(img_record)
+        db.flush()
+
+        saved_urls.append(f"/api/incidents/images/{img_record.id}")
+
+    db.commit()
     return saved_urls
+
+
+@router.get("/images/{image_id}")
+def get_incident_image(
+    image_id: str,
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve stored incident image bytes from PostgreSQL.
+    Access is granted to:
+    - Any authenticated user (Admin, RFO, Officer, Forest Guard, Villager)
+    - If the image was uploaded via a public incident or unattached, allow viewing
+    """
+    stored_img = db.query(IncidentImage).filter(IncidentImage.id == image_id).first()
+    if not stored_img:
+        raise HTTPException(status_code=404, detail="Incident image not found.")
+
+    # Authenticate via Header or Query param
+    auth_token = None
+    if authorization and authorization.startswith("Bearer "):
+        auth_token = authorization.split(" ")[1]
+    elif token:
+        auth_token = token
+
+    user = None
+    if auth_token:
+        from app.core.security import verify_token
+        payload = verify_token(auth_token)
+        if payload:
+            email = payload.get("sub") or payload.get("email")
+            if email:
+                user = db.query(User).filter(User.email == email, User.is_active == True).first()
+
+    # If the image was uploaded by an authenticated user or is attached to an incident with a reporter,
+    # require authentication.
+    if stored_img.uploader_id is not None or (stored_img.incident and stored_img.incident.reported_by is not None):
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required to view this incident image."
+            )
+        # Role/ownership check:
+        # Villager can only view their own incident images unless they are public
+        if user.role == "Villager":
+            if stored_img.uploader_id != user.id and (stored_img.incident and stored_img.incident.reported_by != user.id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to view this incident image."
+                )
+
+    return Response(
+        content=stored_img.image_bytes,
+        media_type=stored_img.content_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{stored_img.filename}"',
+            "Cache-Control": "private, max-age=86400"
+        }
+    )
 
 
 @router.post("/guard", response_model=IncidentOut, status_code=status.HTTP_201_CREATED)
@@ -632,6 +862,10 @@ def create_guard_incident(
     db.add(inc)
     db.commit()
     db.refresh(inc)
+
+    # Associate uploaded database-backed images with the newly created incident
+    if data.images:
+        _associate_and_validate_images(data.images, inc, current_user, db)
 
     log_activity(db, inc.id, current_user.id, "Reported", f"Forest Guard logged incident report [{ref_id}].")
 
@@ -728,6 +962,10 @@ def create_incident(
     db.add(inc)
     db.commit()
     db.refresh(inc)
+
+    # Associate uploaded database-backed images with the newly created incident
+    if data.images:
+        _associate_and_validate_images(data.images, inc, current_user, db)
 
     log_activity(db, inc.id, current_user.id, "Reported", f"Villager/Reporter logged incident report [{ref_id}].")
     background_tasks.add_task(_process_ai_for_incident_bg, inc.id, current_user.id)
@@ -827,6 +1065,10 @@ def create_public_incident(
     db.add(inc)
     db.commit()
     db.refresh(inc)
+
+    # Associate uploaded database-backed images with the newly created public incident
+    if data.images:
+        _associate_and_validate_images(data.images, inc, None, db)
 
     log_activity(db, inc.id, None, "Reported", f"Public Visitor logged incident report [{ref_id}].")
     background_tasks.add_task(_process_ai_for_incident_bg, inc.id, None)
@@ -1133,17 +1375,49 @@ def analyze_incident_evidence(
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
         detections_added = []
         for img_url in unprocessed_images:
-            local_path = img_url
-            if img_url.startswith("/static/"):
-                candidate1 = os.path.join(base_dir, "app", *img_url.strip("/").split("/"))
-                candidate2 = os.path.join(base_dir, *img_url.strip("/").split("/"))
-                local_path = candidate1 if os.path.exists(candidate1) else candidate2
-            elif not os.path.isabs(img_url):
-                candidate1 = os.path.join(base_dir, "app", img_url)
-                candidate2 = os.path.join(base_dir, img_url)
-                local_path = candidate1 if os.path.exists(candidate1) else candidate2
+            local_path = None
+            temp_file_to_clean = None
 
-            if not os.path.exists(local_path):
+            # 1. Check if database-backed incident image
+            img_id = _extract_image_id(img_url)
+            if img_id:
+                img_record = db.query(IncidentImage).filter(IncidentImage.id == img_id).first()
+                if img_record and img_record.image_bytes:
+                    ext = os.path.splitext(img_record.filename)[1] or ".jpg"
+                    fd, temp_file_to_clean = tempfile.mkstemp(prefix=f"gaia_ai_{img_id}_", suffix=ext)
+                    with os.fdopen(fd, "wb") as f:
+                        f.write(img_record.image_bytes)
+                    local_path = temp_file_to_clean
+
+            # 2. Check local static directory for legacy or fallback images
+            if not local_path:
+                if img_url.startswith("/static/"):
+                    candidate1 = os.path.join(base_dir, "app", *img_url.strip("/").split("/"))
+                    candidate2 = os.path.join(base_dir, *img_url.strip("/").split("/"))
+                    if os.path.exists(candidate1): local_path = candidate1
+                    elif os.path.exists(candidate2): local_path = candidate2
+                elif not os.path.isabs(img_url):
+                    candidate1 = os.path.join(base_dir, "app", img_url)
+                    candidate2 = os.path.join(base_dir, img_url)
+                    if os.path.exists(candidate1): local_path = candidate1
+                    elif os.path.exists(candidate2): local_path = candidate2
+                elif os.path.isabs(img_url) and os.path.exists(img_url):
+                    local_path = img_url
+
+            if not local_path or not os.path.exists(local_path):
+                # Mark as missing/failed detection rather than hanging in Pending indefinitely
+                db_detection = AnimalDetection(
+                    animal_name="Unknown",
+                    normalized_species="Unknown",
+                    confidence=-1.0,
+                    count=0,
+                    image_path=img_url,
+                    station_id=inc.station_id,
+                    incident_id=inc.id,
+                    model_info="Image file not found or inaccessible for inference"
+                )
+                db.add(db_detection)
+                detections_added.append(db_detection)
                 continue
 
             try:
@@ -1186,6 +1460,12 @@ def analyze_incident_evidence(
                 )
                 db.add(db_detection)
                 detections_added.append(db_detection)
+            finally:
+                if temp_file_to_clean and os.path.exists(temp_file_to_clean):
+                    try:
+                        os.remove(temp_file_to_clean)
+                    except Exception:
+                        pass
 
         if detections_added:
             db.commit()
