@@ -5,16 +5,17 @@ import { AlertCircle, Shield, BellRing, Compass } from "lucide-react";
 
 export const VillagerReportIncident: React.FC = () => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto">
       <PageHeader
         title="Report Wildlife Incident"
         subtitle="Report wildlife sightings or human-animal conflict to alert nearby villagers and Range Officers"
         icon={AlertCircle}
         badge="Field Emergency Report"
+        theme="light"
       />
 
       {/* Nature-themed introduction banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-950 via-emerald-900 to-emerald-800 text-white p-6 sm:p-8 shadow-lg border border-emerald-800/40">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-950/90 via-emerald-900/85 to-emerald-800/80 text-white p-6 sm:p-8 shadow-lg border border-emerald-800/40 backdrop-blur-md">
         <img
           src="/images/nature2.jpg"
           alt="Wildlife Conservation Area"
@@ -54,4 +55,3 @@ export const VillagerReportIncident: React.FC = () => {
 };
 
 export default VillagerReportIncident;
-

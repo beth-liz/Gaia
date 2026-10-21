@@ -138,6 +138,7 @@ const ProfilePage: React.FC = () => {
             : "Manage your operational user profile, profile picture, and password credentials"
         }
         icon={User}
+        theme={isVillager ? "light" : "default"}
       />
 
       {successMsg && (
@@ -155,9 +156,15 @@ const ProfilePage: React.FC = () => {
       )}
 
       {/* Main Account Card */}
-      <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-8 shadow-xs">
+      <div className={`rounded-3xl p-6 sm:p-8 space-y-8 shadow-xs backdrop-blur-md transition-all ${
+        isVillager
+          ? "bg-emerald-950/45 border border-emerald-500/25 text-white"
+          : "bg-white/95 border border-emerald-950/10"
+      }`}>
         {/* Profile Header Banner */}
-        <div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-emerald-950/10">
+        <div className={`flex flex-col sm:flex-row items-center gap-6 pb-6 border-b ${
+          isVillager ? "border-emerald-500/20" : "border-emerald-950/10"
+        }`}>
           {/* Avatar representation */}
           <div className="relative shrink-0">
             {isVillager || !profileImg ? (
@@ -180,7 +187,9 @@ const ProfilePage: React.FC = () => {
           {/* User Role & Identifiers */}
           <div className="text-center sm:text-left space-y-1.5 flex-1 min-w-0">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <h3 className="text-xl font-black text-emerald-950 tracking-tight truncate">
+              <h3 className={`text-xl font-black tracking-tight truncate ${
+                isVillager ? "text-white" : "text-emerald-950"
+              }`}>
                 {fullName || user?.full_name || "User"}
               </h3>
               <span className="px-3 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-xs font-black border border-emerald-200">
@@ -191,13 +200,15 @@ const ProfilePage: React.FC = () => {
               </span>
             </div>
 
-            <p className="text-xs text-emerald-800/70 font-medium flex items-center justify-center sm:justify-start gap-1.5">
-              <Mail className="w-3.5 h-3.5 text-emerald-700" />
+            <p className={`text-xs font-medium flex items-center justify-center sm:justify-start gap-1.5 ${
+              isVillager ? "text-emerald-200/80" : "text-emerald-800/70"
+            }`}>
+              <Mail className={`w-3.5 h-3.5 ${isVillager ? "text-amber-300" : "text-emerald-700"}`} />
               <span>{user?.email || "No email available"}</span>
             </p>
 
             {isVillager && (
-              <p className="text-xs text-emerald-800/80 font-semibold pt-1">
+              <p className="text-xs text-emerald-200/90 font-semibold pt-1">
                 Verified community member registered for early conflict prevention and rapid wildlife alerts.
               </p>
             )}
@@ -229,36 +240,42 @@ const ProfilePage: React.FC = () => {
         {/* Read-Only Informational Cards: Location Information & Account Information */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Section: Location Information */}
-          <div className="p-5 rounded-2xl bg-emerald-50/50 border border-emerald-950/10 space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-wider text-emerald-900 pb-2 border-b border-emerald-950/10 flex items-center gap-1.5">
-              <MapPin className="w-4 h-4 text-emerald-700" /> Location Information
+          <div className={`p-5 rounded-2xl space-y-3 transition-all ${
+            isVillager
+              ? "bg-emerald-900/40 border border-emerald-500/25 text-white"
+              : "bg-emerald-50/50 border border-emerald-950/10 text-emerald-950"
+          }`}>
+            <h4 className={`text-xs font-black uppercase tracking-wider pb-2 border-b flex items-center gap-1.5 ${
+              isVillager ? "text-amber-300 border-emerald-500/20" : "text-emerald-900 border-emerald-950/10"
+            }`}>
+              <MapPin className={`w-4 h-4 ${isVillager ? "text-amber-300" : "text-emerald-700"}`} /> Location Information
             </h4>
 
             <dl className="space-y-2.5 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-emerald-950/5">
-                <dt className="text-emerald-800/70 font-semibold">Registered Village:</dt>
-                <dd className="font-extrabold text-emerald-950">
+              <div className={`flex justify-between items-center py-1 border-b ${isVillager ? "border-emerald-500/10" : "border-emerald-950/5"}`}>
+                <dt className={isVillager ? "text-emerald-200/80 font-semibold" : "text-emerald-800/70 font-semibold"}>Registered Village:</dt>
+                <dd className={`font-extrabold ${isVillager ? "text-white" : "text-emerald-950"}`}>
                   {user?.village_name || (user?.village_id ? `Village #${user.village_id}` : "Not provided")}
                 </dd>
               </div>
 
-              <div className="flex justify-between items-center py-1 border-b border-emerald-950/5">
-                <dt className="text-emerald-800/70 font-semibold">District:</dt>
-                <dd className="font-extrabold text-emerald-950">
+              <div className={`flex justify-between items-center py-1 border-b ${isVillager ? "border-emerald-500/10" : "border-emerald-950/5"}`}>
+                <dt className={isVillager ? "text-emerald-200/80 font-semibold" : "text-emerald-800/70 font-semibold"}>District:</dt>
+                <dd className={`font-extrabold ${isVillager ? "text-white" : "text-emerald-950"}`}>
                   {user?.district_name || "Not provided"}
                 </dd>
               </div>
 
-              <div className="flex justify-between items-center py-1 border-b border-emerald-950/5">
-                <dt className="text-emerald-800/70 font-semibold">State:</dt>
-                <dd className="font-extrabold text-emerald-950">
+              <div className={`flex justify-between items-center py-1 border-b ${isVillager ? "border-emerald-500/10" : "border-emerald-950/5"}`}>
+                <dt className={isVillager ? "text-emerald-200/80 font-semibold" : "text-emerald-800/70 font-semibold"}>State:</dt>
+                <dd className={`font-extrabold ${isVillager ? "text-white" : "text-emerald-950"}`}>
                   {user?.state_name || "Not provided"}
                 </dd>
               </div>
 
               <div className="flex justify-between items-center py-1">
-                <dt className="text-emerald-800/70 font-semibold">Nearest Station:</dt>
-                <dd className="font-extrabold text-emerald-950">
+                <dt className={isVillager ? "text-emerald-200/80 font-semibold" : "text-emerald-800/70 font-semibold"}>Nearest Station:</dt>
+                <dd className={`font-extrabold ${isVillager ? "text-white" : "text-emerald-950"}`}>
                   {user?.station_name || user?.station || "Assigned via Sector"}
                 </dd>
               </div>
@@ -266,35 +283,41 @@ const ProfilePage: React.FC = () => {
           </div>
 
           {/* Section: Account Information */}
-          <div className="p-5 rounded-2xl bg-emerald-50/50 border border-emerald-950/10 space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-wider text-emerald-900 pb-2 border-b border-emerald-950/10 flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-emerald-700" /> Account Information
+          <div className={`p-5 rounded-2xl space-y-3 transition-all ${
+            isVillager
+              ? "bg-emerald-900/40 border border-emerald-500/25 text-white"
+              : "bg-emerald-50/50 border border-emerald-950/10 text-emerald-950"
+          }`}>
+            <h4 className={`text-xs font-black uppercase tracking-wider pb-2 border-b flex items-center gap-1.5 ${
+              isVillager ? "text-amber-300 border-emerald-500/20" : "text-emerald-900 border-emerald-950/10"
+            }`}>
+              <ShieldCheck className={`w-4 h-4 ${isVillager ? "text-amber-300" : "text-emerald-700"}`} /> Account Information
             </h4>
 
             <dl className="space-y-2.5 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-emerald-950/5">
-                <dt className="text-emerald-800/70 font-semibold">User Role:</dt>
-                <dd className="font-extrabold text-emerald-950">{user?.role || "Villager"}</dd>
+              <div className={`flex justify-between items-center py-1 border-b ${isVillager ? "border-emerald-500/10" : "border-emerald-950/5"}`}>
+                <dt className={isVillager ? "text-emerald-200/80 font-semibold" : "text-emerald-800/70 font-semibold"}>User Role:</dt>
+                <dd className={`font-extrabold ${isVillager ? "text-white" : "text-emerald-950"}`}>{user?.role || "Villager"}</dd>
               </div>
 
-              <div className="flex justify-between items-center py-1 border-b border-emerald-950/5">
-                <dt className="text-emerald-800/70 font-semibold">Verification Status:</dt>
-                <dd className="font-extrabold text-emerald-950 flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+              <div className={`flex justify-between items-center py-1 border-b ${isVillager ? "border-emerald-500/10" : "border-emerald-950/5"}`}>
+                <dt className={isVillager ? "text-emerald-200/80 font-semibold" : "text-emerald-800/70 font-semibold"}>Verification Status:</dt>
+                <dd className={`font-extrabold flex items-center gap-1 ${isVillager ? "text-amber-300" : "text-emerald-950"}`}>
+                  <CheckCircle2 className={`w-3.5 h-3.5 ${isVillager ? "text-amber-300" : "text-emerald-700"}`} />
                   <span>{user?.is_verified ? "Verified User" : "Approved"}</span>
                 </dd>
               </div>
 
-              <div className="flex justify-between items-center py-1 border-b border-emerald-950/5">
-                <dt className="text-emerald-800/70 font-semibold">Account Created:</dt>
-                <dd className="font-extrabold text-emerald-950">
+              <div className={`flex justify-between items-center py-1 border-b ${isVillager ? "border-emerald-500/10" : "border-emerald-950/5"}`}>
+                <dt className={isVillager ? "text-emerald-200/80 font-semibold" : "text-emerald-800/70 font-semibold"}>Account Created:</dt>
+                <dd className={`font-extrabold ${isVillager ? "text-white" : "text-emerald-950"}`}>
                   {user?.created_at ? new Date(user.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "Not recorded"}
                 </dd>
               </div>
 
               <div className="flex justify-between items-center py-1">
-                <dt className="text-emerald-800/70 font-semibold">Operational Status:</dt>
-                <dd className="font-extrabold text-emerald-950">
+                <dt className={isVillager ? "text-emerald-200/80 font-semibold" : "text-emerald-800/70 font-semibold"}>Operational Status:</dt>
+                <dd className={`font-extrabold ${isVillager ? "text-white" : "text-emerald-950"}`}>
                   {user?.work_status || "Active Member"}
                 </dd>
               </div>
@@ -307,43 +330,57 @@ const ProfilePage: React.FC = () => {
           {/* Section 1: Personal Information (Editable) */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-emerald-950/10 pb-2">
-              <h4 className="text-xs font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
-                <User className="w-4 h-4 text-emerald-700" /> Personal Information (Editable)
+              <h4 className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                isVillager ? "text-white" : "text-emerald-800"
+              }`}>
+                <User className={`w-4 h-4 ${isVillager ? "text-amber-300" : "text-emerald-700"}`} /> Personal Information (Editable)
               </h4>
               <span className="text-[10px] text-emerald-700/70 font-semibold">Update contact info below</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
+                <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${
+                  isVillager ? "text-white" : "text-emerald-950"
+                }`}>
                   Full Name *
                 </label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <User className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${isVillager ? "text-emerald-300" : "text-emerald-700"}`} />
                   <input
                     type="text"
                     required
                     autoComplete="off"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-emerald-950/15 text-emerald-950 text-xs font-semibold focus:ring-2 focus:ring-emerald-800 focus:outline-none"
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs font-semibold transition focus:outline-none ${
+                      isVillager
+                        ? "bg-emerald-900/60 border border-emerald-500/30 text-white placeholder:text-emerald-200/50 focus:border-amber-400 focus:bg-emerald-900/80"
+                        : "bg-white border border-emerald-950/15 text-emerald-950 focus:ring-2 focus:ring-emerald-800"
+                    }`}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
+                <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${
+                  isVillager ? "text-white" : "text-emerald-950"
+                }`}>
                   Phone Number
                 </label>
                 <div className="relative">
-                  <Phone className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Phone className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${isVillager ? "text-emerald-300" : "text-emerald-700"}`} />
                   <input
                     type="tel"
                     autoComplete="off"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="E.g. 9876543210"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-emerald-950/15 text-emerald-950 text-xs font-semibold focus:ring-2 focus:ring-emerald-800 focus:outline-none"
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs font-semibold transition focus:outline-none ${
+                      isVillager
+                        ? "bg-emerald-900/60 border border-emerald-500/30 text-white placeholder:text-emerald-200/50 focus:border-amber-400 focus:bg-emerald-900/80"
+                        : "bg-white border border-emerald-950/15 text-emerald-950 focus:ring-2 focus:ring-emerald-800"
+                    }`}
                   />
                 </div>
               </div>
@@ -351,42 +388,56 @@ const ProfilePage: React.FC = () => {
           </div>
 
           {/* Section 2: Change Password Section */}
-          <div className="space-y-4 pt-4 border-t border-emerald-950/10">
-            <h4 className="text-xs font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
-              <Lock className="w-4 h-4 text-emerald-700" /> Change Password Credentials
+          <div className={`space-y-4 pt-4 border-t ${isVillager ? "border-emerald-500/20" : "border-emerald-950/10"}`}>
+            <h4 className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
+              isVillager ? "text-white" : "text-emerald-800"
+            }`}>
+              <Lock className={`w-4 h-4 ${isVillager ? "text-amber-300" : "text-emerald-700"}`} /> Change Password Credentials
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
+                <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${
+                  isVillager ? "text-white" : "text-emerald-950"
+                }`}>
                   Current Password
                 </label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Lock className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${isVillager ? "text-emerald-300" : "text-emerald-700"}`} />
                   <input
                     type="password"
                     autoComplete="current-password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-emerald-950/15 text-emerald-950 text-xs focus:ring-2 focus:ring-emerald-800 focus:outline-none"
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs transition focus:outline-none ${
+                      isVillager
+                        ? "bg-emerald-900/60 border border-emerald-500/30 text-white placeholder:text-emerald-200/50 focus:border-amber-400 focus:bg-emerald-900/80"
+                        : "bg-white border border-emerald-950/15 text-emerald-950 focus:ring-2 focus:ring-emerald-800"
+                    }`}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
+                <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${
+                  isVillager ? "text-white" : "text-emerald-950"
+                }`}>
                   New Password
                 </label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Lock className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${isVillager ? "text-emerald-300" : "text-emerald-700"}`} />
                   <input
                     type="password"
                     autoComplete="new-password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-emerald-950/15 text-emerald-950 text-xs focus:ring-2 focus:ring-emerald-800 focus:outline-none"
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs transition focus:outline-none ${
+                      isVillager
+                        ? "bg-emerald-900/60 border border-emerald-500/30 text-white placeholder:text-emerald-200/50 focus:border-amber-400 focus:bg-emerald-900/80"
+                        : "bg-white border border-emerald-950/15 text-emerald-950 focus:ring-2 focus:ring-emerald-800"
+                    }`}
                   />
                 </div>
               </div>
@@ -407,16 +458,20 @@ const ProfilePage: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60"
+              className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 ${
+                isVillager
+                  ? "bg-amber-400 hover:bg-amber-500 text-emerald-950 font-black shadow-amber-950/20"
+                  : "bg-emerald-900 hover:bg-emerald-950 text-white"
+              }`}
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                  <Loader2 className={`w-4 h-4 animate-spin ${isVillager ? "text-emerald-950" : "text-amber-300"}`} />
                   Saving Updates...
                 </>
               ) : (
                 <>
-                  <Save className="w-4 h-4 text-amber-300" />
+                  <Save className={`w-4 h-4 ${isVillager ? "text-emerald-950" : "text-amber-300"}`} />
                   Save Changes
                 </>
               )}

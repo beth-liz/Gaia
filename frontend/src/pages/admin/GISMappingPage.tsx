@@ -87,21 +87,35 @@ export default function GISMappingPage() {
     <div className="space-y-6">
       
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-emerald-950/10">
+      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b ${
+        isVillager ? "border-white/20" : "border-emerald-950/10"
+      }`}>
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-2xl bg-emerald-900 text-amber-300 shadow-sm shrink-0">
+          <div className={`p-3 rounded-2xl shadow-sm shrink-0 ${
+            isVillager
+              ? "bg-emerald-950/80 border border-emerald-500/30 text-amber-300"
+              : "bg-emerald-900 text-amber-300"
+          }`}>
             <Map className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl font-black text-emerald-950 tracking-tight">GIS Mapping</h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-[11px] font-bold">
+              <h1 className={`text-2xl font-black tracking-tight ${
+                isVillager ? "text-white drop-shadow-sm" : "text-emerald-950"
+              }`}>GIS Mapping</h1>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                isVillager
+                  ? "bg-white/20 text-white border border-white/30 backdrop-blur-sm"
+                  : "bg-emerald-100 text-emerald-900"
+              }`}>
                 {isVillager 
                   ? `${analytics.valid_incidents || 0} Community Incidents` 
                   : `${analytics.valid_incidents || 0} Incidents • ${analytics.valid_cameras || 0} Cameras • ${analytics.valid_detections || 0} Detections`}
               </span>
             </div>
-            <p className="text-xs text-emerald-800/70 font-medium mt-0.5">
+            <p className={`text-xs font-medium mt-0.5 ${
+              isVillager ? "text-emerald-100/90 drop-shadow-xs" : "text-emerald-800/70"
+            }`}>
               {isVillager
                 ? "Interactive spatial map displaying verified wildlife encounters, community incident locations, and sanctuary territory."
                 : "Real-time interactive spatial telemetry displaying official human-wildlife conflict incidents, deployed camera traps, and AI wildlife detections."}
@@ -123,26 +137,38 @@ export default function GISMappingPage() {
           <button
             onClick={fetchData}
             disabled={isLoading}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-950/20 text-xs font-bold transition shadow-xs disabled:opacity-50"
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-xs disabled:opacity-50 ${
+              isVillager
+                ? "bg-emerald-900/60 hover:bg-emerald-800/80 text-white border border-emerald-500/30 backdrop-blur-md"
+                : "bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-950/20"
+            }`}
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isVillager ? "text-amber-300" : "text-emerald-700"} ${isLoading ? "animate-spin" : ""}`} />
             <span>Refresh</span>
           </button>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 p-3.5 bg-white border border-slate-200 rounded-2xl shadow-xs">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 p-3.5 rounded-2xl shadow-xs transition-all ${
+        isVillager
+          ? "bg-emerald-950/45 border border-emerald-500/25 backdrop-blur-md"
+          : "bg-white border border-slate-200"
+      }`}>
         
         {/* Search Input */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isVillager ? "text-emerald-300" : "text-slate-400"}`} />
           <input
             type="text"
             placeholder="Search ID, camera, location..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+            className={`w-full rounded-xl pl-9 pr-3 py-2 text-xs font-bold transition focus:outline-none ${
+              isVillager
+                ? "bg-emerald-900/60 border border-emerald-500/30 text-white placeholder:text-emerald-200/60 focus:border-amber-400 focus:bg-emerald-900/80"
+                : "bg-slate-50 border border-slate-200 text-slate-900 focus:border-emerald-600 focus:bg-white"
+            }`}
           />
         </div>
 
@@ -153,7 +179,11 @@ export default function GISMappingPage() {
             placeholder="Species (e.g. Tiger, Elephant)..."
             value={speciesFilter}
             onChange={(e) => setSpeciesFilter(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+            className={`w-full rounded-xl px-3 py-2 text-xs font-bold transition focus:outline-none ${
+              isVillager
+                ? "bg-emerald-900/60 border border-emerald-500/30 text-white placeholder:text-emerald-200/60 focus:border-amber-400 focus:bg-emerald-900/80"
+                : "bg-slate-50 border border-slate-200 text-slate-800 focus:border-emerald-600 focus:bg-white"
+            }`}
           />
         </div>
 
@@ -162,13 +192,17 @@ export default function GISMappingPage() {
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-600 focus:bg-white transition cursor-pointer"
+            className={`w-full rounded-xl px-3 py-2 text-xs font-bold transition cursor-pointer focus:outline-none ${
+              isVillager
+                ? "bg-emerald-900/70 border border-emerald-500/30 text-white focus:border-amber-400"
+                : "bg-slate-50 border border-slate-200 text-slate-800 focus:border-emerald-600 focus:bg-white"
+            }`}
           >
-            <option value="all">All Features</option>
-            <option value="incident">⚠️ Incidents Only</option>
+            <option value="all" className={isVillager ? "bg-emerald-950 text-white" : ""}>All Features</option>
+            <option value="incident" className={isVillager ? "bg-emerald-950 text-white" : ""}>⚠️ Incidents Only</option>
             {!isVillager && <option value="camera">📷 Cameras Only</option>}
             {!isVillager && <option value="detection">🐾 Wildlife Detections Only</option>}
-            <option value="station">🏢 Stations Only</option>
+            <option value="station" className={isVillager ? "bg-emerald-950 text-white" : ""}>🏢 Stations Only</option>
           </select>
         </div>
 
@@ -177,14 +211,18 @@ export default function GISMappingPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-600 focus:bg-white transition cursor-pointer"
+            className={`w-full rounded-xl px-3 py-2 text-xs font-bold transition cursor-pointer focus:outline-none ${
+              isVillager
+                ? "bg-emerald-900/70 border border-emerald-500/30 text-white focus:border-amber-400"
+                : "bg-slate-50 border border-slate-200 text-slate-800 focus:border-emerald-600 focus:bg-white"
+            }`}
           >
-            <option value="">All Statuses</option>
-            <option value="Pending Review">Pending Review</option>
-            <option value="Assigned">Assigned</option>
-            <option value="Action In Progress">Action In Progress</option>
-            <option value="Verified">Verified</option>
-            <option value="Closed">Closed</option>
+            <option value="" className={isVillager ? "bg-emerald-950 text-white" : ""}>All Statuses</option>
+            <option value="Pending Review" className={isVillager ? "bg-emerald-950 text-white" : ""}>Pending Review</option>
+            <option value="Assigned" className={isVillager ? "bg-emerald-950 text-white" : ""}>Assigned</option>
+            <option value="Action In Progress" className={isVillager ? "bg-emerald-950 text-white" : ""}>Action In Progress</option>
+            <option value="Verified" className={isVillager ? "bg-emerald-950 text-white" : ""}>Verified</option>
+            <option value="Closed" className={isVillager ? "bg-emerald-950 text-white" : ""}>Closed</option>
           </select>
         </div>
 
@@ -193,13 +231,17 @@ export default function GISMappingPage() {
           <select
             value={daysFilter}
             onChange={(e) => setDaysFilter(e.target.value ? Number(e.target.value) : "")}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-600 focus:bg-white transition cursor-pointer"
+            className={`w-full rounded-xl px-3 py-2 text-xs font-bold transition cursor-pointer focus:outline-none ${
+              isVillager
+                ? "bg-emerald-900/70 border border-emerald-500/30 text-white focus:border-amber-400"
+                : "bg-slate-50 border border-slate-200 text-slate-800 focus:border-emerald-600 focus:bg-white"
+            }`}
           >
-            <option value="">All Time Records</option>
-            <option value="1">Last 24 Hours</option>
-            <option value="7">Last 7 Days</option>
-            <option value="30">Last 30 Days</option>
-            <option value="90">Last 90 Days</option>
+            <option value="" className={isVillager ? "bg-emerald-950 text-white" : ""}>All Time Records</option>
+            <option value="1" className={isVillager ? "bg-emerald-950 text-white" : ""}>Last 24 Hours</option>
+            <option value="7" className={isVillager ? "bg-emerald-950 text-white" : ""}>Last 7 Days</option>
+            <option value="30" className={isVillager ? "bg-emerald-950 text-white" : ""}>Last 30 Days</option>
+            <option value="90" className={isVillager ? "bg-emerald-950 text-white" : ""}>Last 90 Days</option>
           </select>
         </div>
 
@@ -221,23 +263,33 @@ export default function GISMappingPage() {
 
         {/* Selected Record Detail Sidebar */}
         {selectedFeature && (
-          <div className="lg:col-span-1 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+          <div className={`lg:col-span-1 rounded-2xl p-4 shadow-sm flex flex-col justify-between transition-all ${
+            isVillager
+              ? "bg-emerald-950/65 border border-emerald-500/30 text-white backdrop-blur-md"
+              : "bg-white border border-slate-200 text-slate-900"
+          }`}>
             <div className="space-y-4">
               
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className={`flex items-center justify-between pb-3 border-b ${
+                isVillager ? "border-emerald-500/20" : "border-slate-100"
+              }`}>
                 <div className="flex items-center gap-2">
                   <span className={`w-2.5 h-2.5 rounded-full ${
                     selectedFeature.type === 'incident' ? 'bg-rose-500' :
                     selectedFeature.type === 'camera' ? 'bg-emerald-600' :
                     selectedFeature.type === 'detection' ? 'bg-purple-600' : 'bg-blue-600'
                   }`}></span>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  <span className={`text-[11px] font-black uppercase tracking-wider ${
+                    isVillager ? "text-emerald-300" : "text-slate-500"
+                  }`}>
                     {selectedFeature.type} Details
                   </span>
                 </div>
                 <button
                   onClick={() => setSelectedFeature(null)}
-                  className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+                  className={`p-1 rounded-lg transition ${
+                    isVillager ? "hover:bg-emerald-900/60 text-emerald-300 hover:text-white" : "hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+                  }`}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -255,67 +307,91 @@ export default function GISMappingPage() {
               )}
 
               <div>
-                <h3 className="text-base font-black text-slate-900">{selectedFeature.name}</h3>
-                <span className="text-xs font-mono font-bold text-slate-400">{selectedFeature.id}</span>
+                <h3 className={`text-base font-black ${isVillager ? "text-white" : "text-slate-900"}`}>{selectedFeature.name}</h3>
+                <span className={`text-xs font-mono font-bold ${isVillager ? "text-emerald-300" : "text-slate-400"}`}>{selectedFeature.id}</span>
               </div>
 
               {selectedFeature.species && (
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block mb-0.5">Reported Wildlife:</span>
-                  <span className="text-sm font-extrabold">{selectedFeature.species}</span>
+                <div className={`p-2.5 rounded-xl text-xs ${
+                  isVillager
+                    ? "bg-emerald-900/70 border border-emerald-500/30 text-white"
+                    : "bg-emerald-50 border border-emerald-200 text-emerald-950"
+                }`}>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider block mb-0.5 ${
+                    isVillager ? "text-amber-300" : "text-emerald-700"
+                  }`}>Reported Wildlife:</span>
+                  <span className="text-sm font-extrabold text-white">{selectedFeature.species}</span>
                   {selectedFeature.animal_count && (
-                    <span className="ml-2 px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-900 text-[10px] font-bold">
+                    <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      isVillager ? "bg-amber-400 text-emerald-950 font-black" : "bg-emerald-200 text-emerald-900"
+                    }`}>
                       Count: {selectedFeature.animal_count}
                     </span>
                   )}
                   {selectedFeature.confidence && (
-                    <span className="block text-[11px] text-emerald-700 mt-1">
+                    <span className={`block text-[11px] mt-1 ${
+                      isVillager ? "text-emerald-200" : "text-emerald-700"
+                    }`}>
                       AI Model Confidence: {(selectedFeature.confidence * 100).toFixed(0)}%
                     </span>
                   )}
                 </div>
               )}
 
-              <div className="space-y-2 text-xs font-medium text-slate-600">
+              <div className={`space-y-2 text-xs font-medium ${
+                isVillager ? "text-white" : "text-slate-600"
+              }`}>
                 {selectedFeature.station && (
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-400">Monitoring Station:</span>
-                    <span className="font-bold text-slate-800">{selectedFeature.station}</span>
+                  <div className={`flex justify-between py-1 border-b ${
+                    isVillager ? "border-emerald-500/20" : "border-slate-100"
+                  }`}>
+                    <span className={isVillager ? "text-emerald-200/80 font-medium" : "text-slate-400"}>Monitoring Station:</span>
+                    <span className={`font-bold ${isVillager ? "text-white" : "text-slate-800"}`}>{selectedFeature.station}</span>
                   </div>
                 )}
                 {selectedFeature.village && (
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-400">Village / Sector:</span>
-                    <span className="font-bold text-slate-800">{selectedFeature.village}</span>
+                  <div className={`flex justify-between py-1 border-b ${
+                    isVillager ? "border-emerald-500/20" : "border-slate-100"
+                  }`}>
+                    <span className={isVillager ? "text-emerald-200/80 font-medium" : "text-slate-400"}>Village / Sector:</span>
+                    <span className={`font-bold ${isVillager ? "text-white" : "text-slate-800"}`}>{selectedFeature.village}</span>
                   </div>
                 )}
                 {selectedFeature.timestamp && (
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-400">Logged At:</span>
-                    <span className="font-bold text-slate-800 font-mono text-[11px]">
+                  <div className={`flex justify-between py-1 border-b ${
+                    isVillager ? "border-emerald-500/20" : "border-slate-100"
+                  }`}>
+                    <span className={isVillager ? "text-emerald-200/80 font-medium" : "text-slate-400"}>Logged At:</span>
+                    <span className={`font-bold font-mono text-[11px] ${isVillager ? "text-white" : "text-slate-800"}`}>
                       {new Date(selectedFeature.timestamp).toLocaleString()}
                     </span>
                   </div>
                 )}
                 {selectedFeature.severity && (
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-400">Conflict Severity:</span>
+                  <div className={`flex justify-between py-1 border-b ${
+                    isVillager ? "border-emerald-500/20" : "border-slate-100"
+                  }`}>
+                    <span className={isVillager ? "text-emerald-200/80 font-medium" : "text-slate-400"}>Conflict Severity:</span>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
-                      selectedFeature.severity === 'Critical' ? 'bg-rose-100 text-rose-800' :
-                      selectedFeature.severity === 'High' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                      selectedFeature.severity === 'Critical' ? 'bg-rose-500 text-white font-bold' :
+                      selectedFeature.severity === 'High' ? 'bg-amber-400 text-emerald-950 font-bold' : 'bg-emerald-500 text-white font-bold'
                     }`}>
                       {selectedFeature.severity}
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between py-1 border-b border-slate-100 font-mono text-[11px]">
-                  <span className="text-slate-400">Coordinates:</span>
-                  <span className="text-slate-700">{selectedFeature.lat.toFixed(4)}°, {selectedFeature.lng.toFixed(4)}°</span>
+                <div className={`flex justify-between py-1 border-b font-mono text-[11px] ${
+                  isVillager ? "border-emerald-500/20" : "border-slate-100"
+                }`}>
+                  <span className={isVillager ? "text-emerald-200/80 font-medium" : "text-slate-400"}>Coordinates:</span>
+                  <span className={isVillager ? "text-white font-bold" : "text-slate-700"}>{selectedFeature.lat.toFixed(4)}°, {selectedFeature.lng.toFixed(4)}°</span>
                 </div>
               </div>
 
               {selectedFeature.description && (
-                <div className="p-2.5 rounded-xl bg-slate-50 text-slate-600 text-xs italic">
+                <div className={`p-2.5 rounded-xl text-xs italic ${
+                  isVillager ? "bg-emerald-900/60 border border-emerald-500/20 text-white" : "bg-slate-50 text-slate-600"
+                }`}>
                   "{selectedFeature.description}"
                 </div>
               )}
@@ -333,9 +409,13 @@ export default function GISMappingPage() {
                       ? `/officer/incidents/${selectedFeature.db_id}`
                       : user?.role === "Forest Guard"
                       ? `/guard/incidents/${selectedFeature.db_id}`
-                      : `/villager/my-reports/${selectedFeature.db_id}`
+                      : `/villager/my-reports`
                   }
-                  className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-bold transition shadow-xs"
+                  className={`w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition shadow-xs ${
+                    isVillager
+                      ? "bg-amber-400 hover:bg-amber-300 text-emerald-950 font-black shadow-amber-950/20"
+                      : "bg-emerald-900 hover:bg-emerald-950 text-white"
+                  }`}
                 >
                   <span>{isVillager ? "View Incident Details" : "Review Incident Report"}</span>
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -348,11 +428,15 @@ export default function GISMappingPage() {
       </div>
 
       {/* Telemetry Summary & Missing Coordinates Diagnostic Bar */}
-      <div className="p-4 bg-emerald-950/[0.03] border border-emerald-950/10 rounded-2xl flex flex-wrap items-center justify-between gap-4 text-xs">
+      <div className={`p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4 text-xs transition-all ${
+        isVillager
+          ? "bg-emerald-950/45 border border-emerald-500/25 text-white backdrop-blur-md"
+          : "bg-emerald-950/[0.03] border border-emerald-950/10"
+      }`}>
         <div className="flex flex-wrap items-center gap-4">
           <div>
-            <span className="text-slate-500 font-medium">Mapped Incidents: </span>
-            <strong className="text-emerald-950">{analytics.valid_incidents || 0} / {analytics.total_incidents || 0}</strong>
+            <span className={isVillager ? "text-emerald-200/80 font-medium" : "text-slate-500 font-medium"}>Mapped Incidents: </span>
+            <strong className={isVillager ? "text-amber-300 font-black" : "text-emerald-950"}>{analytics.valid_incidents || 0} / {analytics.total_incidents || 0}</strong>
             {analytics.incidents_missing_coords > 0 && (
               <span className="ml-1 text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
                 ({analytics.incidents_missing_coords} without GPS coordinates)
@@ -379,8 +463,8 @@ export default function GISMappingPage() {
           )}
         </div>
 
-        <div className="text-[11px] text-slate-500 font-medium">
-          Default Layer: <strong className="text-emerald-900">Esri Satellite/Terrain</strong>
+        <div className={`text-[11px] font-medium ${isVillager ? "text-emerald-200/80" : "text-slate-500"}`}>
+          Default Layer: <strong className={isVillager ? "text-white" : "text-emerald-900"}>Esri Satellite/Terrain</strong>
         </div>
       </div>
 

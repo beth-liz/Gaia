@@ -77,19 +77,29 @@ export default function ConflictHeatmapPage() {
     <div className="space-y-6">
       
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-emerald-950/10">
+      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b ${
+        isVillager ? "border-white/20" : "border-emerald-950/10"
+      }`}>
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 text-white shadow-md shadow-orange-100 shrink-0">
             <Flame className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl font-black text-emerald-950 tracking-tight">Conflict Heatmap</h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-900 text-[11px] font-bold">
+              <h1 className={`text-2xl font-black tracking-tight ${
+                isVillager ? "text-white drop-shadow-sm" : "text-emerald-950"
+              }`}>Conflict Heatmap</h1>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                isVillager
+                  ? "bg-white/20 text-white border border-white/30 backdrop-blur-sm"
+                  : "bg-orange-100 text-orange-900"
+              }`}>
                 {activeHeatPointsCount} Active Geotagged Records
               </span>
             </div>
-            <p className="text-xs text-emerald-800/70 font-medium mt-0.5">
+            <p className={`text-xs font-medium mt-0.5 ${
+              isVillager ? "text-emerald-100/90 drop-shadow-xs" : "text-emerald-800/70"
+            }`}>
               Density gradient visualization depicting human-wildlife conflict clusters, high-risk encounter corridors, and camera wildlife hotspots.
             </p>
           </div>
@@ -111,16 +121,24 @@ export default function ConflictHeatmapPage() {
           <button
             onClick={fetchData}
             disabled={isLoading}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-950/20 text-xs font-bold transition shadow-xs disabled:opacity-50"
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-xs disabled:opacity-50 ${
+              isVillager
+                ? "bg-emerald-900/60 hover:bg-emerald-800/80 text-white border border-emerald-500/30 backdrop-blur-md"
+                : "bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-950/20"
+            }`}
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isVillager ? "text-amber-300" : "text-emerald-700"} ${isLoading ? "animate-spin" : ""}`} />
             <span>Refresh</span>
           </button>
         </div>
       </div>
 
       {/* Control Toolbar: Heatmap Data Mode Selector & Time Filter */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-3.5 bg-white border border-slate-200 rounded-2xl shadow-xs">
+      <div className={`grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-3.5 rounded-2xl shadow-xs transition-all ${
+        isVillager
+          ? "bg-emerald-950/45 border border-emerald-500/25 backdrop-blur-md"
+          : "bg-white border border-slate-200"
+      }`}>
         
         {/* Heatmap Data Mode */}
         {!isVillager ? (
@@ -159,7 +177,8 @@ export default function ConflictHeatmapPage() {
             </button>
           </div>
         ) : (
-          <div className="sm:col-span-2 flex items-center bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-950/10 text-xs font-bold text-emerald-900">
+          <div className="sm:col-span-2 flex items-center bg-emerald-900/60 p-2.5 rounded-xl border border-emerald-500/30 text-xs font-bold text-white">
+            <span className="text-amber-300 mr-2">●</span>
             <span>Community Wildlife Conflict Heatmap ({analytics.valid_incidents || 0} Incidents)</span>
           </div>
         )}
@@ -171,7 +190,11 @@ export default function ConflictHeatmapPage() {
             placeholder="Filter by species (e.g. Tiger, Elephant)..."
             value={speciesFilter}
             onChange={(e) => setSpeciesFilter(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+            className={`w-full rounded-xl px-3 py-2 text-xs font-bold transition focus:outline-none ${
+              isVillager
+                ? "bg-emerald-900/60 border border-emerald-500/30 text-white placeholder:text-emerald-200/60 focus:border-amber-400 focus:bg-emerald-900/80"
+                : "bg-slate-50 border border-slate-200 text-slate-800 focus:border-emerald-600 focus:bg-white"
+            }`}
           />
         </div>
 
@@ -180,13 +203,17 @@ export default function ConflictHeatmapPage() {
           <select
             value={daysFilter}
             onChange={(e) => setDaysFilter(e.target.value ? Number(e.target.value) : "")}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-600 focus:bg-white transition cursor-pointer"
+            className={`w-full rounded-xl px-3 py-2 text-xs font-bold transition cursor-pointer focus:outline-none ${
+              isVillager
+                ? "bg-emerald-900/70 border border-emerald-500/30 text-white focus:border-amber-400"
+                : "bg-slate-50 border border-slate-200 text-slate-800 focus:border-emerald-600 focus:bg-white"
+            }`}
           >
-            <option value="">Historical & Real-Time (All)</option>
-            <option value="1">Last 24 Hours</option>
-            <option value="7">Last 7 Days</option>
-            <option value="30">Last 30 Days</option>
-            <option value="90">Last 90 Days</option>
+            <option value="" className={isVillager ? "bg-emerald-950 text-white" : ""}>Historical & Real-Time (All)</option>
+            <option value="1" className={isVillager ? "bg-emerald-950 text-white" : ""}>Last 24 Hours</option>
+            <option value="7" className={isVillager ? "bg-emerald-950 text-white" : ""}>Last 7 Days</option>
+            <option value="30" className={isVillager ? "bg-emerald-950 text-white" : ""}>Last 30 Days</option>
+            <option value="90" className={isVillager ? "bg-emerald-950 text-white" : ""}>Last 90 Days</option>
           </select>
         </div>
 
@@ -203,10 +230,14 @@ export default function ConflictHeatmapPage() {
         />
 
         {/* Floating Dynamic Intensity Legend */}
-        <div className="absolute bottom-10 left-4 z-[500] bg-white/95 backdrop-blur-md p-3 rounded-2xl border border-slate-200 shadow-lg text-xs font-sans max-w-xs pointer-events-auto">
+        <div className={`absolute bottom-10 left-4 z-[500] backdrop-blur-md p-3 rounded-2xl shadow-lg text-xs font-sans max-w-xs pointer-events-auto transition-all ${
+          isVillager
+            ? "bg-emerald-950/80 border border-emerald-500/30 text-white"
+            : "bg-white/95 border border-slate-200 text-slate-800"
+        }`}>
           <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-700">Conflict Density Scale</span>
-            <span className="text-[10px] text-slate-400 font-bold">Relative Intensity</span>
+            <span className={`text-[11px] font-black uppercase tracking-wider ${isVillager ? "text-amber-300" : "text-slate-700"}`}>Conflict Density Scale</span>
+            <span className={`text-[10px] font-bold ${isVillager ? "text-emerald-200/80" : "text-slate-400"}`}>Relative Intensity</span>
           </div>
 
           {/* Color Gradient Bar */}
@@ -218,8 +249,8 @@ export default function ConflictHeatmapPage() {
             <span className="text-rose-600 font-extrabold">High (Critical Hotspot)</span>
           </div>
 
-          <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-            Derived from <strong>{activeHeatPointsCount}</strong> verified coordinate points weighted by incident severity and wildlife count frequency.
+          <p className={`text-[10px] mt-2 leading-relaxed ${isVillager ? "text-emerald-100/90" : "text-slate-500"}`}>
+            Derived from <strong className={isVillager ? "text-amber-300 font-black" : ""}>{activeHeatPointsCount}</strong> verified coordinate points weighted by incident severity and wildlife count frequency.
           </p>
         </div>
       </div>
@@ -227,13 +258,17 @@ export default function ConflictHeatmapPage() {
       {/* Heatmap Metrics & Diagnostics Panel */}
       <div className={`grid grid-cols-1 ${isVillager ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-4`}>
         
-        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+        <div className={`p-4 rounded-2xl shadow-xs transition-all ${
+          isVillager
+            ? "bg-emerald-950/45 border border-emerald-500/25 text-white backdrop-blur-md"
+            : "bg-white border border-slate-200"
+        }`}>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-slate-500">Official Incidents in Heatmap</span>
+            <span className={`text-xs font-bold ${isVillager ? "text-emerald-200/90" : "text-slate-500"}`}>Official Incidents in Heatmap</span>
             <span className="w-2 h-2 rounded-full bg-rose-500"></span>
           </div>
-          <div className="text-2xl font-black text-slate-900">{analytics.valid_incidents || 0}</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">
+          <div className={`text-2xl font-black ${isVillager ? "text-amber-300" : "text-slate-900"}`}>{analytics.valid_incidents || 0}</div>
+          <p className={`text-[11px] mt-0.5 ${isVillager ? "text-emerald-200/70" : "text-slate-400"}`}>
             {analytics.incidents_missing_coords || 0} excluded due to absent GPS coordinates
           </p>
         </div>
@@ -251,15 +286,19 @@ export default function ConflictHeatmapPage() {
           </div>
         )}
 
-        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+        <div className={`p-4 rounded-2xl shadow-xs transition-all ${
+          isVillager
+            ? "bg-emerald-950/45 border border-emerald-500/25 text-white backdrop-blur-md"
+            : "bg-white border border-slate-200"
+        }`}>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-slate-500">Spatial Telemetry Scope</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+            <span className={`text-xs font-bold ${isVillager ? "text-emerald-200/90" : "text-slate-500"}`}>Spatial Telemetry Scope</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
           </div>
-          <div className="text-lg font-black text-emerald-950 uppercase tracking-tight">
+          <div className={`text-lg font-black uppercase tracking-tight ${isVillager ? "text-white" : "text-emerald-950"}`}>
             {isVillager ? "Community Alerts" : heatmapMode}
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5">
+          <p className={`text-[11px] mt-0.5 ${isVillager ? "text-emerald-200/70" : "text-slate-400"}`}>
             Default Map: Esri Satellite/Terrain • OpenStreetMap (OSM) available
           </p>
         </div>

@@ -300,9 +300,13 @@ export const IncidentReviewPage: React.FC = () => {
       {/* Top Back Navigation */}
       <button
         onClick={() => navigate(-1)}
-        className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-gray-100 text-emerald-950 border border-emerald-950/10 font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all"
+        className={`px-3.5 py-1.5 rounded-xl font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all ${
+          user?.role === "Villager"
+            ? "bg-emerald-900/60 hover:bg-emerald-800/80 text-white border border-emerald-500/30 backdrop-blur-md"
+            : "bg-white hover:bg-gray-100 text-emerald-950 border border-emerald-950/10"
+        }`}
       >
-        <ArrowLeft className="w-4 h-4 text-emerald-700" /> Back to Incident Management
+        <ArrowLeft className={`w-4 h-4 ${user?.role === "Villager" ? "text-amber-300" : "text-emerald-700"}`} /> Back to Incident Management
       </button>
 
       {/* Header Banner */}
@@ -311,6 +315,7 @@ export const IncidentReviewPage: React.FC = () => {
         subtitle={`Station Range: ${incident.station_name || "Muthanga Range HQ"} • Head Officer: ${incident.head_officer_name || "Head RFO"}`}
         icon={AlertCircle}
         badge={incident.status}
+        theme={user?.role === "Villager" ? "light" : "default"}
       />
 
       {/* Success Banner */}
@@ -334,8 +339,8 @@ export const IncidentReviewPage: React.FC = () => {
         </div>
       )}
 
-      {/* Horizontal Lifecycle Progress Bar */}
-      <IncidentProgressTracker currentStatus={incident.status} />
+      {/* Horizontal Lifecycle Progress Bar (hidden for Villagers) */}
+      {!isVillager && <IncidentProgressTracker currentStatus={incident.status} />}
 
       {/* Camera AI Provenance Banner if generated from camera detection */}
       {incident.camera_detection_event_id && (
@@ -363,12 +368,18 @@ export const IncidentReviewPage: React.FC = () => {
       )}
 
       {/* Main Workspace Split Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* LEFT COLUMN: Incident Details Workspace & Assigned Officers (8 cols) */}
-        <div className="lg:col-span-8 space-y-6">
+      <div className={`grid grid-cols-1 gap-6 ${isVillager ? "w-full" : "lg:grid-cols-12"}`}>
+        {/* LEFT COLUMN: Incident Details Workspace & Assigned Officers (full width for Villager, 8 cols for staff) */}
+        <div className={`space-y-6 ${isVillager ? "w-full" : "lg:col-span-8"}`}>
           {/* Incident Record Summary Card */}
-          <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 space-y-4 shadow-xs">
-            <h3 className="text-xs font-black uppercase tracking-wider text-emerald-950 border-b border-emerald-950/10 pb-3">
+          <div className={`backdrop-blur-md rounded-3xl p-6 space-y-4 shadow-xs transition-all ${
+            user?.role === "Villager"
+              ? "bg-emerald-950/45 border border-emerald-500/25 text-white"
+              : "bg-white/90 border border-emerald-950/10"
+          }`}>
+            <h3 className={`text-xs font-black uppercase tracking-wider pb-3 border-b ${
+              user?.role === "Villager" ? "text-white border-emerald-500/20" : "text-emerald-950 border-emerald-950/10"
+            }`}>
               Incident Operational Parameters
             </h3>
 
@@ -377,55 +388,89 @@ export const IncidentReviewPage: React.FC = () => {
 
             {/* Metric Attributes Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div className="bg-emerald-50/60 p-3 rounded-2xl border border-emerald-950/5">
-                <span className="text-[10px] font-extrabold text-emerald-800/70 block uppercase">Animal</span>
-                <span className="font-extrabold text-emerald-950 block text-sm">{incident.animal_species_name || incident.animal}</span>
+              <div className={`p-3 rounded-2xl border ${
+                isVillager
+                  ? "bg-emerald-900/40 border-emerald-500/25 text-white"
+                  : "bg-emerald-50/60 border-emerald-950/5 text-emerald-950"
+              }`}>
+                <span className={`text-[10px] font-extrabold block uppercase ${isVillager ? "text-amber-300" : "text-emerald-800/70"}`}>Animal</span>
+                <span className={`font-extrabold block text-sm ${isVillager ? "text-white" : "text-emerald-950"}`}>{incident.animal_species_name || incident.animal}</span>
               </div>
 
-              <div className="bg-emerald-50/60 p-3 rounded-2xl border border-emerald-950/5">
-                <span className="text-[10px] font-extrabold text-emerald-800/70 block uppercase">Category</span>
-                <span className="font-extrabold text-emerald-950 block text-sm">{incident.incident_category}</span>
+              <div className={`p-3 rounded-2xl border ${
+                isVillager
+                  ? "bg-emerald-900/40 border-emerald-500/25 text-white"
+                  : "bg-emerald-50/60 border-emerald-950/5 text-emerald-950"
+              }`}>
+                <span className={`text-[10px] font-extrabold block uppercase ${isVillager ? "text-amber-300" : "text-emerald-800/70"}`}>Category</span>
+                <span className={`font-extrabold block text-sm ${isVillager ? "text-white" : "text-emerald-950"}`}>{incident.incident_category}</span>
               </div>
 
-              <div className="bg-emerald-50/60 p-3 rounded-2xl border border-emerald-950/5">
-                <span className="text-[10px] font-extrabold text-emerald-800/70 block uppercase">Severity</span>
-                <span className="font-extrabold text-amber-900 block text-sm">{incident.severity}</span>
+              <div className={`p-3 rounded-2xl border ${
+                isVillager
+                  ? "bg-emerald-900/40 border-emerald-500/25 text-white"
+                  : "bg-emerald-50/60 border-emerald-950/5 text-emerald-950"
+              }`}>
+                <span className={`text-[10px] font-extrabold block uppercase ${isVillager ? "text-amber-300" : "text-emerald-800/70"}`}>Severity</span>
+                <span className={`font-extrabold block text-sm ${
+                  isVillager ? "text-amber-300 font-black" : "text-amber-900"
+                }`}>{incident.severity}</span>
               </div>
 
-              <div className="bg-emerald-50/60 p-3 rounded-2xl border border-emerald-950/5">
-                <span className="text-[10px] font-extrabold text-emerald-800/70 block uppercase">Weather</span>
-                <span className="font-extrabold text-emerald-950 block text-sm">{incident.weather || "Sunny"}</span>
+              <div className={`p-3 rounded-2xl border ${
+                isVillager
+                  ? "bg-emerald-900/40 border-emerald-500/25 text-white"
+                  : "bg-emerald-50/60 border-emerald-950/5 text-emerald-950"
+              }`}>
+                <span className={`text-[10px] font-extrabold block uppercase ${isVillager ? "text-amber-300" : "text-emerald-800/70"}`}>Weather</span>
+                <span className={`font-extrabold block text-sm ${isVillager ? "text-white" : "text-emerald-950"}`}>{incident.weather || "Sunny"}</span>
               </div>
             </div>
 
             {/* Description */}
             <div className="text-xs space-y-1">
-              <span className="font-extrabold text-emerald-800/70 block uppercase text-[10px]">Incident Field Description</span>
-              <p className="p-3.5 rounded-2xl bg-emerald-50/40 border border-emerald-950/5 text-emerald-950 font-medium leading-relaxed">
+              <span className={`font-extrabold block uppercase text-[10px] ${
+                isVillager ? "text-amber-300" : "text-emerald-800/70"
+              }`}>Incident Field Description</span>
+              <p className={`p-3.5 rounded-2xl font-medium leading-relaxed ${
+                isVillager
+                  ? "bg-emerald-900/40 border border-emerald-500/25 text-white"
+                  : "bg-emerald-50/40 border border-emerald-950/5 text-emerald-950"
+              }`}>
                 {incident.description || "No description logged."}
               </p>
             </div>
 
             {/* Location & Reporter Attributes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs text-emerald-950">
-              <div className="p-3 rounded-2xl bg-white border border-emerald-950/10 space-y-1.5">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs ${
+              user?.role === "Villager" ? "text-white" : "text-emerald-950"
+            }`}>
+              <div className={`p-3 rounded-2xl space-y-1.5 ${
+                user?.role === "Villager"
+                  ? "bg-emerald-900/40 border border-emerald-500/25"
+                  : "bg-white border border-emerald-950/10"
+              }`}>
                 <div className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                  <span className="text-emerald-800/70 font-semibold">Location:</span>
+                  <MapPin className={`w-3.5 h-3.5 shrink-0 ${user?.role === "Villager" ? "text-amber-300" : "text-emerald-700"}`} />
+                  <span className={user?.role === "Villager" ? "text-emerald-200/80 font-semibold" : "text-emerald-800/70 font-semibold"}>Location:</span>
                   <span className="font-extrabold">{incident.location}</span>
                 </div>
-                <div className="text-[11px] text-emerald-800/80">Village: <strong>{incident.village_name || "Sector Range"}</strong></div>
-                <div className="text-[11px] text-emerald-800/80">District: <strong>{incident.district_name || "Wayanad"}</strong></div>
+                <div className={`text-[11px] ${user?.role === "Villager" ? "text-emerald-200/90" : "text-emerald-800/80"}`}>Village: <strong className={user?.role === "Villager" ? "text-white font-black" : ""}>{incident.village_name || "Sector Range"}</strong></div>
+                <div className={`text-[11px] ${user?.role === "Villager" ? "text-emerald-200/90" : "text-emerald-800/80"}`}>District: <strong className={user?.role === "Villager" ? "text-white font-black" : ""}>{incident.district_name || "Wayanad"}</strong></div>
               </div>
 
-              <div className="p-3 rounded-2xl bg-white border border-emerald-950/10 space-y-1.5">
+              <div className={`p-3 rounded-2xl space-y-1.5 ${
+                user?.role === "Villager"
+                  ? "bg-emerald-900/40 border border-emerald-500/25"
+                  : "bg-white border border-emerald-950/10"
+              }`}>
                 <div className="flex items-center gap-1.5">
-                  <UserIcon className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                  <span className="text-emerald-800/70 font-semibold">Reporter:</span>
+                  <UserIcon className={`w-3.5 h-3.5 shrink-0 ${user?.role === "Villager" ? "text-amber-300" : "text-emerald-700"}`} />
+                  <span className={user?.role === "Villager" ? "text-emerald-200/80 font-semibold" : "text-emerald-800/70 font-semibold"}>Reporter:</span>
                   <span className="font-extrabold">{incident.reporter_name}</span>
                 </div>
-                <div className="text-[11px] text-emerald-800/80">Role: <strong>{incident.reporter_role || "Villager"}</strong></div>
-                <div className="text-[11px] text-emerald-800/80">Contact: <strong>{incident.contact_number || "N/A"}</strong></div>
+                <div className={`text-[11px] ${user?.role === "Villager" ? "text-emerald-200/90" : "text-emerald-800/80"}`}>Role: <strong className={user?.role === "Villager" ? "text-white font-black" : ""}>{incident.reporter_role || "Villager"}</strong></div>
+                <div className={`text-[11px] ${user?.role === "Villager" ? "text-emerald-200/90" : "text-emerald-800/80"}`}>Contact: <strong className={user?.role === "Villager" ? "text-white font-black" : ""}>{incident.contact_number || "N/A"}</strong></div>
               </div>
             </div>
 
@@ -461,10 +506,16 @@ export const IncidentReviewPage: React.FC = () => {
 
           {/* AUTOMATED / OFFICIAL FIELD REPORT REVIEW */}
           {((fieldOp && fieldOp.report_generated_content) || incident.has_report) && (
-            <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 space-y-4 shadow-xs text-xs">
+            <div className={`backdrop-blur-md rounded-3xl p-6 space-y-4 shadow-xs text-xs transition-all ${
+              user?.role === "Villager"
+                ? "bg-emerald-950/45 border border-emerald-500/25 text-white"
+                : "bg-white/90 border border-emerald-950/10"
+            }`}>
               <div className="flex items-center justify-between border-b border-emerald-950/10 pb-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-emerald-950 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-emerald-700" />
+                <h3 className={`text-xs font-black uppercase tracking-wider flex items-center gap-2 ${
+                  isVillager ? "text-white" : "text-emerald-950"
+                }`}>
+                  <FileText className={`w-4 h-4 ${isVillager ? "text-amber-300" : "text-emerald-700"}`} />
                   Official Wildlife Incident Investigation Report
                 </h3>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-950 border border-emerald-300">
@@ -478,8 +529,8 @@ export const IncidentReviewPage: React.FC = () => {
                     <FileText className="w-5 h-5 text-amber-300" />
                   </div>
                   <div>
-                    <p className="font-extrabold text-sm text-emerald-950">Official Field Investigation Report (PDF)</p>
-                    <p className="text-[11px] font-medium text-emerald-800/70">
+                    <p className={`font-extrabold text-sm ${isVillager ? "text-white" : "text-emerald-950"}`}>Official Field Investigation Report (PDF)</p>
+                    <p className={`text-[11px] font-medium ${isVillager ? "text-emerald-200/90" : "text-emerald-800/70"}`}>
                       Generated with digital endorsement, vision analysis, GPS logs & photographic exhibits
                     </p>
                   </div>
@@ -520,10 +571,16 @@ export const IncidentReviewPage: React.FC = () => {
           )}
 
           {/* ASSIGNED OFFICERS SECTION */}
-          <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 space-y-4 shadow-xs">
+          <div className={`backdrop-blur-md rounded-3xl p-6 space-y-4 shadow-xs transition-all ${
+            user?.role === "Villager"
+              ? "bg-emerald-950/45 border border-emerald-500/25 text-white"
+              : "bg-white/90 border border-emerald-950/10"
+          }`}>
             <div className="flex items-center justify-between border-b border-emerald-950/10 pb-3">
-              <h3 className="text-xs font-black uppercase tracking-wider text-emerald-950 flex items-center gap-2">
-                <Users className="w-4 h-4 text-emerald-700" />
+              <h3 className={`text-xs font-black uppercase tracking-wider flex items-center gap-2 ${
+                isVillager ? "text-white" : "text-emerald-950"
+              }`}>
+                <Users className={`w-4 h-4 ${isVillager ? "text-amber-300" : "text-emerald-700"}`} />
                 Assigned Officer Roster ({assignedOfficersList.length})
               </h3>
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${assignedOfficersList.length > 0 ? "bg-emerald-100 text-emerald-950 border border-emerald-300" : "bg-gray-100 text-gray-700"}`}>
@@ -542,7 +599,11 @@ export const IncidentReviewPage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {assignedOfficersList.map((off) => (
-                  <div key={off.assignment_id} className="p-4 rounded-2xl bg-white border border-emerald-950/10 shadow-2xs space-y-3">
+                  <div key={off.assignment_id} className={`p-4 rounded-2xl shadow-2xs space-y-3 ${
+                    isVillager
+                      ? "bg-emerald-900/40 border border-emerald-500/25 text-white"
+                      : "bg-white border border-emerald-950/10"
+                  }`}>
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 text-amber-950 font-black text-xs flex items-center justify-center border border-amber-300 shadow-2xs shrink-0">
                         {off.avatar_url ? (
@@ -552,20 +613,22 @@ export const IncidentReviewPage: React.FC = () => {
                         )}
                       </div>
                       <div>
-                        <h4 className="text-xs font-black text-emerald-950">{off.full_name}</h4>
-                        <span className="text-[11px] font-bold text-emerald-800/70 block">{off.designation || "Forest Guard"}</span>
+                        <h4 className={`text-xs font-black ${isVillager ? "text-white" : "text-emerald-950"}`}>{off.full_name}</h4>
+                        <span className={`text-[11px] font-bold block ${isVillager ? "text-emerald-200/90" : "text-emerald-800/70"}`}>{off.designation || "Forest Guard"}</span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-emerald-950/5">
+                    <div className={`grid grid-cols-2 gap-2 text-[11px] pt-1 border-t ${
+                      isVillager ? "border-emerald-500/20" : "border-emerald-950/5"
+                    }`}>
                       <div>
-                        <span className="text-emerald-800/60 font-semibold block text-[10px] uppercase">Work Status</span>
-                        <span className={`font-black ${off.work_status === "Busy" ? "text-amber-700" : "text-emerald-900"}`}>{off.work_status}</span>
+                        <span className={`font-semibold block text-[10px] uppercase ${isVillager ? "text-emerald-200/70" : "text-emerald-800/60"}`}>Work Status</span>
+                        <span className={`font-black ${off.work_status === "Busy" ? "text-amber-300" : (isVillager ? "text-white" : "text-emerald-900")}`}>{off.work_status}</span>
                       </div>
 
                       <div>
-                        <span className="text-emerald-800/60 font-semibold block text-[10px] uppercase">Est. Response</span>
-                        <span className="font-bold text-emerald-950">{off.estimated_response_time || "30 Mins"}</span>
+                        <span className={`font-semibold block text-[10px] uppercase ${isVillager ? "text-emerald-200/70" : "text-emerald-800/60"}`}>Est. Response</span>
+                        <span className={`font-bold ${isVillager ? "text-white" : "text-emerald-950"}`}>{off.estimated_response_time || "30 Mins"}</span>
                       </div>
                     </div>
                   </div>
@@ -575,14 +638,18 @@ export const IncidentReviewPage: React.FC = () => {
           </div>
 
           {/* Compact Timeline Trigger */}
-          <div className="bg-white rounded-2xl border border-emerald-950/10 p-4 flex items-center justify-between shadow-xs">
+          <div className={`rounded-2xl p-4 flex items-center justify-between shadow-xs transition-all ${
+            user?.role === "Villager"
+              ? "bg-emerald-950/45 border border-emerald-500/25 text-white"
+              : "bg-white border border-emerald-950/10"
+          }`}>
             <div className="flex items-center gap-2.5">
               <div className="p-2 bg-emerald-50 rounded-xl text-emerald-800">
                 <FileText className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-xs font-black text-emerald-950">Incident Audit Trail & History</h4>
-                <p className="text-[11px] text-emerald-800/60 font-semibold">{activities.length} activity entries recorded</p>
+                <h4 className={`text-xs font-black ${isVillager ? "text-white" : "text-emerald-950"}`}>Incident Audit Trail & History</h4>
+                <p className={`text-[11px] font-semibold ${isVillager ? "text-emerald-200/90" : "text-emerald-800/60"}`}>{activities.length} activity entries recorded</p>
               </div>
             </div>
             <button
@@ -595,7 +662,8 @@ export const IncidentReviewPage: React.FC = () => {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Head Officer Operational Action Panel (4 cols) */}
+        {/* RIGHT COLUMN: Head Officer Operational Action Panel (4 cols) - completely hidden for Villager */}
+        {!isVillager && (
         <div className="lg:col-span-4 space-y-5">
           {/* HEAD OFFICER OPERATIONAL PANEL */}
           {isHeadOfficer ? (
@@ -760,14 +828,19 @@ export const IncidentReviewPage: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="bg-white rounded-3xl border border-emerald-950/10 p-5 space-y-3 shadow-xs text-xs">
-              <span className="font-extrabold text-emerald-800 uppercase tracking-wider text-[10px] block">Range Operational Command</span>
-              <p className="text-emerald-950 font-medium">
+            <div className={`rounded-3xl p-5 space-y-3 shadow-xs text-xs transition-all ${
+              user?.role === "Villager"
+                ? "bg-emerald-950/45 border border-emerald-500/25 text-white backdrop-blur-md"
+                : "bg-white border border-emerald-950/10 text-emerald-950"
+            }`}>
+              <span className="font-extrabold uppercase tracking-wider text-[10px] block text-emerald-800">Range Operational Command</span>
+              <p className="font-medium text-emerald-950">
                 Operational review, multi-officer assignment, report approval, verification, and closure actions are restricted to Head Officer <strong>{incident.head_officer_name || "Head RFO"}</strong>.
               </p>
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* MULTI-OFFICER SELECTION MODAL */}

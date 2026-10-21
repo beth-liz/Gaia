@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Navigation, MapPin, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 // Fix Leaflet marker icon asset paths
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -24,6 +25,8 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   address,
   onLocationSelect,
 }) => {
+  const { user } = useAuth();
+  const isVillager = (user?.role || "").toLowerCase() === "villager";
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -165,17 +168,25 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   return (
     <div className="space-y-4">
       {/* Geolocation Controls & Success/Error Banners */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 rounded-2xl bg-emerald-50/70 border border-emerald-950/10">
+      <div className={`flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 rounded-2xl border transition-all ${
+        isVillager
+          ? "bg-emerald-900/40 border-emerald-500/25 text-white"
+          : "bg-emerald-50/70 border-emerald-950/10"
+      }`}>
         <div>
-          <h4 className="text-xs font-black uppercase tracking-wider text-emerald-950">Option 1: Device GPS Location</h4>
-          <p className="text-[11px] text-emerald-800/70 font-medium">Acquire exact field coordinates automatically from device sensor</p>
+          <h4 className={`text-xs font-black uppercase tracking-wider ${isVillager ? "text-white" : "text-emerald-950"}`}>Option 1: Device GPS Location</h4>
+          <p className={`text-[11px] font-medium ${isVillager ? "text-white" : "text-emerald-800/70"}`}>Acquire exact field coordinates automatically from device sensor</p>
         </div>
 
         <button
           type="button"
           onClick={handleUseCurrentLocation}
           disabled={geoStatus === "loading"}
-          className="px-4 py-2.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-extrabold shadow-md transition-all flex items-center justify-center gap-2 shrink-0 active:scale-95 disabled:opacity-70"
+          className={`px-4 py-2.5 rounded-xl text-xs font-extrabold shadow-md transition-all flex items-center justify-center gap-2 shrink-0 active:scale-95 disabled:opacity-70 ${
+            isVillager
+              ? "bg-amber-400 hover:bg-amber-500 text-emerald-950 font-black shadow-amber-950/20"
+              : "bg-emerald-900 hover:bg-emerald-950 text-white"
+          }`}
         >
           {geoStatus === "loading" ? (
             <>
@@ -184,7 +195,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
             </>
           ) : (
             <>
-              <Navigation className="w-4 h-4 text-amber-300" />
+              <Navigation className={`w-4 h-4 ${isVillager ? "text-emerald-950" : "text-amber-300"}`} />
               Use My Current Location
             </>
           )}
@@ -208,8 +219,8 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
       {/* Option 2: Leaflet Interactive Map Picker */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h4 className="text-xs font-black uppercase tracking-wider text-emerald-950">Option 2: Choose On Interactive Map</h4>
-          <span className="text-[11px] text-emerald-800/70 font-semibold">Click map or drag marker to set location</span>
+          <h4 className={`text-xs font-black uppercase tracking-wider ${isVillager ? "text-white" : "text-emerald-950"}`}>Option 2: Choose On Interactive Map</h4>
+          <span className={`text-[11px] font-semibold ${isVillager ? "text-white" : "text-emerald-800/70"}`}>Click map or drag marker to set location</span>
         </div>
 
         <div className="relative rounded-2xl overflow-hidden border border-emerald-950/15 shadow-sm">
@@ -226,38 +237,60 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
       {/* Read-Only Coordinates & Address Display */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
         <div>
-          <label className="block text-[11px] font-extrabold text-emerald-950 uppercase tracking-wider mb-1">Latitude (Read-Only)</label>
+          <label className={`block text-[11px] font-extrabold uppercase tracking-wider mb-1 ${
+            isVillager ? "text-white" : "text-emerald-950"
+          }`}>Latitude (Read-Only)</label>
           <div className="relative">
-            <MapPin className="w-3.5 h-3.5 text-emerald-700 absolute left-3 top-1/2 -translate-y-1/2" />
+            <MapPin className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${
+              isVillager ? "text-amber-300" : "text-emerald-700"
+            }`} />
             <input
               type="text"
               readOnly
               value={latitude ? latitude.toFixed(6) : "Not Selected"}
-              className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-emerald-50/60 border border-emerald-950/15 text-emerald-950 font-bold focus:outline-none"
+              className={`w-full pl-8 pr-3 py-2 text-xs rounded-xl font-bold focus:outline-none ${
+                isVillager
+                  ? "bg-emerald-900/60 border border-emerald-500/30 text-white"
+                  : "bg-emerald-50/60 border border-emerald-950/15 text-emerald-950"
+              }`}
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-[11px] font-extrabold text-emerald-950 uppercase tracking-wider mb-1">Longitude (Read-Only)</label>
+          <label className={`block text-[11px] font-extrabold uppercase tracking-wider mb-1 ${
+            isVillager ? "text-white" : "text-emerald-950"
+          }`}>Longitude (Read-Only)</label>
           <div className="relative">
-            <MapPin className="w-3.5 h-3.5 text-emerald-700 absolute left-3 top-1/2 -translate-y-1/2" />
+            <MapPin className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${
+              isVillager ? "text-amber-300" : "text-emerald-700"
+            }`} />
             <input
               type="text"
               readOnly
               value={longitude ? longitude.toFixed(6) : "Not Selected"}
-              className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-emerald-50/60 border border-emerald-950/15 text-emerald-950 font-bold focus:outline-none"
+              className={`w-full pl-8 pr-3 py-2 text-xs rounded-xl font-bold focus:outline-none ${
+                isVillager
+                  ? "bg-emerald-900/60 border border-emerald-500/30 text-white"
+                  : "bg-emerald-50/60 border border-emerald-950/15 text-emerald-950"
+              }`}
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-[11px] font-extrabold text-emerald-950 uppercase tracking-wider mb-1">Detected Address</label>
+          <label className={`block text-[11px] font-extrabold uppercase tracking-wider mb-1 ${
+            isVillager ? "text-white" : "text-emerald-950"
+          }`}>Detected Address</label>
           <input
             type="text"
             readOnly
             value={address || "Click map or use GPS to populate address"}
-            className="w-full px-3 py-2 text-xs rounded-xl bg-emerald-50/60 border border-emerald-950/15 text-emerald-950 font-semibold truncate focus:outline-none"
+            className={`w-full px-3 py-2 text-xs rounded-xl font-semibold truncate focus:outline-none ${
+              isVillager
+                ? "bg-emerald-900/60 border border-emerald-500/30 text-white"
+                : "bg-emerald-50/60 border border-emerald-950/15 text-emerald-950"
+            }`}
           />
         </div>
       </div>

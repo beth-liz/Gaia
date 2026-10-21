@@ -27,6 +27,7 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
 }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isVillager = (user?.role || "").toLowerCase() === "villager";
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [speciesList, setSpeciesList] = useState<AnimalSpecies[]>([]);
@@ -345,25 +346,25 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
 
       {/* SECTION 0: Reporter Information (Only if not logged in) */}
       {!user && (
-        <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-6 shadow-xs">
-          <div className="flex items-center gap-3 border-b border-emerald-950/10 pb-4">
-            <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center font-black text-sm shrink-0">
+        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-white/70 shadow-lg shadow-emerald-950/5 p-6 sm:p-8 space-y-6">
+          <div className="flex items-center gap-3.5 border-b border-emerald-950/10 pb-4">
+            <div className="w-9 h-9 rounded-xl bg-amber-100/90 text-amber-900 border border-amber-300/60 flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
               0
             </div>
-            <div>
-              <h3 className="text-base font-extrabold text-emerald-950">Reporter Information</h3>
-              <p className="text-xs text-emerald-800/70 font-medium">Please provide your contact details</p>
+            <div className="min-w-0">
+              <h3 className="text-base font-extrabold text-emerald-950 tracking-tight">Reporter Information</h3>
+              <p className="text-xs text-emerald-800/70 font-medium">Please provide your contact details for official follow-up</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
             <div>
               <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Full Name *</label>
               <input
                 type="text"
                 required
                 placeholder="Enter your full name"
-                className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-emerald-950/10 focus:bg-white focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-sm font-semibold text-emerald-950"
+                className="w-full px-4 py-2.5 rounded-xl bg-white/90 border border-emerald-950/15 focus:bg-white focus:border-emerald-700 focus:ring-2 focus:ring-emerald-600/20 outline-none transition-all text-sm font-semibold text-emerald-950 placeholder:text-gray-400 shadow-2xs"
                 value={reporterName}
                 onChange={(e) => setReporterName(e.target.value)}
               />
@@ -374,7 +375,7 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
                 type="tel"
                 required
                 placeholder="E.g., +91 9876543210"
-                className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-emerald-950/10 focus:bg-white focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all text-sm font-semibold text-emerald-950"
+                className="w-full px-4 py-2.5 rounded-xl bg-white/90 border border-emerald-950/15 focus:bg-white focus:border-emerald-700 focus:ring-2 focus:ring-emerald-600/20 outline-none transition-all text-sm font-semibold text-emerald-950 placeholder:text-gray-400 shadow-2xs"
                 value={reporterPhone}
                 onChange={(e) => setReporterPhone(e.target.value)}
               />
@@ -384,20 +385,32 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
       )}
 
       {/* SECTION 1: Incident Information */}
-      <div className="bg-white rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-6 shadow-xs">
-        <div className="flex items-center gap-3 border-b border-emerald-950/10 pb-4">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-black text-sm shrink-0 border border-emerald-200">
+      <div className={`rounded-2xl shadow-lg p-6 sm:p-8 space-y-6 backdrop-blur-md transition-all ${
+        isVillager
+          ? "bg-emerald-950/45 border border-emerald-500/25 text-white"
+          : "bg-white/90 border border-white/70 shadow-emerald-950/5"
+      }`}>
+        <div className={`flex items-center gap-3.5 pb-4 border-b ${
+          isVillager ? "border-emerald-500/20" : "border-emerald-950/10"
+        }`}>
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-xs border ${
+            isVillager
+              ? "bg-amber-400 text-emerald-950 border-amber-300 font-black"
+              : "bg-emerald-100 text-emerald-950 border-emerald-300/70"
+          }`}>
             1
           </div>
-          <div>
-            <h3 className="text-base font-extrabold text-emerald-950">Section 1: Incident Information</h3>
-            <p className="text-xs text-emerald-800/70 font-medium">Specify wildlife sighting type, animal detected, and severity level</p>
+          <div className="min-w-0">
+            <h3 className={`text-base font-extrabold tracking-tight ${isVillager ? "text-white" : "text-emerald-950"}`}>Section 1: Incident Information</h3>
+            <p className={`text-xs font-medium ${isVillager ? "text-emerald-200/90" : "text-emerald-800/70"}`}>Specify wildlife sighting type, animal detected, and severity level</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
+            <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${
+              isVillager ? "text-white" : "text-emerald-950"
+            }`}>
               Incident Title
             </label>
             <input
@@ -405,18 +418,28 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
               placeholder="e.g. Lone Wild Elephant Herd Sighting near Farm"
               value={incidentTitle}
               onChange={(e) => setIncidentTitle(e.target.value)}
-              className="w-full px-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-semibold transition-all"
+              className={`w-full px-4 py-2.5 text-xs rounded-xl transition-all shadow-2xs font-semibold focus:outline-none ${
+                isVillager
+                  ? "bg-emerald-900/60 border border-emerald-500/30 text-white placeholder:text-emerald-200/50 focus:border-amber-400 focus:bg-emerald-900/80"
+                  : "border border-emerald-950/15 bg-white/90 focus:bg-white focus:border-emerald-700 focus:ring-2 focus:ring-emerald-600/20 text-emerald-950"
+              }`}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
-              Incident Category <span className="text-red-600">*</span>
+            <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${
+              isVillager ? "text-white" : "text-emerald-950"
+            }`}>
+              Incident Category <span className="text-red-400">*</span>
             </label>
             <select
               value={incidentCategory}
               onChange={(e) => setIncidentCategory(e.target.value)}
-              className="w-full px-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-semibold transition-all cursor-pointer"
+              className={`w-full px-4 py-2.5 text-xs rounded-xl transition-all cursor-pointer shadow-2xs font-semibold focus:outline-none ${
+                isVillager
+                  ? "bg-emerald-900/70 border border-emerald-500/30 text-white focus:border-amber-400"
+                  : "border border-emerald-950/15 bg-white/90 focus:bg-white focus:border-emerald-700 focus:ring-2 focus:ring-emerald-600/20 text-emerald-950"
+              }`}
             >
               <option value="Wildlife Sighting">Wildlife Sighting</option>
               <option value="Human Wildlife Conflict">Human Wildlife Conflict</option>
@@ -429,14 +452,16 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
-              Animal Detected <span className="text-red-600">*</span>
+            <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${
+              isVillager ? "text-white" : "text-emerald-950"
+            }`}>
+              Animal Detected <span className="text-red-400">*</span>
             </label>
             {loadingSpecies ? (
-              <div className="py-2 text-xs text-emerald-800/70 flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-800" />
+              <div className={`py-2 text-xs flex items-center gap-2 ${isVillager ? "text-emerald-200" : "text-emerald-800/70"}`}>
+                <Loader2 className={`w-4 h-4 animate-spin ${isVillager ? "text-amber-300" : "text-emerald-800"}`} />
                 Loading species database...
               </div>
             ) : (
@@ -450,7 +475,11 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
                     setSelectedSpeciesId(Number(val));
                   }
                 }}
-                className="w-full px-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-bold"
+                className={`w-full px-4 py-2.5 text-xs rounded-xl font-bold transition-all shadow-2xs focus:outline-none ${
+                  isVillager
+                    ? "bg-emerald-900/70 border border-emerald-500/30 text-white focus:border-amber-400"
+                    : "border border-emerald-950/15 bg-white/90 focus:bg-white focus:border-emerald-700 focus:ring-2 focus:ring-emerald-600/20 text-emerald-950"
+                }`}
               >
                 {speciesList.map((spec) => (
                   <option key={spec.id} value={spec.id}>
@@ -467,13 +496,15 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
                 placeholder="Specify Custom Animal Name"
                 value={customAnimalType}
                 onChange={(e) => setCustomAnimalType(e.target.value)}
-                className="w-full mt-2 px-4 py-2 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-semibold"
+                className="w-full mt-2 px-4 py-2 text-xs rounded-xl border border-emerald-950/15 bg-white/90 focus:bg-white focus:outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-600/20 text-emerald-950 font-semibold shadow-2xs"
               />
             )}
           </div>
 
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Severity Level *</label>
+            <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${
+              isVillager ? "text-white" : "text-emerald-950"
+            }`}>Severity Level *</label>
             <div className="grid grid-cols-4 gap-2">
               {(["Low", "Medium", "High", "Critical"] as const).map((lvl) => (
                 <button
@@ -500,33 +531,49 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
-            Incident Description <span className="text-emerald-700/60 font-semibold">(Optional)</span>
+          <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${
+            isVillager ? "text-white" : "text-emerald-950"
+          }`}>
+            Incident Description <span className={`font-semibold ${isVillager ? "text-emerald-200/70" : "text-emerald-700/60"}`}>(Optional)</span>
           </label>
           <textarea
             rows={4}
             placeholder="Provide any additional details of the sighting or conflict (optional)..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full min-h-[120px] p-4 text-xs rounded-2xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-medium leading-relaxed"
+            className={`w-full min-h-[110px] p-4 text-xs rounded-xl font-medium leading-relaxed shadow-2xs focus:outline-none ${
+              isVillager
+                ? "bg-emerald-900/60 border border-emerald-500/30 text-white placeholder:text-emerald-200/50 focus:border-amber-400 focus:bg-emerald-900/80"
+                : "border border-emerald-950/15 bg-white/90 focus:bg-white focus:border-emerald-700 focus:ring-2 focus:ring-emerald-600/20 text-emerald-950"
+            }`}
           />
         </div>
       </div>
 
       {/* SECTION 2: Location (Leaflet & GPS) */}
-      <div className="bg-white rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-4 shadow-xs">
-        <div className="flex items-center gap-3 border-b border-emerald-950/10 pb-4">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-black text-sm shrink-0 border border-emerald-200">
+      <div className={`rounded-2xl shadow-lg p-6 sm:p-8 space-y-4 backdrop-blur-md transition-all ${
+        isVillager
+          ? "bg-emerald-950/45 border border-emerald-500/25 text-white"
+          : "bg-white/90 border border-white/70 shadow-emerald-950/5"
+      }`}>
+        <div className={`flex items-center gap-3.5 pb-4 border-b ${
+          isVillager ? "border-emerald-500/20" : "border-emerald-950/10"
+        }`}>
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-xs border ${
+            isVillager
+              ? "bg-amber-400 text-emerald-950 border-amber-300 font-black"
+              : "bg-emerald-100 text-emerald-950 border-emerald-300/70"
+          }`}>
             2
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-extrabold text-emerald-950">Section 2: Incident Field Location</h3>
-              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className={`text-base font-extrabold tracking-tight ${isVillager ? "text-white" : "text-emerald-950"}`}>Section 2: Incident Field Location</h3>
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-600 text-white border border-red-700 font-bold">
                 Required *
               </span>
             </div>
-            <p className="text-xs text-emerald-800/70 font-medium">Use GPS geolocation or select exact coordinates on interactive map</p>
+            <p className={`text-xs font-medium ${isVillager ? "text-emerald-200/90" : "text-emerald-800/70"}`}>Use GPS geolocation or select exact coordinates on interactive map</p>
           </div>
         </div>
 
@@ -602,56 +649,78 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
       </div>
 
       {/* SECTION 3: Additional Details */}
-      <div className="bg-white rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-6 shadow-xs">
-        <div className="flex items-center gap-3 border-b border-emerald-950/10 pb-4">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-black text-sm shrink-0 border border-emerald-200">
+      <div className={`rounded-2xl shadow-lg p-6 sm:p-8 space-y-6 backdrop-blur-md transition-all ${
+        isVillager
+          ? "bg-emerald-950/45 border border-emerald-500/25 text-white"
+          : "bg-white/90 border border-white/70 shadow-emerald-950/5"
+      }`}>
+        <div className={`flex items-center gap-3.5 pb-4 border-b ${
+          isVillager ? "border-emerald-500/20" : "border-emerald-950/10"
+        }`}>
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-xs border ${
+            isVillager
+              ? "bg-amber-400 text-emerald-950 border-amber-300 font-black"
+              : "bg-emerald-100 text-emerald-950 border-emerald-300/70"
+          }`}>
             3
           </div>
-          <div>
-            <h3 className="text-base font-extrabold text-emerald-950">Section 3: Additional Field Details</h3>
-            <p className="text-xs text-emerald-800/70 font-medium">Record date, time, weather, and impact flags</p>
+          <div className="min-w-0">
+            <h3 className={`text-base font-extrabold tracking-tight ${isVillager ? "text-white" : "text-emerald-950"}`}>Section 3: Additional Field Details</h3>
+            <p className={`text-xs font-medium ${isVillager ? "text-emerald-200/90" : "text-emerald-800/70"}`}>Record date, time, weather, and impact flags</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
-              Report Date <span className="text-[10px] text-emerald-700 font-semibold">(System Time)</span>
+            <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${isVillager ? "text-white" : "text-emerald-950"}`}>
+              Report Date <span className={`text-[10px] font-semibold ${isVillager ? "text-emerald-200/80" : "text-emerald-700"}`}>(System Time)</span>
             </label>
             <div className="relative">
-              <Calendar className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Calendar className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${isVillager ? "text-emerald-300" : "text-emerald-700"}`} />
               <input
                 type="text"
                 readOnly
                 value={new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-slate-50 text-emerald-950 font-bold cursor-not-allowed select-none"
+                className={`w-full pl-10 pr-4 py-2.5 text-xs rounded-xl font-bold cursor-not-allowed select-none ${
+                  isVillager
+                    ? "bg-emerald-900/60 border border-emerald-500/30 text-white"
+                    : "border border-emerald-950/15 bg-slate-50 text-emerald-950"
+                }`}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">
-              Report Time <span className="text-[10px] text-emerald-700 font-semibold">(System Time)</span>
+            <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${isVillager ? "text-white" : "text-emerald-950"}`}>
+              Report Time <span className={`text-[10px] font-semibold ${isVillager ? "text-emerald-200/80" : "text-emerald-700"}`}>(System Time)</span>
             </label>
             <div className="relative">
-              <Clock className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Clock className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${isVillager ? "text-emerald-300" : "text-emerald-700"}`} />
               <input
                 type="text"
                 readOnly
                 value={new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-slate-50 text-emerald-950 font-bold cursor-not-allowed select-none"
+                className={`w-full pl-10 pr-4 py-2.5 text-xs rounded-xl font-bold cursor-not-allowed select-none ${
+                  isVillager
+                    ? "bg-emerald-900/60 border border-emerald-500/30 text-white"
+                    : "border border-emerald-950/15 bg-slate-50 text-emerald-950"
+                }`}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-extrabold text-emerald-950 uppercase tracking-wider mb-1.5">Weather Condition</label>
+            <label className={`block text-xs font-extrabold uppercase tracking-wider mb-1.5 ${isVillager ? "text-white" : "text-emerald-950"}`}>Weather Condition</label>
             <div className="relative">
-              <CloudSun className="w-4 h-4 text-emerald-700 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <CloudSun className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${isVillager ? "text-emerald-300" : "text-emerald-700"}`} />
               <select
                 value={weather}
                 onChange={(e) => setWeather(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-emerald-950/15 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 text-emerald-950 font-bold cursor-pointer"
+                className={`w-full pl-10 pr-4 py-2.5 text-xs rounded-xl font-bold cursor-pointer transition-all shadow-2xs focus:outline-none ${
+                  isVillager
+                    ? "bg-emerald-900/70 border border-emerald-500/30 text-white focus:border-amber-400"
+                    : "border border-emerald-950/15 bg-white/90 focus:bg-white focus:border-emerald-700 focus:ring-2 focus:ring-emerald-600/20 text-emerald-950"
+                }`}
               >
                 <option value="Sunny">Sunny</option>
                 <option value="Rainy">Rainy</option>
@@ -748,19 +817,29 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
       </div>
 
       {/* SECTION 4: Image Upload */}
-      <div className="bg-white rounded-3xl border border-emerald-950/10 p-6 sm:p-8 space-y-4 shadow-xs">
-        <div className="flex items-center gap-3 border-b border-emerald-950/10 pb-4">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-black text-sm shrink-0 border border-emerald-200">
+      <div className={`rounded-2xl shadow-lg p-6 sm:p-8 space-y-4 backdrop-blur-md transition-all ${
+        isVillager
+          ? "bg-emerald-950/45 border border-emerald-500/25 text-white"
+          : "bg-white/90 border border-white/70 shadow-emerald-950/5"
+      }`}>
+        <div className={`flex items-center gap-3.5 pb-4 border-b ${
+          isVillager ? "border-emerald-500/20" : "border-emerald-950/10"
+        }`}>
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-xs border ${
+            isVillager
+              ? "bg-amber-400 text-emerald-950 border-amber-300 font-black"
+              : "bg-emerald-100 text-emerald-950 border-emerald-300/70"
+          }`}>
             4
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-extrabold text-emerald-950">Section 4: Incident Photos (Up to 5)</h3>
-              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className={`text-base font-extrabold tracking-tight ${isVillager ? "text-white" : "text-emerald-950"}`}>Section 4: Incident Photos (Up to 5)</h3>
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-600 text-white border border-red-700 font-bold">
                 Mandatory *
               </span>
             </div>
-            <p className="text-xs text-emerald-800/70 font-medium">At least one field photograph of wildlife, tracks, or damage is required</p>
+            <p className={`text-xs font-medium ${isVillager ? "text-emerald-200/90" : "text-emerald-800/70"}`}>At least one field photograph of wildlife, tracks, or damage is required</p>
           </div>
         </div>
 
@@ -791,9 +870,13 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
               <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
-                className="w-24 h-24 rounded-2xl bg-emerald-50/60 hover:bg-emerald-100 border-2 border-dashed border-emerald-950/20 text-emerald-900 flex flex-col items-center justify-center gap-1 transition-all active:scale-95"
+                className={`w-24 h-24 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${
+                  isVillager
+                    ? "bg-emerald-900/50 hover:bg-emerald-800/70 border-emerald-500/40 text-white"
+                    : "bg-emerald-50/60 hover:bg-emerald-100 border-emerald-950/20 text-emerald-900"
+                }`}
               >
-                <Upload className="w-5 h-5 text-emerald-700" />
+                <Upload className={`w-5 h-5 ${isVillager ? "text-amber-300" : "text-emerald-700"}`} />
                 <span className="text-[10px] font-bold">Add Photo</span>
               </button>
             </div>
@@ -822,16 +905,16 @@ export const CreateIncidentForm: React.FC<CreateIncidentFormProps> = ({
           <button
             type="submit"
             disabled={isSubmitting || isUploadingImages}
-            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white font-extrabold text-xs shadow-lg shadow-emerald-950/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70"
+            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-emerald-950 font-black text-xs shadow-lg shadow-amber-950/30 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70"
           >
             {isSubmitting || isUploadingImages ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-950" />
                 Submitting Incident...
               </>
             ) : (
               <>
-                <FileText className="w-4 h-4 text-amber-300" />
+                <FileText className="w-4 h-4 text-emerald-950" />
                 Submit Incident Report
               </>
             )}

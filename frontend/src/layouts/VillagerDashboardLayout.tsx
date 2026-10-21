@@ -14,11 +14,34 @@ const villagerNavItems: NavItem[] = [
 
 const VillagerDashboardLayout: React.FC = () => {
   return (
-    <BaseDashboardLayout
-      roleTitle="Villager Portal"
-      navItems={villagerNavItems}
-      profilePath="/villager/profile"
-    />
+    <div className="relative h-screen w-full overflow-hidden">
+      {/* 
+        BACKGROUND LAYER FOR ALL VILLAGER MODULE PAGES:
+        - Exact same full-cover nature5.jpg background image and subtle transparent forest gradient
+      */}
+      <div
+        className="fixed inset-0 w-full h-full z-0 pointer-events-none"
+        style={{
+          backgroundImage: `
+            linear-gradient(180deg, rgba(6, 28, 20, 0.35) 0%, rgba(13, 40, 24, 0.25) 50%, rgba(6, 28, 20, 0.40) 100%),
+            url('/images/nature5.jpg')
+          `,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+        }}
+        aria-hidden="true"
+      />
+
+      <div className="relative z-10 h-full w-full">
+        <BaseDashboardLayout
+          roleTitle="Villager Portal"
+          navItems={villagerNavItems}
+          profilePath="/villager/profile"
+          bgTransparent={true}
+        />
+      </div>
+    </div>
   );
 };
 

@@ -258,7 +258,7 @@ function App() {
             <Route path="gis/heatmap" element={<ConflictHeatmapPage />} />
             <Route path="report-incident" element={<VillagerReportIncident />} />
             <Route path="my-reports" element={<MyReportsPage />} />
-            <Route path="my-reports/:id" element={<IncidentReviewPage />} />
+            <Route path="my-reports/:id" element={<Navigate to="/villager/my-reports" replace />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>

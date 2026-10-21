@@ -95,7 +95,7 @@ export const MyReportsPage: React.FC = () => {
       accessorKey: "reference_id",
       sortable: true,
       cell: (inc) => (
-        <span className="font-mono font-extrabold text-emerald-950 text-xs px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-950/10 inline-block whitespace-nowrap">
+        <span className="font-mono font-extrabold text-white text-xs px-2.5 py-1 rounded-xl bg-emerald-900/60 border border-emerald-500/30 inline-block whitespace-nowrap">
           {inc.reference_id || `INC-2026-${String(inc.id).padStart(5, "0")}`}
         </span>
       ),
@@ -105,7 +105,7 @@ export const MyReportsPage: React.FC = () => {
       accessorKey: "animal",
       sortable: true,
       cell: (inc) => (
-        <span className="font-extrabold text-emerald-950 block whitespace-nowrap">
+        <span className="font-extrabold text-white block whitespace-nowrap">
           {inc.animal_species_name || inc.animal || "Unknown"}
         </span>
       ),
@@ -115,7 +115,7 @@ export const MyReportsPage: React.FC = () => {
       accessorKey: "incident_category",
       sortable: true,
       cell: (inc) => (
-        <span className="text-[11px] text-emerald-800/80 block whitespace-nowrap">
+        <span className="text-[11px] text-emerald-100/90 block whitespace-nowrap">
           {inc.incident_category || "Wildlife Sighting"}
         </span>
       ),
@@ -125,7 +125,7 @@ export const MyReportsPage: React.FC = () => {
       accessorKey: "date_reported",
       sortable: true,
       cell: (inc) => (
-        <span className="text-[11px] text-emerald-900 whitespace-nowrap">
+        <span className="text-[11px] text-white whitespace-nowrap">
           {inc.date_reported || "—"} {inc.time_reported || ""}
         </span>
       ),
@@ -135,7 +135,7 @@ export const MyReportsPage: React.FC = () => {
       accessorKey: "created_at",
       sortable: true,
       cell: (inc) => (
-        <span className="text-[11px] text-emerald-900 whitespace-nowrap">
+        <span className="text-[11px] text-white whitespace-nowrap">
           {inc.created_at ? new Date(inc.created_at).toLocaleString() : (inc.date_reported || "—")}
         </span>
       ),
@@ -144,8 +144,8 @@ export const MyReportsPage: React.FC = () => {
       header: "Place / Location",
       accessorKey: "location",
       cell: (inc) => (
-        <span className="text-xs text-emerald-950 font-medium truncate max-w-[150px] block flex items-center gap-1 whitespace-nowrap">
-          <MapPin className="w-3 h-3 text-emerald-700 shrink-0" />
+        <span className="text-xs text-white font-medium truncate max-w-[150px] block flex items-center gap-1 whitespace-nowrap">
+          <MapPin className="w-3 h-3 text-amber-300 shrink-0" />
           {inc.location || inc.address || "—"}
         </span>
       ),
@@ -155,7 +155,7 @@ export const MyReportsPage: React.FC = () => {
       accessorKey: "village_name",
       sortable: true,
       cell: (inc) => (
-        <span className="text-xs text-emerald-950 whitespace-nowrap">{inc.village_name || "—"}</span>
+        <span className="text-xs text-white whitespace-nowrap">{inc.village_name || "—"}</span>
       ),
     },
     {
@@ -163,7 +163,7 @@ export const MyReportsPage: React.FC = () => {
       accessorKey: "district_name",
       sortable: true,
       cell: (inc) => (
-        <span className="text-xs text-emerald-950 whitespace-nowrap">{inc.district_name || "—"}</span>
+        <span className="text-xs text-white whitespace-nowrap">{inc.district_name || "—"}</span>
       ),
     },
     {
@@ -171,7 +171,7 @@ export const MyReportsPage: React.FC = () => {
       accessorKey: "station_name",
       sortable: true,
       cell: (inc) => (
-        <span className="text-xs font-semibold text-emerald-900 whitespace-nowrap">
+        <span className="text-xs font-semibold text-white whitespace-nowrap">
           {inc.station_name || "Not Assigned"}
         </span>
       ),
@@ -184,7 +184,7 @@ export const MyReportsPage: React.FC = () => {
           inc.assigned_officers && inc.assigned_officers.length > 0
             ? inc.assigned_officers[0].assigned_at
             : null;
-        return <span className="text-[11px] text-emerald-900 whitespace-nowrap">{assignedAt || "—"}</span>;
+        return <span className="text-[11px] text-white whitespace-nowrap">{assignedAt || "—"}</span>;
       },
     },
     {
@@ -211,7 +211,7 @@ export const MyReportsPage: React.FC = () => {
       header: "Evidence",
       accessorKey: "images",
       cell: (inc) => (
-        <span className="text-xs text-emerald-900 whitespace-nowrap">
+        <span className="text-xs text-white whitespace-nowrap">
           {(inc.images && inc.images.length > 0) || inc.photo_url ? "Yes" : "No"}
         </span>
       ),
@@ -222,9 +222,9 @@ export const MyReportsPage: React.FC = () => {
       cell: (inc) => (
         <button
           onClick={() => setSelectedIncident(inc)}
-          className="p-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-950/10 font-bold text-xs flex items-center gap-1 whitespace-nowrap"
+          className="p-1.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-emerald-950 font-black text-xs flex items-center gap-1 whitespace-nowrap shadow-xs transition-all"
         >
-          <Eye className="w-3.5 h-3.5" /> View Details
+          <Eye className="w-3.5 h-3.5 text-emerald-950" /> View Details
         </button>
       ),
     },
@@ -247,6 +247,7 @@ export const MyReportsPage: React.FC = () => {
         subtitle="Track real-time status and resolutions for all your submitted wildlife incident reports"
         icon={FileText}
         badge={`${incidents.length} Reports Submitted`}
+        theme="light"
       />
 
       <ActionToolbar
@@ -264,6 +265,7 @@ export const MyReportsPage: React.FC = () => {
         ]}
         onRefresh={fetchMyReports}
         isRefreshing={loading}
+        theme="green"
       />
 
       <DataTable
@@ -272,6 +274,7 @@ export const MyReportsPage: React.FC = () => {
         keyExtractor={(inc) => inc.id}
         isLoading={loading}
         emptyMessage="You have not submitted any wildlife incident reports yet."
+        theme="green"
       />
 
       {/* Wide Horizontal View Details Modal */}
