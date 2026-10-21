@@ -113,6 +113,7 @@ export const IncidentReviewPage: React.FC = () => {
   }
 
   // Permission Logic: Only Station Head Officer or Station RFO can perform operational actions. Admin is Read-Only.
+  const isVillager = user?.role === "Villager";
   const isAdmin = user?.role === "Admin";
   const isHeadOfficer =
     !isAdmin &&
